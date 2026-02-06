@@ -51,6 +51,7 @@
             font-weight: 700;
             background: linear-gradient(135deg, var(--primary), #a855f7);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
@@ -135,6 +136,28 @@
             max-width: 900px;
             margin: 2rem auto;
             padding: 0 1rem;
+        }
+
+        /* Step Content - Page View Behavior */
+        .step-content {
+            display: none;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        .step-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         /* Cards */
@@ -300,93 +323,110 @@
             color: black;
         }
 
-        .scene-status.approved {
-            background: var(--success);
-        }
-
-        .scene-desc {
-            color: var(--text-muted);
-            font-size: 0.875rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .dialogue {
+        /* Character Card */
+        .char-card {
             background: var(--bg-card);
-            padding: 0.5rem 0.75rem;
-            border-radius: 6px;
-            margin-top: 0.5rem;
-            font-size: 0.875rem;
-        }
-
-        .dialogue-char {
-            font-weight: 600;
-            color: var(--primary);
-        }
-
-        .warning {
-            color: var(--warning);
-            font-size: 0.75rem;
-            margin-top: 0.5rem;
-        }
-
-        /* Loading */
-        .loading {
-            display: none;
-            text-align: center;
-            padding: 2rem;
-        }
-
-        .loading.show {
-            display: block;
-        }
-
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid var(--border);
-            border-top-color: var(--primary);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 1rem;
-        }
-
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-
-        /* Footer Actions */
-        .actions {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1rem;
             display: flex;
-            justify-content: space-between;
-            margin-top: 2rem;
-            padding-top: 1.5rem;
-            border-top: 1px solid var(--border);
+            gap: 1rem;
+            align-items: center;
+            margin-bottom: 1rem;
+            transition: all 0.2s;
         }
 
-        /* Hide/Show Steps */
-        .step-content {
-            display: none;
+        .char-card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
 
-        .step-content.active {
-            display: block;
+        .char-avatar {
+            width: 60px;
+            height: 60px;
+            background: var(--bg-input);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .char-info {
+            flex: 1;
+        }
+
+        .char-name {
+            font-weight: 600;
+            font-size: 1rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .char-role {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            background: var(--bg-input);
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        /* Rule Warning */
+        .rule-warning {
+            background: rgba(255, 152, 0, 0.1);
+            border-left: 3px solid var(--warning);
+            padding: 0.5rem 0.75rem;
+            border-radius: 4px;
+            margin-top: 0.5rem;
+            font-size: 0.75rem;
+            color: #ff9800;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .tab-container {
+            display: flex;
+            gap: 1rem;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 1.5rem;
+        }
+
+        .tab {
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            color: var(--text-muted);
+        }
+
+        .tab.active {
+            color: var(--primary);
+            border-color: var(--primary);
+            font-weight: 600;
+        }
+
+        /* Settings Grid */
+        .settings-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
         }
     </style>
 </head>
 
 <body>
     <header>
-        <a href="/" class="logo" style="text-decoration: none;">🎨 Tax Webtoon Auto-Generator</a>
-        <div><a href="/settings" style="color: var(--text-muted); text-decoration: none;">⚙️ 설정</a></div>
+        <a href="/" class="logo" style="text-decoration: none;">🎨 Tax Webtoon Auto-Generator Pro</a>
+        <div style="display: flex; gap: 1rem; align-items: center;">
+            <span id="login-status" style="font-size: 0.875rem; color: var(--text-muted);">Guest User</span>
+            <a href="/settings" style="color: var(--text-muted); text-decoration: none;">⚙️ 설정</a>
+        </div>
     </header>
 
     <div class="progress-bar">
         <div class="steps">
             <div class="step active" data-step="1" onclick="navigateToStep(1)"><span class="step-num">1</span> 시작</div>
             <div class="step-line"></div>
-            <div class="step" data-step="2" onclick="navigateToStep(2)"><span class="step-num">2</span> 자료</div>
+            <div class="step" data-step="2" onclick="navigateToStep(2)"><span class="step-num">2</span> 자료수집</div>
             <div class="step-line"></div>
             <div class="step" data-step="3" onclick="navigateToStep(3)"><span class="step-num">3</span> 스토리</div>
             <div class="step-line"></div>
@@ -399,220 +439,379 @@
     </div>
 
     <main>
-        <!-- Step 1: 시작 -->
         <div class="step-content active" id="step-1">
             <div class="card">
-                <h2 class="card-title">🚀 웹툰 생성 시작</h2>
-                <p class="card-desc">어떤 방식으로 시작할까요?</p>
-
-                <div class="mode-cards">
+                <h2 class="card-title">🚀 워크플로우 시작</h2>
+                <!-- Mode Cards Hidden (Optional: Can keep them if needed, but user didn't ask to remove) -->
+                <div class="mode-cards" style="margin-bottom: 2rem;">
                     <div class="mode-card selected" data-mode="auto" onclick="selectMode('auto')">
-                        <div class="mode-icon">🔄</div>
+                        <div class="mode-icon">🤖</div>
                         <div class="mode-title">자동 모드</div>
-                        <div class="mode-desc">키워드만 입력하면 AI가 자동 생성</div>
+                        <div class="mode-desc">키워드만 입력하면 AI가 자료 수집부터스토리까지 모두 처리합니다.</div>
                     </div>
                     <div class="mode-card" data-mode="manual" onclick="selectMode('manual')">
-                        <div class="mode-icon">✏️</div>
+                        <div class="mode-icon">✍️</div>
                         <div class="mode-title">수동 모드</div>
-                        <div class="mode-desc">직접 내용을 입력합니다</div>
+                        <div class="mode-desc">직접 작성한 시나리오나 텍스트를 바탕으로 이미지를 생성합니다.</div>
                     </div>
                 </div>
-            </div>
 
-            <div class="card" id="keyword-card">
-                <div class="form-group">
-                    <label for="keyword">주제 키워드</label>
-                    <input type="text" id="keyword" placeholder="예: 종합소득세 신고, 퇴직금 계산법">
-                </div>
+                <div id="keyword-input-area">
+                    <div class="form-group">
+                        <label for="keyword">무엇에 대해 설명하는 웹툰을 만들까요?</label>
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <input type="text" id="keyword" placeholder="예: 증여세 없이 증여하는 법, 육아휴직 신청"
+                                onkeyup="if(event.key==='Enter') startWorkflow()">
+                        </div>
 
-                <div id="field-result" style="display: none; margin-bottom: 1rem;">
-                    <div style="background: var(--bg-input); padding: 1rem; border-radius: 8px;">
-                        <strong>📋 AI 분석 결과:</strong>
-                        <div style="margin-top: 0.5rem;">
-                            분야: <span id="detected-field" style="color: var(--primary); font-weight: 600;">-</span>
-                            <span id="verification-badge"
-                                style="margin-left: 0.5rem; font-size: 0.75rem; background: var(--warning); color: black; padding: 2px 6px; border-radius: 4px; display: none;">법령
-                                검증 필요</span>
+                        <!-- AI Model Selection -->
+                        <div
+                            style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: var(--text-muted);">
+                            <span>사용할 AI 모델:</span>
+                            <select id="ai-model-select"
+                                style="padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text);">
+                                <option value="gemini-3-pro-preview">Gemini 3.0 Pro (Preview/최고성능)</option>
+                                <option value="gemini-3-flash-preview">Gemini 3.0 Flash (Preview/빠름)</option>
+                                <option value="gemini-2.5-pro">Gemini 2.5 Pro (Stable/고성능)</option>
+                                <option value="gemini-2.0-flash" selected>Gemini 2.0 Flash (Stable/균형)</option>
+                            </select>
                         </div>
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label>씬 개수</label>
-                    <select id="scene-count">
-                        <option value="6">6개 (간단)</option>
-                        <option value="8" selected>8개 (기본)</option>
-                        <option value="10">10개 (상세)</option>
-                        <option value="15">15개 (시리즈 분할)</option>
-                    </select>
+                <div id="manual-input-area" style="display : none;">
+                    <div class="form-group">
+                        <label for="manual-script">시나리오 또는 텍스트 입력</label>
+                        <textarea id="manual-script" rows="5" placeholder="직접 작성한 시나리오나 텍스트 내용을 입력해주세요."></textarea>
+                    </div>
                 </div>
+
+                <!-- Smart Analysis Result Removed -->
             </div>
 
             <div class="actions">
                 <div></div>
-                <button class="btn btn-primary" onclick="startWorkflow()">시작하기 →</button>
+                <!-- Initial Start Button Hidden when Analysis Shown -->
+                <button class="btn btn-primary" id="btn-start-next" onclick="startWorkflow()"
+                    style="display: block; width: 100%;">
+                    웹툰 제작 시작하기 🚀
+                </button>
             </div>
         </div>
 
-        <!-- Step 2: 자료 수집 검토 -->
+        <!-- Step 2: 자료 수집 및 추천 -->
         <div class="step-content" id="step-2">
             <div class="loading" id="loading-data">
                 <div class="spinner"></div>
-                <div>자료를 수집하고 있습니다...</div>
+                <div>AI가 관련 법령과 상세 정보를 수집하고 있습니다...</div>
             </div>
 
-            <div class="card" id="data-review" style="display: none;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <h2 class="card-title" style="margin-bottom: 0;">📚 수집된 자료 검토</h2>
-                    <select id="data-model" style="width: auto; padding: 0.5rem;">
-                        <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-                        <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite</option>
-                        <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-                    </select>
+            <div id="data-review-area" style="display: none;">
+                <div class="card">
+                    <h2 class="card-title">📚 수집된 상세 정보</h2>
+                    <p class="card-desc">AI가 키워드에 맞춰 수집한 내용입니다. 필요 시 본문을 수정하거나 항목을 추가하세요.</p>
+                    <div id="data-container"></div>
+                    <button class="btn btn-secondary" style="margin-top: 1rem; width: 100%;"
+                        onclick="openAddDataModal()">+ 정보 항목 추가</button>
                 </div>
-                <p class="card-desc">AI가 수집한 자료를 확인하고 수정하세요. 불필요한 내용은 삭제하고, 추가할 내용이 있으면 입력하세요.</p>
 
-                <div id="data-container"></div>
+                <!-- AI 분할 추천 -->
+                <div class="card"
+                    style="background: linear-gradient(135deg, rgba(74, 144, 226, 0.05), rgba(74, 144, 226, 0.15)); border: 1px solid var(--primary);">
+                    <h3 style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">🪄 AI 시퀀스 추천
+                    </h3>
+                    <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1rem;">수집된 정보의 양을 분석했을 때,
+                        다음과 같은 구성을 추천합니다.</p>
 
-                <div class="form-group" style="margin-top: 1rem;">
-                    <div style="display: flex; gap: 0.5rem;">
-                        <input type="text" id="new-data-input" placeholder="추가할 자료 내용 입력..." style="flex: 1;">
-                        <button class="btn btn-secondary" onclick="addDataItem()">+ 추가</button>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+                        <div>
+                            <label style="font-weight: 600;">총 제작 씬(Scene) 개수</label>
+                            <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.5rem;">
+                                <input type="number" id="total-scene-count" value="8"
+                                    style="width: 80px; text-align: center; font-size: 1.25rem;">
+                                <span style="font-size: 0.875rem; color: var(--text-muted);">추천: <b
+                                        id="ai-rec-scenes">8</b>개</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label style="font-weight: 600;">시리즈 분할 (인스타 캐러셀용)</label>
+                            <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.5rem;">
+                                <input type="text" id="series-split" value="8" placeholder="예: 8,7 (8장+7장)"
+                                    style="width: 120px; text-align: center;">
+                                <span style="font-size: 0.875rem; color: var(--text-muted);">추천: <b
+                                        id="ai-rec-split">단일</b></span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <div class="actions" id="data-actions" style="display: none;">
                 <button class="btn btn-secondary" onclick="goToStep(1)">← 이전</button>
-                <button class="btn btn-primary" onclick="confirmData()">자료 확정 → 스토리 생성</button>
+                <button class="btn btn-primary" onclick="confirmData()">스토리 구성 확인 →</button>
             </div>
         </div>
 
-        <!-- Step 3: 스토리 검토 -->
+        <!-- Step 3: 스토리 및 캐릭터 관리 -->
         <div class="step-content" id="step-3">
             <div class="loading" id="loading-story">
                 <div class="spinner"></div>
-                <div>스토리를 생성하고 있습니다...</div>
+                <div>맞춤형 스토리를 구성 중입니다...</div>
             </div>
 
-            <div class="card" id="story-review" style="display: none;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <h2 class="card-title" style="margin-bottom: 0;">📖 씬 검토</h2>
-                    <select id="story-model" style="width: auto; padding: 0.5rem;">
-                        <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-                        <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite</option>
-                        <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-                    </select>
+            <div id="story-review-area" style="display: none;">
+                <!-- 캐릭터 프로필 섹션 -->
+                <div class="card">
+                    <h2 class="card-title">👥 등장인물 프로필</h2>
+                    <div id="character-profiles" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <!-- Character Profile Cards will be injected here -->
+                    </div>
                 </div>
-                <p class="card-desc">생성된 스토리를 확인하고 필요시 수정하세요.</p>
 
-                <div id="scenes-container"></div>
-
-                <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
-                    <button class="btn btn-secondary" onclick="addNewScene()">+ 씬 추가</button>
-                    <button class="btn btn-secondary" onclick="regenerateAllScenes()">🔄 전체 재생성</button>
+                <!-- 스토리 씬 섹션 -->
+                <div class="card">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h2 class="card-title" style="margin-bottom: 0;">📖 씬 검토 및 규칙 확인</h2>
+                        <div style="font-size: 0.75rem; color: var(--text-muted);" id="rule-status">대사 20자 / 말풍선 2개 준수 중
+                        </div>
+                    </div>
+                    <div id="scenes-container"></div>
                 </div>
             </div>
 
             <div class="actions" id="story-actions" style="display: none;">
                 <button class="btn btn-secondary" onclick="goToStep(2)">← 이전</button>
-                <button class="btn btn-primary" onclick="approveScenes()">모든 씬 확정 → 이미지 생성</button>
+                <button class="btn btn-primary" onclick="approveScenes()">사용자 정의 레이아웃/스타일 설정 →</button>
             </div>
         </div>
 
-        <!-- Step 4: 이미지 검토 -->
+        <!-- Step 4: 상세 설정 (Font, Style, Layout, Ratio, Model) -->
         <div class="step-content" id="step-4">
-            <div class="loading" id="loading-images">
-                <div class="spinner"></div>
-                <div>이미지를 생성하고 있습니다...</div>
-                <div style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;">씬당 약 10-15초 소요됩니다.</div>
-            </div>
-
-            <div class="card" id="images-review" style="display: none;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <h2 class="card-title" style="margin-bottom: 0;">🖼️ 이미지 검토</h2>
-                    <select id="image-model" style="width: auto; padding: 0.5rem;">
-                        <option value="dall-e-3">DALL-E 3 (고품질)</option>
-                        <option value="dall-e-2">DALL-E 2 (경제적)</option>
-                        <option value="gpt-image-1">GPT Image 1 (최신)</option>
-                    </select>
-                </div>
-                <p class="card-desc">생성된 이미지를 확인하세요. 불만족스러운 이미지는 개별 재생성 가능합니다.</p>
-
-                <div id="images-container"
-                    style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem;">
-                </div>
-            </div>
-
-            <div class="actions" id="images-actions" style="display: none;">
-                <button class="btn btn-secondary" onclick="goToStep(3)">← 이전</button>
-                <button class="btn btn-primary" onclick="generateCaption()">캡션 생성 →</button>
-            </div>
-        </div>
-
-        <!-- Step 5: 캡션 검토 -->
-        <div class="step-content" id="step-5">
-            <div class="loading" id="loading-caption">
-                <div class="spinner"></div>
-                <div>캡션을 생성하고 있습니다...</div>
-            </div>
-
-            <div class="card" id="caption-review" style="display: none;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <h2 class="card-title" style="margin-bottom: 0;">📝 캡션 검토</h2>
-                    <select id="caption-model" style="width: auto; padding: 0.5rem;">
-                        <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-                        <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite</option>
-                        <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>🔥 훅 문장 (첫 줄)</label>
-                    <input type="text" id="caption-hook">
-                </div>
-
-                <div class="form-group">
-                    <label>📝 본문 캡션</label>
-                    <textarea id="caption-body" rows="4"></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label>💡 전문가 Tip</label>
-                    <input type="text" id="caption-tip">
-                </div>
-
-                <div class="form-group">
-                    <label>#️⃣ 해시태그</label>
-                    <textarea id="caption-hashtags" rows="2" placeholder="#태그1 #태그2 ..."></textarea>
-                </div>
-            </div>
-
-            <div class="actions" id="caption-actions" style="display: none;">
-                <button class="btn btn-secondary" onclick="goToStep(4)">← 이전</button>
-                <button class="btn btn-primary" onclick="goToStep(6)">최종 확인 →</button>
-            </div>
-        </div>
-
-        <!-- Step 6: 최종 발행 -->
-        <div class="step-content" id="step-6">
             <div class="card">
-                <h2 class="card-title">🚀 최종 확인 및 발행</h2>
-                <p class="card-desc">모든 준비가 완료되었습니다!</p>
+                <h2 class="card-title">⚙️ 고도화된 제작 설정</h2>
 
-                <div id="final-preview" style="text-align: center; padding: 2rem;">
-                    <div style="font-size: 4rem; margin-bottom: 1rem;">✅</div>
-                    <div style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem;">웹툰 생성 완료!</div>
-                    <div style="color: var(--text-muted);">인스타그램에 발행하거나 이미지를 다운로드하세요.</div>
+                <div class="tab-container">
+                    <div class="tab active" onclick="switchSettingTab('image')">그림 스타일</div>
+                    <div class="tab" onclick="switchSettingTab('text')">텍스트 & 폰트</div>
+                    <div class="tab" onclick="switchSettingTab('layout')">장면 & 비율</div>
                 </div>
+
+                <!-- Image Settings Tab -->
+                <div id="setting-tab-image" class="tab-content active">
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label>메인 스타일</label>
+                            <select id="image-style" onchange="updateSubStyles()">
+                                <option value="webtoon">웹툰 (스토리텔링 중심)</option>
+                                <option value="card_news">카드뉴스 (정보전달 중심)</option>
+                                <option value="simple">단순 캐러셀 (깔끔한 배경)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>세부 화풍</label>
+                            <select id="image-sub-style">
+                                <option value="normal">일반</option>
+                                <option value="ghibli">지브리 스타일</option>
+                                <option value="romance">로맨틱 코미디</option>
+                                <option value="business">깔끔한 비즈니스</option>
+                                <option value="comic">코믹 스타일</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>이미지 생성 모델</label>
+                        <select id="image-model">
+                            <option value="dall-e-3">DALL-E 3 (고품질 기본)</option>
+                            <option value="dall-e-2">DALL-E 2 (빠른 생성)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Text Settings Tab -->
+                <div id="setting-tab-text" class="tab-content" style="display: none;">
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label>폰트 선택</label>
+                            <select id="font-family">
+                                <option value="NanumGothic">나눔고딕 (기본)</option>
+                                <option value="Bamin">배민체 (우아한형제들)</option>
+                                <option value="Malgun">맑은고딕</option>
+                                <option value="Cafe24">Cafe24</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>대사 가독성 옵션</label>
+                            <select id="dialogue-placement">
+                                <option value="bubble">말풍선 (친근함)</option>
+                                <option value="subtitle">하단 자막 (가독성 우수)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label>대사 크기</label>
+                            <input type="range" id="font-size-dialogue" min="18" max="36" value="24"
+                                oninput="document.getElementById('fs-d-val').innerText=this.value+'px'">
+                            <span id="fs-d-val">24px</span>
+                        </div>
+                        <div class="form-group">
+                            <label>나레이션 크기</label>
+                            <input type="range" id="font-size-narration" min="16" max="30" value="20"
+                                oninput="document.getElementById('fs-n-val').innerText=this.value+'px'">
+                            <span id="fs-n-val">20px</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Layout Settings Tab -->
+                <div id="setting-tab-layout" class="tab-content" style="display: none;">
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label>이미지 비율</label>
+                            <select id="aspect-ratio">
+                                <option value="4:5" selected>1080x1350 (인스타 세로 권장)</option>
+                                <option value="1:1">1080x1080 (정사각형)</option>
+                                <option value="9:16">1080x1920 (릴스/스토리용)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>페이지 번호 위치</label>
+                            <select id="page-number-position">
+                                <option value="bottom_right">우측 하단 (기본)</option>
+                                <option value="bottom_center">중앙 하단</option>
+                                <option value="hide">표시 안 함</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+
             </div>
 
             <div class="actions">
-                <button class="btn btn-secondary" onclick="goToStep(5)">← 이전</button>
-                <div style="display: flex; gap: 0.5rem;">
-                    <button class="btn btn-secondary" onclick="downloadImages()">💾 다운로드</button>
-                    <button class="btn btn-primary" onclick="publishToInstagram()">📱 인스타그램 발행</button>
+                <button class="btn btn-secondary" onclick="goToStep(3)">← 이전</button>
+                <div style="display: flex; gap: 1rem; align-items: center;">
+                    <span style="font-size: 0.875rem; color: var(--text-muted);">예상 소요 시간: 약 <b
+                            id="image-est-time">2</b>분</span>
+                    <button class="btn btn-primary" onclick="startImageGeneration()">이미지 생성 시작 🚀</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- Step 5: 이미지 생성 및 검토 -->
+        <div class="step-content" id="step-5">
+            <div class="loading" id="loading-images">
+                <div class="spinner"></div>
+                <div id="image-progress-text">이미지 렌더링 중...</div>
+                <div style="margin-top: 1rem; width: 100%; max-width: 400px; margin-left: auto; margin-right: auto;">
+                    <div
+                        style="background: var(--bg-input); border-radius: 10px; height: 12px; overflow: hidden; border: 1px solid var(--border);">
+                        <div id="image-progress-bar"
+                            style="background: var(--primary); height: 100%; width: 0%; transition: width 0.5s;"></div>
+                    </div>
+                    <div id="image-progress-detail"
+                        style="text-align: right; font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">0 /
+                        0</div>
+                </div>
+            </div>
+
+            <div id="images-review-area" style="display: none;">
+                <div class="card">
+                    <h2 class="card-title">🎞️ 이미지 생성 결과</h2>
+                    <div id="images-container"
+                        style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem;">
+                        <!-- Generated images will be injected here -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="actions" id="image-actions" style="display: none;">
+                <button class="btn btn-secondary" onclick="goToStep(4)">← 이전</button>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-primary" onclick="generateCaption()">캡션 생성 및 발행 준비 →</button>
+                </div>
+            </div>
+
+            <div class="loading" id="loading-caption" style="display: none;">
+                <div class="spinner"></div>
+                <div>AI가 인스타그램 맞춤형 캡션을 생성하고 있습니다...</div>
+            </div>
+        </div>
+
+        <!-- Step 6: 최종 발행 & Instagram Preview -->
+        <div class="step-content" id="step-6">
+            <div style="display: grid; grid-template-columns: 1fr 380px; gap: 2rem;">
+                <!-- Left: Instagram Mockup -->
+                <div class="card"
+                    style="padding: 0; overflow: hidden; background: #fff; color: #000; border-radius: 12px; border: 1px solid #dbdbdb;">
+                    <div
+                        style="padding: 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #efefef;">
+                        <div
+                            style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); padding: 2px;">
+                            <div
+                                style="width: 100%; height: 100%; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold;">
+                                TAX</div>
+                        </div>
+                        <span style="font-weight: 600; font-size: 14px;">tax_webtoon_pro</span>
+                    </div>
+
+                    <div id="insta-preview-carousel"
+                        style="aspect-ratio: 1/1; background: #fafafa; position: relative;">
+                        <!-- Preview Image will be here -->
+                        <img id="insta-preview-img" src="" style="width: 100%; height: 100%; object-fit: cover;">
+                        <div style="position: absolute; bottom: 10px; right: 10px; background: rgba(0,0,0,0.7); color: #fff; padding: 4px 8px; border-radius: 12px; font-size: 12px;"
+                            id="insta-carousel-index">1 / 8</div>
+                    </div>
+
+                    <div style="padding: 12px;">
+                        <div style="display: flex; gap: 15px; margin-bottom: 10px;">
+                            <span>❤️</span> <span>💬</span> <span>✈️</span> <span style="margin-left: auto;">🔖</span>
+                        </div>
+                        <div style="font-weight: 600; font-size: 14px; margin-bottom: 5px;">좋아요 1,234개</div>
+                        <div style="font-size: 14px; line-height: 1.4;">
+                            <span style="font-weight: 600; margin-right: 5px;">tax_webtoon_pro</span>
+                            <span id="insta-preview-caption-text">AI가 생성한 캡션이 이곳에 표시됩니다.</span>
+                        </div>
+                        <div style="color: #0095f6; font-size: 14px; margin-top: 5px;" id="insta-preview-hashtags">#해시태그
+                            #웹툰</div>
+                    </div>
+                </div>
+
+                <!-- Right: Content Review & Actions -->
+                <div>
+                    <div class="card" style="padding: 1.5rem;">
+                        <h2 class="card-title" style="font-size: 1.25rem;">📝 캡션 및 태그 수정</h2>
+                        <div class="form-group">
+                            <label>🔥 훅 문장</label>
+                            <input type="text" id="final-hook" oninput="updateInstaPreview()">
+                        </div>
+                        <div class="form-group">
+                            <label>📝 본문 캡션</label>
+                            <textarea id="final-body" rows="6" oninput="updateInstaPreview()"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>💡 전문가 Tip</label>
+                            <input type="text" id="final-tip" oninput="updateInstaPreview()">
+                        </div>
+                        <div class="form-group">
+                            <label>#️⃣ 해시태그</label>
+                            <textarea id="final-hashtags" rows="2" oninput="updateInstaPreview()"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="card" style="padding: 1.5rem; background: var(--bg-input);">
+                        <h3 style="font-size: 1rem; margin-bottom: 1rem;">🚀 발행 옵션</h3>
+                        <button class="btn btn-primary" onclick="publishToInstagram()"
+                            style="width: 100%; margin-bottom: 0.5rem;">인스타그램 즉시 발행</button>
+                        <button class="btn btn-secondary" onclick="downloadImages()" style="width: 100%;">이미지 ZIP
+                            다운로드</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="actions" style="margin-top: 2rem;">
+                <button class="btn btn-secondary" onclick="goToStep(5)">← 이전 단계</button>
             </div>
         </div>
     </main>
@@ -620,81 +819,150 @@
     <script>
         let currentStep = 1;
         let sessionId = null;
-        let selectedMode = 'auto';
         let storyData = null;
-        let imagesData = null;
-        let captionData = null;
+        let collectedData = [];
+        let characters = [];
+        let selectedMode = 'auto'; // 'auto' or 'manual'
 
         function selectMode(mode) {
             selectedMode = mode;
-            document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('selected'));
-            document.querySelector(`[data-mode="${mode}"]`).classList.add('selected');
-        }
-
-        function goToStep(step) {
-            currentStep = step;
-            document.querySelectorAll('.step-content').forEach(c => c.classList.remove('active'));
-            document.getElementById(`step-${step}`).classList.add('active');
-
-            document.querySelectorAll('.step').forEach(s => {
-                const sNum = parseInt(s.dataset.step);
-                s.classList.remove('active', 'done');
-                if (sNum < step) s.classList.add('done');
-                if (sNum === step) s.classList.add('active');
+            document.querySelectorAll('.mode-card').forEach(c => {
+                c.classList.toggle('selected', c.dataset.mode === mode);
             });
-        }
 
-        // 진행 단계 버튼 클릭 시 해당 단계로 이동 (완료된 단계만 가능)
-        function navigateToStep(step) {
-            const stepEl = document.querySelector(`[data-step="${step}"]`);
-            // 현재 단계이거나 완료된 단계만 이동 가능
-            if (step <= currentStep || stepEl.classList.contains('done')) {
-                goToStep(step);
+            if (mode === 'auto') {
+                document.getElementById('keyword-input-area').style.display = 'block';
+                document.getElementById('manual-input-area').style.display = 'none';
+                document.getElementById('btn-start-next').innerText = '웹툰 제작 시작하기 🚀';
+            } else {
+                document.getElementById('keyword-input-area').style.display = 'none';
+                document.getElementById('manual-input-area').style.display = 'block';
+                document.getElementById('btn-start-next').innerText = '다음 단계: 스토리 직접 구성 →';
             }
         }
 
-        async function startWorkflow() {
-            const keyword = document.getElementById('keyword').value;
-            if (!keyword && selectedMode === 'auto') {
+        // --- Step 1: 분야 감지 (Intelligent Start) ---
+        async function detectField() {
+            const keyword = document.getElementById('keyword').value.trim();
+            const model = document.getElementById('ai-model-select').value;
+
+            if (!keyword) {
                 alert('키워드를 입력해주세요.');
                 return;
             }
 
+            const btn = document.querySelector('#step-1 .btn-secondary');
+            const originalText = btn.innerText;
+            btn.innerText = 'AI 분석 중...';
+            btn.disabled = true;
+
             try {
+                // 1. 세션 시작 및 필드 감지
                 const res = await fetch('/api/workflow/start', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ mode: selectedMode, keyword })
+                    body: JSON.stringify({ mode: 'auto', keyword, model })
                 });
                 const data = await res.json();
                 sessionId = data.session_id;
 
-                if (data.field) {
-                    document.getElementById('field-result').style.display = 'block';
-                    document.getElementById('detected-field').textContent = data.field;
-                    if (data.field_requires_verification) {
-                        document.getElementById('verification-badge').style.display = 'inline';
-                    }
+                // 2. 세션 정보 조회 (감지된 결과 확인)
+                const sessionRes = await fetch(`/api/workflow/session/${sessionId}`);
+                const session = await sessionRes.json();
+                const info = session.field_info;
+
+                // 3. Step 1 결과 UI 표시
+                document.getElementById('smart-analysis-result').style.display = 'block';
+                // 기존 시작 버튼 숨김
+                document.getElementById('btn-start-next').style.display = 'none';
+
+                // 값 바인딩
+                document.getElementById('confirmed-field').value = info.field_code || 'GENERAL';
+                document.getElementById('confirmed-year').innerText = info.target_year || new Date().getFullYear();
+                document.getElementById('hidden-target-year').value = info.target_year || new Date().getFullYear();
+
+                if (info.requires_legal_verification) {
+                    document.getElementById('verification-needed-badge').style.display = 'flex';
+                } else {
+                    document.getElementById('verification-needed-badge').style.display = 'none';
                 }
 
-                goToStep(2);
-                collectData();
+                btn.innerText = '다시 감지';
+                btn.disabled = false;
+
             } catch (e) {
-                alert('오류가 발생했습니다: ' + e.message);
+                console.error("Detect Field Error:", e);
+                alert('분야 감지 오류: ' + e.message);
+                btn.innerText = originalText;
+                btn.disabled = false;
             }
         }
 
-        // 자료 수집 데이터
-        let collectedData = [];
+        async function confirmAndStart() {
+            // 사용자가 수정한 값 (혹은 AI 값)으로 확정
+            const finalField = document.getElementById('confirmed-field').value;
+            const finalYear = document.getElementById('hidden-target-year').value;
 
+            // Step 1 -> Step 2
+            navigateToStep(2);
+            startDataCollection();
+        }
+
+        async function startWorkflow() {
+            if (selectedMode === 'manual') {
+                alert('수동 모드 준비 중입니다. 현재는 자동 모드만 지원됩니다.');
+                return;
+            }
+
+            const keyword = document.getElementById('keyword').value.trim();
+            if (!keyword) {
+                alert('키워드를 입력해주세요.');
+                return;
+            }
+
+            // [변경] 감지 단계 없이 바로 시작
+            // 먼저 세션을 생성하고
+            const model = document.getElementById('ai-model-select').value;
+            try {
+                const btn = document.getElementById('btn-start-next');
+                btn.innerText = 'AI가 분석 및 시작 중...';
+                btn.disabled = true;
+
+                const res = await fetch('/api/workflow/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode: 'auto', keyword, model })
+                });
+                const data = await res.json();
+                sessionId = data.session_id;
+
+                btn.innerText = '웹툰 제작 시작하기 🚀';
+                btn.disabled = false;
+
+                // 바로 자료 수집 단계로 이동
+                goToStep(2);
+                collectData();
+
+            } catch (e) {
+                console.error(e);
+                alert('시작 오류: ' + e.message);
+                document.getElementById('btn-start-next').disabled = false;
+            }
+        }
+
+        // --- Step 2: 자료 수집 ---
         async function collectData() {
-            document.getElementById('loading-data').classList.add('show');
-            document.getElementById('data-review').style.display = 'none';
-            document.getElementById('data-actions').style.display = 'none';
+            const loadingEl = document.getElementById('loading-data');
+            const reviewArea = document.getElementById('data-review-area');
+            const actionsEl = document.getElementById('data-actions');
+
+            loadingEl.style.display = 'block';
+            reviewArea.style.display = 'none';
+            actionsEl.style.display = 'none';
 
             try {
-                const model = document.getElementById('data-model')?.value || 'gemini-2.0-flash';
                 const keyword = document.getElementById('keyword').value;
+                const model = document.getElementById('ai-model-select').value;
 
                 const res = await fetch('/api/workflow/collect-data', {
                     method: 'POST',
@@ -706,48 +974,40 @@
 
                 renderDataItems();
 
-                document.getElementById('loading-data').classList.remove('show');
-                document.getElementById('data-review').style.display = 'block';
-                document.getElementById('data-actions').style.display = 'flex';
+                const recScenes = Math.min(Math.max(collectedData.length * 1.5, 6), 15).toFixed(0);
+                document.getElementById('total-scene-count').value = recScenes;
+                document.getElementById('ai-rec-scenes').innerText = recScenes;
+
+                loadingEl.style.display = 'none';
+                reviewArea.style.display = 'block';
+                actionsEl.style.display = 'flex';
             } catch (e) {
-                // API가 아직 없으면 더미 데이터 사용
-                const keyword = document.getElementById('keyword').value;
-                collectedData = [
-                    `${keyword}의 기본 개념과 정의`,
-                    `${keyword} 관련 최신 법령 및 규정`,
-                    `${keyword} 신고/신청 방법 및 절차`,
-                    `${keyword} 시 주의사항 및 팁`,
-                    `${keyword} 관련 자주 묻는 질문`
-                ];
-                renderDataItems();
-                document.getElementById('loading-data').classList.remove('show');
-                document.getElementById('data-review').style.display = 'block';
-                document.getElementById('data-actions').style.display = 'flex';
+                alert('자료 수집 오류: ' + e.message);
+                loadingEl.style.display = 'none';
             }
         }
 
         function renderDataItems() {
             const container = document.getElementById('data-container');
             container.innerHTML = collectedData.map((item, idx) => `
-                <div class="scene-card" style="display: flex; justify-content: space-between; align-items: center;">
-                    <div style="flex: 1;">📄 ${item}</div>
-                    <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="deleteDataItem(${idx})">🗑️ 삭제</button>
+                <div class="char-card" style="cursor:pointer; margin-bottom: 0.5rem; align-items: flex-start; flex-direction: column;" onclick="toggleDataBody(${idx})">
+                    <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+                        <span style="font-weight: 600;">📄 ${item.title}</span>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" onclick="event.stopPropagation(); editData(${idx})">수정</button>
+                            <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" onclick="event.stopPropagation(); deleteData(${idx})">삭제</button>
+                        </div>
+                    </div>
+                    <div id="data-body-${idx}" style="display: block; margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-muted); line-height: 1.5; border-top: 1px solid var(--border); padding-top: 0.5rem; width: 100%;">
+                        ${item.content}
+                    </div>
                 </div>
             `).join('');
         }
 
-        function deleteDataItem(idx) {
-            collectedData.splice(idx, 1);
-            renderDataItems();
-        }
-
-        function addDataItem() {
-            const input = document.getElementById('new-data-input');
-            if (input.value.trim()) {
-                collectedData.push(input.value.trim());
-                input.value = '';
-                renderDataItems();
-            }
+        function toggleDataBody(idx) {
+            const el = document.getElementById(`data-body-${idx}`);
+            el.style.display = el.style.display === 'none' ? 'block' : 'none';
         }
 
         async function confirmData() {
@@ -755,159 +1015,193 @@
             generateStory();
         }
 
+        // --- Step 3: 스토리 생성 ---
         async function generateStory() {
-            document.getElementById('loading-story').classList.add('show');
-            document.getElementById('story-review').style.display = 'none';
-            document.getElementById('story-actions').style.display = 'none';
+            const loadingEl = document.getElementById('loading-story');
+            const reviewArea = document.getElementById('story-review-area');
+            const actionsEl = document.getElementById('story-actions');
 
-            const sceneCount = parseInt(document.getElementById('scene-count').value);
+            loadingEl.style.display = 'block';
+            reviewArea.style.display = 'none';
+            actionsEl.style.display = 'none';
+
+            const sceneCount = parseInt(document.getElementById('total-scene-count').value);
 
             try {
                 const res = await fetch('/api/workflow/generate-story', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ session_id: sessionId, scene_count: sceneCount })
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        scene_count: sceneCount,
+                        questioner_type: '일반인',
+                        expert_type: '세무사'
+                    })
                 });
                 const data = await res.json();
                 storyData = data.story;
+                characters = storyData.characters || [];
 
+                renderCharacters();
                 renderScenes(storyData.scenes);
 
-                document.getElementById('loading-story').classList.remove('show');
-                document.getElementById('story-review').style.display = 'block';
-                document.getElementById('story-actions').style.display = 'flex';
+                loadingEl.style.display = 'none';
+                reviewArea.style.display = 'block';
+                actionsEl.style.display = 'flex';
             } catch (e) {
                 alert('스토리 생성 오류: ' + e.message);
+                loadingEl.style.display = 'none';
             }
         }
 
-        function renderScenes(scenes) {
-            const container = document.getElementById('scenes-container');
-            container.innerHTML = scenes.map((scene, idx) => `
-                <div class="scene-card" id="scene-card-${idx}">
-                    <div class="scene-header">
-                        <span class="scene-num">씬 ${scene.scene_number}</span>
-                        <div style="display: flex; gap: 0.5rem; align-items: center;">
-                            <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="regenerateScene(${idx})">🔄 재생성</button>
-                            <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="toggleEditScene(${idx})">✏️ 수정</button>
-                            <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; color: var(--danger);" onclick="deleteScene(${idx})">🗑️</button>
-                            <span class="scene-status ${scene.status === 'approved' ? 'approved' : ''}">${scene.status === 'approved' ? '확정' : '검토 필요'}</span>
-                        </div>
-                    </div>
-                    
-                    <!-- 보기 모드 -->
-                    <div class="scene-view" id="scene-view-${idx}">
-                        <div class="scene-desc">🎬 ${scene.scene_description}</div>
-                        ${scene.dialogues.map(d => `
-                            <div class="dialogue">
-                                <span class="dialogue-char">${d.character}:</span> "${d.text}"
-                            </div>
-                        `).join('')}
-                        ${scene.narration ? `<div class="dialogue" style="font-style: italic;">📖 ${scene.narration}</div>` : ''}
-                        ${scene.warnings && scene.warnings.length ? scene.warnings.map(w => `<div class="warning">⚠️ ${w}</div>`).join('') : ''}
-                    </div>
-                    
-                    <!-- 수정 모드 -->
-                    <div class="scene-edit" id="scene-edit-${idx}" style="display: none;">
-                        <div class="form-group" style="margin-bottom: 0.5rem;">
-                            <label style="font-size: 0.75rem;">장면 설명</label>
-                            <textarea id="edit-desc-${idx}" rows="2" style="font-size: 0.875rem;">${scene.scene_description}</textarea>
-                        </div>
-                        ${scene.dialogues.map((d, dIdx) => `
-                            <div class="form-group" style="margin-bottom: 0.5rem;">
-                                <label style="font-size: 0.75rem;">${d.character} 대사</label>
-                                <input type="text" id="edit-dialogue-${idx}-${dIdx}" value="${d.text}" style="font-size: 0.875rem;">
-                            </div>
-                        `).join('')}
-                        ${scene.narration !== undefined ? `
-                            <div class="form-group" style="margin-bottom: 0.5rem;">
-                                <label style="font-size: 0.75rem;">나레이션</label>
-                                <input type="text" id="edit-narration-${idx}" value="${scene.narration || ''}" style="font-size: 0.875rem;">
-                            </div>
-                        ` : ''}
-                        <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-                            <button class="btn btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.75rem;" onclick="toggleEditScene(${idx})">취소</button>
-                            <button class="btn btn-primary" style="padding: 0.25rem 0.75rem; font-size: 0.75rem;" onclick="saveScene(${idx})">저장</button>
-                        </div>
+        function renderCharacters() {
+            const container = document.getElementById('character-profiles');
+            container.innerHTML = characters.map(c => `
+                <div class="char-card">
+                    <div class="char-avatar">👤</div>
+                    <div class="char-info">
+                        <div class="char-name">${c.name} <span class="char-role">${c.role}</span></div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">${c.appearance}</div>
                     </div>
                 </div>
             `).join('');
         }
 
-        function toggleEditScene(idx) {
-            const viewEl = document.getElementById(`scene-view-${idx}`);
-            const editEl = document.getElementById(`scene-edit-${idx}`);
-            if (viewEl.style.display === 'none') {
-                viewEl.style.display = 'block';
-                editEl.style.display = 'none';
-            } else {
-                viewEl.style.display = 'none';
-                editEl.style.display = 'block';
-            }
+        function renderScenes(scenes) {
+            const container = document.getElementById('scenes-container');
+            container.innerHTML = scenes.map(s => {
+                const densityWarnings = validateSceneRules(s);
+                return `
+                <div class="card" style="margin-bottom: 1rem; border: 1px solid ${densityWarnings.length > 0 ? 'var(--warning)' : 'var(--border)'};">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <span style="font-weight: 600;">씬 ${s.scene_number}</span>
+                        <div style="display: flex; gap: 0.5rem;">
+                             <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;">수정</button>
+                             <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;">재생성</button>
+                        </div>
+                    </div>
+                    <div style="font-size: 0.875rem; margin-bottom: 0.5rem;">🎬 ${s.scene_description}</div>
+                    ${s.dialogues.map(d => `
+                        <div style="background: var(--bg-input); padding: 0.5rem; border-radius: 6px; margin-bottom: 0.25rem; font-size: 0.875rem;">
+                            <span style="font-weight: 600; color: var(--primary);">${d.character}:</span> ${d.text}
+                            <span style="float: right; font-size: 0.7rem; color: var(--text-muted);">[${d.emotion}]</span>
+                        </div>
+                    `).join('')}
+                    ${s.narration ? `<div style="font-style: italic; color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;">💬 ${s.narration}</div>` : ''}
+                    
+                    ${densityWarnings.map(w => `
+                        <div class="rule-warning">⚠️ ${w}</div>
+                    `).join('')}
+                    
+                    ${densityWarnings.length > 0 ? `
+                        <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem;">
+                            <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; background: rgba(255, 152, 0, 0.1);">자동 씬 분할</button>
+                        </div>
+                    ` : ''}
+                </div>
+            `}).join('');
         }
 
-        function saveScene(idx) {
-            const scene = storyData.scenes[idx];
-            scene.scene_description = document.getElementById(`edit-desc-${idx}`).value;
-
-            scene.dialogues.forEach((d, dIdx) => {
-                const input = document.getElementById(`edit-dialogue-${idx}-${dIdx}`);
-                if (input) d.text = input.value;
+        function validateSceneRules(scene) {
+            const warnings = [];
+            scene.dialogues.forEach(d => {
+                if (d.text.length > 20) warnings.push(`${d.character} 대사가 너무 깁니다 (${d.text.length}자)`);
             });
-
-            const narrationInput = document.getElementById(`edit-narration-${idx}`);
-            if (narrationInput) scene.narration = narrationInput.value;
-
-            scene.status = 'approved';
-            renderScenes(storyData.scenes);
+            if (scene.dialogues.length > 2) warnings.push(`말풍선이 너무 많습니다 (${scene.dialogues.length}개)`);
+            if (scene.narration && scene.narration.length > 30) warnings.push(`나레이션이 너무 깁니다 (${scene.narration.length}자)`);
+            return warnings;
         }
 
-
-        async function approveScenes() {
-            try {
-                await fetch(`/api/workflow/approve-scenes?session_id=${sessionId}`, { method: 'POST' });
-                goToStep(4);
-                generateImages();
-            } catch (e) {
-                alert('오류: ' + e.message);
-            }
+        function approveScenes() {
+            goToStep(4);
+            document.getElementById('image-scene-count').innerText = storyData.scenes.length;
+            document.getElementById('image-est-time').innerText = Math.ceil(storyData.scenes.length * 0.25);
         }
 
-        async function generateImages() {
-            document.getElementById('loading-images').classList.add('show');
-            document.getElementById('images-review').style.display = 'none';
-            document.getElementById('images-actions').style.display = 'none';
+        // --- Step 4: 설정 탭 관리 ---
+        function switchSettingTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+
+            event.target.classList.add('active');
+            document.getElementById(`setting-tab-${tab}`).style.display = 'block';
+        }
+
+        // --- Step 5: 이미지 생성 ---
+        async function startImageGeneration() {
+            goToStep(5);
+            const loadingEl = document.getElementById('loading-images');
+            const reviewArea = document.getElementById('images-review-area');
+
+            loadingEl.style.display = 'block';
+            reviewArea.style.display = 'none';
+
+            const sceneCount = storyData.scenes.length;
+            const style = document.getElementById('image-style').value;
+            const subStyle = document.getElementById('image-sub-style').value;
+            const ratio = document.getElementById('aspect-ratio').value;
 
             try {
-                const res = await fetch('/api/workflow/generate-images', {
+                await fetch('/api/workflow/generate-images', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ session_id: sessionId, style: 'webtoon', sub_style: 'normal' })
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        style: style,
+                        sub_style: subStyle,
+                        aspect_ratio: ratio
+                    })
                 });
-                const data = await res.json();
-                imagesData = data.images;
 
-                const container = document.getElementById('images-container');
-                container.innerHTML = imagesData.map(img => `
-                    <div style="background: var(--bg-input); border-radius: 8px; overflow: hidden;">
-                        ${img.image_url ? `<img src="${img.image_url}" style="width: 100%; aspect-ratio: 4/5; object-fit: cover;">` : '<div style="width: 100%; aspect-ratio: 4/5; display: flex; align-items: center; justify-content: center; color: var(--text-muted);">생성 실패</div>'}
-                        <div style="padding: 0.5rem; text-align: center; font-size: 0.875rem;">씬 ${img.scene_number}</div>
-                    </div>
-                `).join('');
-
-                document.getElementById('loading-images').classList.remove('show');
-                document.getElementById('images-review').style.display = 'block';
-                document.getElementById('images-actions').style.display = 'flex';
+                checkImageProgress(sceneCount);
             } catch (e) {
-                alert('이미지 생성 오류: ' + e.message);
+                alert('이미지 생성 시작 오류: ' + e.message);
+                loadingEl.style.display = 'none';
             }
         }
 
+        function checkImageProgress(total) {
+            let current = 0;
+            const progressBar = document.getElementById('image-progress-bar');
+            const progressDetail = document.getElementById('image-progress-detail');
+            const loadingEl = document.getElementById('loading-images');
+            const reviewArea = document.getElementById('images-review-area');
+            const actionsEl = document.getElementById('image-actions');
+
+            const interval = setInterval(async () => {
+                const res = await fetch(`/api/workflow/session/${sessionId}`);
+                const session = await res.json();
+                current = session.images ? session.images.filter(img => img.status === 'generated').length : 0;
+
+                const progress = (current / total) * 100;
+                progressBar.style.width = `${progress}%`;
+                progressDetail.innerText = `${current} / ${total}`;
+
+                if (current >= total) {
+                    clearInterval(interval);
+                    renderFinalImages(session.images);
+                    loadingEl.style.display = 'none';
+                    reviewArea.style.display = 'block';
+                    actionsEl.style.display = 'flex';
+                }
+            }, 2000);
+        }
+
+        function renderFinalImages(images) {
+            const container = document.getElementById('images-container');
+            container.innerHTML = images.map(img => `
+                <div class="card" style="padding: 0.5rem;">
+                    <img src="${img.local_path}" style="width: 100%; border-radius: 8px; margin-bottom: 0.5rem;">
+                    <div style="font-size: 0.75rem; font-weight: 600;">씬 ${img.scene_number}</div>
+                    <button class="btn btn-secondary" style="width: 100%; padding: 4px; font-size: 0.75rem; margin-top: 0.5rem;">개별 재생성</button>
+                </div>
+            `).join('');
+        }
+
+        // --- Step 5: 이미지 생성 완료 후 캡션 생성 시작 ---
         async function generateCaption() {
-            goToStep(5);
-            document.getElementById('loading-caption').classList.add('show');
-            document.getElementById('caption-review').style.display = 'none';
-            document.getElementById('caption-actions').style.display = 'none';
+            const loadingEl = document.getElementById('loading-caption');
+            loadingEl.style.display = 'block';
 
             try {
                 const res = await fetch('/api/workflow/generate-caption', {
@@ -916,169 +1210,63 @@
                     body: JSON.stringify({ session_id: sessionId })
                 });
                 const data = await res.json();
-                captionData = data.caption;
+                const caption = data.caption;
 
-                document.getElementById('caption-hook').value = captionData.hook;
-                document.getElementById('caption-body').value = captionData.body;
-                document.getElementById('caption-tip').value = captionData.expert_tip;
-                document.getElementById('caption-hashtags').value = captionData.hashtags.join(' ');
+                // Step 6 입력 필드 세팅
+                document.getElementById('final-hook').value = caption.hook;
+                document.getElementById('final-body').value = caption.body;
+                document.getElementById('final-tip').value = caption.tip;
+                document.getElementById('final-hashtags').value = caption.hashtags.join(' ');
 
-                document.getElementById('loading-caption').classList.remove('show');
-                document.getElementById('caption-review').style.display = 'block';
-                document.getElementById('caption-actions').style.display = 'flex';
+                loadingEl.style.display = 'none';
+                goToStep(6);
+                updateInstaPreview();
             } catch (e) {
                 alert('캡션 생성 오류: ' + e.message);
+                loadingEl.style.display = 'none';
             }
         }
 
-        function downloadImages() {
-            if (!imagesData || imagesData.length === 0) {
-                alert('다운로드할 이미지가 없습니다.');
-                return;
+        function updateInstaPreview() {
+            const hook = document.getElementById('final-hook').value;
+            const body = document.getElementById('final-body').value;
+            const tip = document.getElementById('final-tip').value;
+            const hashtags = document.getElementById('final-hashtags').value;
+
+            const fullText = `${hook}\n\n${body}\n\n💡 Tip: ${tip}`;
+            document.getElementById('insta-preview-caption-text').innerText = fullText;
+            document.getElementById('insta-preview-hashtags').innerText = hashtags;
+
+            // 이미지 프리셋 (첫 번째 이미지 표시)
+            const firstImg = document.querySelector('#images-container img');
+            if (firstImg) {
+                document.getElementById('insta-preview-img').src = firstImg.src;
             }
-            // 각 이미지를 개별 다운로드 (ZIP은 백엔드 필요)
-            imagesData.forEach((img, idx) => {
-                if (img.image_url) {
-                    const a = document.createElement('a');
-                    a.href = img.image_url;
-                    a.download = `scene_${img.scene_number}.png`;
-                    a.target = '_blank';
-                    a.click();
-                }
+
+            const totalImages = document.querySelectorAll('#images-container img').length;
+            document.getElementById('insta-carousel-index').innerText = `1 / ${totalImages}`;
+        }
+
+        // --- 유틸리티 ---
+        function goToStep(step) {
+            currentStep = step;
+            document.querySelectorAll('.step-content').forEach(c => c.classList.remove('active'));
+            document.getElementById(`step-${step}`).classList.add('active');
+
+            document.querySelectorAll('.step').forEach(s => {
+                const sNum = parseInt(s.dataset.step);
+                s.classList.remove('active', 'done');
+                if (sNum < step) s.classList.add('done');
+                if (sNum === step) s.classList.add('active');
             });
-            alert('이미지 다운로드를 시작했습니다. 브라우저 설정에 따라 여러 파일이 다운로드됩니다.');
-        }
 
-        async function publishToInstagram() {
-            const hook = document.getElementById('caption-hook').value;
-            const body = document.getElementById('caption-body').value;
-            const tip = document.getElementById('caption-tip').value;
-            const hashtags = document.getElementById('caption-hashtags').value;
-
-            const fullCaption = `${hook}\n\n${body}\n\n💡 ${tip}\n\n${hashtags}`;
-
-            if (!confirm('Instagram에 발행하시겠습니까?\n\n' + fullCaption.substring(0, 200) + '...')) {
-                return;
-            }
-
-            try {
-                const res = await fetch('/api/workflow/publish', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        session_id: sessionId,
-                        caption: fullCaption,
-                        images: imagesData.map(i => i.image_url).filter(Boolean)
-                    })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    alert('🎉 Instagram 발행 완료!\n\n게시물 ID: ' + data.post_id);
-                } else {
-                    alert('발행 실패: ' + (data.error || '알 수 없는 오류'));
-                }
-            } catch (e) {
-                alert('Instagram 발행을 위해서는 설정에서 API 키를 먼저 입력해주세요.\n\n' + e.message);
+            if (step === 6) {
+                updateInstaPreview();
             }
         }
 
-        // 씬 추가
-        function addNewScene() {
-            const newSceneNum = storyData.scenes.length + 1;
-            const newScene = {
-                scene_number: newSceneNum,
-                scene_description: '새로운 씬 - 클릭하여 수정하세요',
-                dialogues: [
-                    { character: '민지', text: '대사를 입력하세요' }
-                ],
-                narration: '',
-                status: 'pending',
-                warnings: []
-            };
-            storyData.scenes.push(newScene);
-            renderScenes(storyData.scenes);
-        }
-
-        // 씬 삭제
-        function deleteScene(idx) {
-            if (confirm(`씬 ${idx + 1}을 삭제하시겠습니까?`)) {
-                storyData.scenes.splice(idx, 1);
-                // 씬 번호 재정렬
-                storyData.scenes.forEach((s, i) => s.scene_number = i + 1);
-                renderScenes(storyData.scenes);
-            }
-        }
-
-        // 씬 재생성
-        async function regenerateScene(idx) {
-            const scene = storyData.scenes[idx];
-            const model = document.getElementById('story-model')?.value || 'gemini-2.0-flash';
-
-            try {
-                const res = await fetch('/api/workflow/regenerate-scene', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        session_id: sessionId,
-                        scene_index: idx,
-                        model
-                    })
-                });
-                const data = await res.json();
-                if (data.scene) {
-                    storyData.scenes[idx] = data.scene;
-                    renderScenes(storyData.scenes);
-                }
-            } catch (e) {
-                alert('재생성 오류: ' + e.message);
-            }
-        }
-
-        // 전체 씬 재생성
-        async function regenerateAllScenes() {
-            if (!confirm('모든 씬을 다시 생성하시겠습니까?')) return;
-            generateStory();
-        }
-
-        // 이미지 재생성
-        async function regenerateImage(sceneIndex) {
-            const model = document.getElementById('image-model')?.value || 'dall-e-3';
-
-            try {
-                const container = document.getElementById('images-container');
-                container.children[sceneIndex].innerHTML = '<div style="width: 100%; aspect-ratio: 4/5; display: flex; align-items: center; justify-content: center;">⏳ 재생성 중...</div>';
-
-                const res = await fetch('/api/workflow/regenerate-image', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        session_id: sessionId,
-                        scene_index: sceneIndex,
-                        model
-                    })
-                });
-                const data = await res.json();
-                if (data.image) {
-                    imagesData[sceneIndex] = data.image;
-                    renderImages();
-                }
-            } catch (e) {
-                alert('이미지 재생성 오류: ' + e.message);
-            }
-        }
-
-        // 이미지 렌더링 함수
-        function renderImages() {
-            const container = document.getElementById('images-container');
-            container.innerHTML = imagesData.map((img, idx) => `
-                <div style="background: var(--bg-input); border-radius: 8px; overflow: hidden;">
-                    ${img.image_url ? `<img src="${img.image_url}" style="width: 100%; aspect-ratio: 4/5; object-fit: cover;">` : '<div style="width: 100%; aspect-ratio: 4/5; display: flex; align-items: center; justify-content: center; color: var(--text-muted);">생성 실패</div>'}
-                    <div style="padding: 0.5rem; text-align: center; font-size: 0.875rem;">
-                        씬 ${img.scene_number}
-                        <button class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.7rem; margin-left: 0.5rem;" onclick="regenerateImage(${idx})">🔄</button>
-                    </div>
-                </div>
-            `).join('');
+        function navigateToStep(step) {
+            if (step <= currentStep) goToStep(step);
         }
     </script>
 </body>

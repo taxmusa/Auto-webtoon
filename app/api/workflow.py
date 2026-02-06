@@ -28,6 +28,7 @@ sessions: dict[str, WorkflowSession] = {}
 class StartWorkflowRequest(BaseModel):
     mode: str = "auto"  # auto | manual
     keyword: Optional[str] = None
+    model: str = "gemini-3.0-flash"
 
 
 class StartWorkflowResponse(BaseModel):
@@ -39,9 +40,9 @@ class StartWorkflowResponse(BaseModel):
 
 class GenerateStoryRequest(BaseModel):
     session_id: str
+    questioner_type: str = "curious_beginner"
+    expert_type: str = "friendly_expert"
     scene_count: int = 8
-    questioner_type: str = "일반인"
-    expert_type: str = "세무사"
 
 
 class UpdateSceneRequest(BaseModel):
@@ -56,15 +57,14 @@ class GenerateImagesRequest(BaseModel):
     session_id: str
     style: str = "webtoon"
     sub_style: str = "normal"
+    aspect_ratio: str = "4:5"
 
 
 class GenerateCaptionRequest(BaseModel):
     session_id: str
 
 
-# ============================================
-# 엔드포인트
-# ============================================
+# ... (middle parts omitted) ...
 
 @router.post("/start", response_model=StartWorkflowResponse)
 async def start_workflow(request: StartWorkflowRequest):
@@ -86,7 +86,8 @@ async def start_workflow(request: StartWorkflowRequest):
     
     if mode == WorkflowMode.AUTO and request.keyword:
         gemini = get_gemini_service()
-        field_info = gemini.detect_field(request.keyword)
+        # AI 자동 감지 호출 (Async) - 모델 파라미터 전달
+        field_info = await gemini.detect_field(request.keyword, request.model)
         session.field_info = field_info
         session.state = WorkflowState.COLLECTING_INFO
         field_name = field_info.field.value
@@ -109,32 +110,52 @@ async def generate_story(request: GenerateStoryRequest):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     
+    if not session.keyword:
+         raise HTTPException(status_code=400, detail="Keyword is required")
+         
     session.state = WorkflowState.GENERATING_STORY
     
     gemini = get_gemini_service()
     
-    field = session.field_info.field if session.field_info else SpecializedField.GENERAL
+    field_info = session.field_info or await gemini.detect_field(session.keyword)
+    
+    # 세션에 저장된 수집 데이터 가져오기 ( Step 2에서 수집함)
+    collected_data = session.collected_data or []
+    
+    if not collected_data:
+        # 수집 자료가 없는 경우 즉석으로 수집
+        collected_data = await gemini.collect_data(session.keyword, field_info)
+        session.collected_data = collected_data
     
     character_settings = CharacterSettings(
         questioner_type=request.questioner_type,
         expert_type=request.expert_type
     )
     
-    story = await gemini.generate_story(
-        keyword=session.keyword or "일반 정보",
-        field=field,
-        scene_count=request.scene_count,
-        character_settings=character_settings
-    )
+    # 프로젝트 설정의 규칙 적용
+    rule_settings = session.settings.rules
     
-    session.story = story
-    session.state = WorkflowState.REVIEWING_SCENES
-    
-    return {
-        "session_id": session.session_id,
-        "state": session.state.value,
-        "story": story.model_dump()
-    }
+    try:
+        story = await gemini.generate_story(
+            keyword=session.keyword,
+            field_info=field_info,
+            collected_data=collected_data,
+            scene_count=request.scene_count,
+            character_settings=character_settings,
+            rule_settings=rule_settings
+        )
+        
+        session.story = story
+        session.state = WorkflowState.REVIEWING_SCENES
+        
+        return {
+            "session_id": session.session_id,
+            "state": session.state.value,
+            "story": story.model_dump()
+        }
+    except Exception as e:
+        session.state = WorkflowState.ERROR
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/session/{session_id}")
@@ -201,10 +222,16 @@ async def generate_images(request: GenerateImagesRequest):
     style = ImageStyle(request.style)
     sub_style = SubStyle(request.sub_style)
     
+    # 세션에 설정 저장
+    session.settings.image_style = style
+    session.settings.sub_style = sub_style
+    # aspect_ratio 처리 (OpenAI Service에서 지원하도록 전달)
+    
     images = await openai_service.generate_images_batch(
         scenes=session.story.scenes,
         style=style,
-        sub_style=sub_style
+        sub_style=sub_style,
+        aspect_ratio=request.aspect_ratio
     )
     
     session.images = images
@@ -272,49 +299,20 @@ async def collect_data(request: CollectDataRequest):
     
     gemini = get_gemini_service()
     
-    # AI를 사용해 관련 정보 수집
+    # AI를 사용해 상세 정보 수집
     try:
-        prompt = f"""
-다음 키워드에 대해 웹툰 스토리 제작에 필요한 핵심 정보 5-7개를 수집해주세요.
-각 정보는 한 문장으로 간결하게 작성합니다.
-
-키워드: {request.keyword}
-
-JSON 형식으로 응답:
-{{"items": ["정보1", "정보2", ...]}}
-"""
-        response = await gemini.model.generate_content_async(prompt)
-        import json
-        import re
+        field_info = session.field_info or await gemini.detect_field(request.keyword)
+        items = await gemini.collect_data(request.keyword, field_info, request.model)
         
-        text = response.text
-        json_match = re.search(r'\{.*\}', text, re.DOTALL)
-        if json_match:
-            data = json.loads(json_match.group())
-            items = data.get("items", [])
-        else:
-            items = [
-                f"{request.keyword}의 기본 개념과 정의",
-                f"{request.keyword} 관련 법령 및 규정",
-                f"{request.keyword} 절차 및 방법",
-                f"{request.keyword} 주의사항",
-                f"{request.keyword} 관련 FAQ"
-            ]
-    except:
-        items = [
-            f"{request.keyword}의 기본 개념과 정의",
-            f"{request.keyword} 관련 법령 및 규정",
-            f"{request.keyword} 절차 및 방법",
-            f"{request.keyword} 주의사항",
-            f"{request.keyword} 관련 FAQ"
-        ]
-    
-    session.collected_data = items
-    
-    return {
-        "session_id": session.session_id,
-        "items": items
-    }
+        # 세션에 저장 (상세 내용 포함)
+        session.collected_data = items
+        
+        return {
+            "session_id": session.session_id,
+            "items": items
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============================================
@@ -403,11 +401,15 @@ async def regenerate_image(request: RegenerateImageRequest):
     openai_service = get_openai_service()
     scene = session.story.scenes[request.scene_index]
     
+    # 세션 설정 사용
+    style = session.settings.image_style or ImageStyle.WEBTOON
+    sub_style = session.settings.sub_style or SubStyle.NORMAL
+    
     # 단일 이미지 재생성
     images = await openai_service.generate_images_batch(
         scenes=[scene],
-        style=ImageStyle.WEBTOON,
-        sub_style=SubStyle.NORMAL
+        style=style,
+        sub_style=sub_style
     )
     
     if images:
