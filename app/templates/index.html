@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --primary-light: #e0e7ff;
+            --bg: #0f172a;
+            --bg-card: #1e293b;
+            --bg-input: #334155;
+            --text: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border: #475569;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        /* Header */
+        header {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.25rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary), #a855f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Progress Steps */
+        .progress-bar {
+            background: var(--bg-card);
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .steps {
+            display: flex;
+            justify-content: center;
+            gap: 0;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .step {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .step:hover {
+            color: var(--primary);
+        }
+
+        .step.active {
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        .step.done {
+            color: var(--success);
+        }
+
+        .step.done:hover {
+            color: var(--primary);
+        }
+
+        .step-num {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--bg-input);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .step.active .step-num {
+            background: var(--primary);
+            color: white;
+        }
+
+        .step.done .step-num {
+            background: var(--success);
+            color: white;
+        }
+
+        .step-line {
+            width: 60px;
+            height: 2px;
+            background: var(--border);
+            margin: 0 0.5rem;
+        }
+
+        .step.done+.step-line {
+            background: var(--success);
+        }
+
+        /* Main Content */
+        main {
+            max-width: 900px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .card-desc {
+            color: var(--text-muted);
+            margin-bottom: 1.5rem;
+        }
+
+        /* Form Elements */
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+        }
+
+        input,
+        textarea,
+        select {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 1rem;
+        }
+
+        input:focus,
+        textarea:focus,
+        select:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1rem;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+        }
+
+        .btn-secondary {
+            background: var(--bg-input);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Mode Selection */
+        .mode-cards {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .mode-card {
+            background: var(--bg-input);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+
+        .mode-card:hover {
+            border-color: var(--primary);
+        }
+
+        .mode-card.selected {
+            border-color: var(--primary);
+            background: var(--primary-light);
+        }
+
+        .mode-card.selected {
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .mode-icon {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .mode-title {
+            font-weight: 700;
+            font-size: 1.125rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .mode-desc {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        /* Scene Cards */
+        .scene-card {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .scene-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .scene-num {
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .scene-status {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            background: var(--warning);
+            color: black;
+        }
+
+        .scene-status.approved {
+            background: var(--success);
+        }
+
+        .scene-desc {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .dialogue {
+            background: var(--bg-card);
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            margin-top: 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        .dialogue-char {
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .warning {
+            color: var(--warning);
+            font-size: 0.75rem;
+            margin-top: 0.5rem;
+        }
+
+        /* Loading */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Footer Actions */
+        .actions {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 2rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border);
+        }
+
+        /* Hide/Show Steps */
+        .step-content {
+            display: none;
+        }
+
+        .step-content.active {
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <a href="/" class="logo" style="text-decoration: none;">🎨 Tax Webtoon Auto-Generator</a>
+        <div><a href="/settings" style="color: var(--text-muted); text-decoration: none;">⚙️ 설정</a></div>
+    </header>
+
+    <div class="progress-bar">
+        <div class="steps">
+            <div class="step active" data-step="1" onclick="navigateToStep(1)"><span class="step-num">1</span> 시작</div>
+            <div class="step-line"></div>
+            <div class="step" data-step="2" onclick="navigateToStep(2)"><span class="step-num">2</span> 자료</div>
+            <div class="step-line"></div>
+            <div class="step" data-step="3" onclick="navigateToStep(3)"><span class="step-num">3</span> 스토리</div>
+            <div class="step-line"></div>
+            <div class="step" data-step="4" onclick="navigateToStep(4)"><span class="step-num">4</span> 이미지</div>
+            <div class="step-line"></div>
+            <div class="step" data-step="5" onclick="navigateToStep(5)"><span class="step-num">5</span> 캡션</div>
+            <div class="step-line"></div>
+            <div class="step" data-step="6" onclick="navigateToStep(6)"><span class="step-num">6</span> 발행</div>
+        </div>
+    </div>
+
+    <main>
+        <!-- Step 1: 시작 -->
+        <div class="step-content active" id="step-1">
+            <div class="card">
+                <h2 class="card-title">🚀 웹툰 생성 시작</h2>
+                <p class="card-desc">어떤 방식으로 시작할까요?</p>
+
+                <div class="mode-cards">
+                    <div class="mode-card selected" data-mode="auto" onclick="selectMode('auto')">
+                        <div class="mode-icon">🔄</div>
+                        <div class="mode-title">자동 모드</div>
+                        <div class="mode-desc">키워드만 입력하면 AI가 자동 생성</div>
+                    </div>
+                    <div class="mode-card" data-mode="manual" onclick="selectMode('manual')">
+                        <div class="mode-icon">✏️</div>
+                        <div class="mode-title">수동 모드</div>
+                        <div class="mode-desc">직접 내용을 입력합니다</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" id="keyword-card">
+                <div class="form-group">
+                    <label for="keyword">주제 키워드</label>
+                    <input type="text" id="keyword" placeholder="예: 종합소득세 신고, 퇴직금 계산법">
+                </div>
+
+                <div id="field-result" style="display: none; margin-bottom: 1rem;">
+                    <div style="background: var(--bg-input); padding: 1rem; border-radius: 8px;">
+                        <strong>📋 AI 분석 결과:</strong>
+                        <div style="margin-top: 0.5rem;">
+                            분야: <span id="detected-field" style="color: var(--primary); font-weight: 600;">-</span>
+                            <span id="verification-badge"
+                                style="margin-left: 0.5rem; font-size: 0.75rem; background: var(--warning); color: black; padding: 2px 6px; border-radius: 4px; display: none;">법령
+                                검증 필요</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>씬 개수</label>
+                    <select id="scene-count">
+                        <option value="6">6개 (간단)</option>
+                        <option value="8" selected>8개 (기본)</option>
+                        <option value="10">10개 (상세)</option>
+                        <option value="15">15개 (시리즈 분할)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="actions">
+                <div></div>
+                <button class="btn btn-primary" onclick="startWorkflow()">시작하기 →</button>
+            </div>
+        </div>
+
+        <!-- Step 2: 자료 수집 검토 -->
+        <div class="step-content" id="step-2">
+            <div class="loading" id="loading-data">
+                <div class="spinner"></div>
+                <div>자료를 수집하고 있습니다...</div>
+            </div>
+
+            <div class="card" id="data-review" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h2 class="card-title" style="margin-bottom: 0;">📚 수집된 자료 검토</h2>
+                    <select id="data-model" style="width: auto; padding: 0.5rem;">
+                        <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                        <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite</option>
+                        <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                    </select>
+                </div>
+                <p class="card-desc">AI가 수집한 자료를 확인하고 수정하세요. 불필요한 내용은 삭제하고, 추가할 내용이 있으면 입력하세요.</p>
+
+                <div id="data-container"></div>
+
+                <div class="form-group" style="margin-top: 1rem;">
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="new-data-input" placeholder="추가할 자료 내용 입력..." style="flex: 1;">
+                        <button class="btn btn-secondary" onclick="addDataItem()">+ 추가</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="actions" id="data-actions" style="display: none;">
+                <button class="btn btn-secondary" onclick="goToStep(1)">← 이전</button>
+                <button class="btn btn-primary" onclick="confirmData()">자료 확정 → 스토리 생성</button>
+            </div>
+        </div>
+
+        <!-- Step 3: 스토리 검토 -->
+        <div class="step-content" id="step-3">
+            <div class="loading" id="loading-story">
+                <div class="spinner"></div>
+                <div>스토리를 생성하고 있습니다...</div>
+            </div>
+
+            <div class="card" id="story-review" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h2 class="card-title" style="margin-bottom: 0;">📖 씬 검토</h2>
+                    <select id="story-model" style="width: auto; padding: 0.5rem;">
+                        <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                        <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite</option>
+                        <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                    </select>
+                </div>
+                <p class="card-desc">생성된 스토리를 확인하고 필요시 수정하세요.</p>
+
+                <div id="scenes-container"></div>
+
+                <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+                    <button class="btn btn-secondary" onclick="addNewScene()">+ 씬 추가</button>
+                    <button class="btn btn-secondary" onclick="regenerateAllScenes()">🔄 전체 재생성</button>
+                </div>
+            </div>
+
+            <div class="actions" id="story-actions" style="display: none;">
+                <button class="btn btn-secondary" onclick="goToStep(2)">← 이전</button>
+                <button class="btn btn-primary" onclick="approveScenes()">모든 씬 확정 → 이미지 생성</button>
+            </div>
+        </div>
+
+        <!-- Step 4: 이미지 검토 -->
+        <div class="step-content" id="step-4">
+            <div class="loading" id="loading-images">
+                <div class="spinner"></div>
+                <div>이미지를 생성하고 있습니다...</div>
+                <div style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;">씬당 약 10-15초 소요됩니다.</div>
+            </div>
+
+            <div class="card" id="images-review" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h2 class="card-title" style="margin-bottom: 0;">🖼️ 이미지 검토</h2>
+                    <select id="image-model" style="width: auto; padding: 0.5rem;">
+                        <option value="dall-e-3">DALL-E 3 (고품질)</option>
+                        <option value="dall-e-2">DALL-E 2 (경제적)</option>
+                        <option value="gpt-image-1">GPT Image 1 (최신)</option>
+                    </select>
+                </div>
+                <p class="card-desc">생성된 이미지를 확인하세요. 불만족스러운 이미지는 개별 재생성 가능합니다.</p>
+
+                <div id="images-container"
+                    style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem;">
+                </div>
+            </div>
+
+            <div class="actions" id="images-actions" style="display: none;">
+                <button class="btn btn-secondary" onclick="goToStep(3)">← 이전</button>
+                <button class="btn btn-primary" onclick="generateCaption()">캡션 생성 →</button>
+            </div>
+        </div>
+
+        <!-- Step 5: 캡션 검토 -->
+        <div class="step-content" id="step-5">
+            <div class="loading" id="loading-caption">
+                <div class="spinner"></div>
+                <div>캡션을 생성하고 있습니다...</div>
+            </div>
+
+            <div class="card" id="caption-review" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h2 class="card-title" style="margin-bottom: 0;">📝 캡션 검토</h2>
+                    <select id="caption-model" style="width: auto; padding: 0.5rem;">
+                        <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                        <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite</option>
+                        <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>🔥 훅 문장 (첫 줄)</label>
+                    <input type="text" id="caption-hook">
+                </div>
+
+                <div class="form-group">
+                    <label>📝 본문 캡션</label>
+                    <textarea id="caption-body" rows="4"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>💡 전문가 Tip</label>
+                    <input type="text" id="caption-tip">
+                </div>
+
+                <div class="form-group">
+                    <label>#️⃣ 해시태그</label>
+                    <textarea id="caption-hashtags" rows="2" placeholder="#태그1 #태그2 ..."></textarea>
+                </div>
+            </div>
+
+            <div class="actions" id="caption-actions" style="display: none;">
+                <button class="btn btn-secondary" onclick="goToStep(4)">← 이전</button>
+                <button class="btn btn-primary" onclick="goToStep(6)">최종 확인 →</button>
+            </div>
+        </div>
+
+        <!-- Step 6: 최종 발행 -->
+        <div class="step-content" id="step-6">
+            <div class="card">
+                <h2 class="card-title">🚀 최종 확인 및 발행</h2>
+                <p class="card-desc">모든 준비가 완료되었습니다!</p>
+
+                <div id="final-preview" style="text-align: center; padding: 2rem;">
+                    <div style="font-size: 4rem; margin-bottom: 1rem;">✅</div>
+                    <div style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem;">웹툰 생성 완료!</div>
+                    <div style="color: var(--text-muted);">인스타그램에 발행하거나 이미지를 다운로드하세요.</div>
+                </div>
+            </div>
+
+            <div class="actions">
+                <button class="btn btn-secondary" onclick="goToStep(5)">← 이전</button>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-secondary" onclick="downloadImages()">💾 다운로드</button>
+                    <button class="btn btn-primary" onclick="publishToInstagram()">📱 인스타그램 발행</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let currentStep = 1;
+        let sessionId = null;
+        let selectedMode = 'auto';
+        let storyData = null;
+        let imagesData = null;
+        let captionData = null;
+
+        function selectMode(mode) {
+            selectedMode = mode;
+            document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('selected'));
+            document.querySelector(`[data-mode="${mode}"]`).classList.add('selected');
+        }
+
+        function goToStep(step) {
+            currentStep = step;
+            document.querySelectorAll('.step-content').forEach(c => c.classList.remove('active'));
+            document.getElementById(`step-${step}`).classList.add('active');
+
+            document.querySelectorAll('.step').forEach(s => {
+                const sNum = parseInt(s.dataset.step);
+                s.classList.remove('active', 'done');
+                if (sNum < step) s.classList.add('done');
+                if (sNum === step) s.classList.add('active');
+            });
+        }
+
+        // 진행 단계 버튼 클릭 시 해당 단계로 이동 (완료된 단계만 가능)
+        function navigateToStep(step) {
+            const stepEl = document.querySelector(`[data-step="${step}"]`);
+            // 현재 단계이거나 완료된 단계만 이동 가능
+            if (step <= currentStep || stepEl.classList.contains('done')) {
+                goToStep(step);
+            }
+        }
+
+        async function startWorkflow() {
+            const keyword = document.getElementById('keyword').value;
+            if (!keyword && selectedMode === 'auto') {
+                alert('키워드를 입력해주세요.');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/workflow/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode: selectedMode, keyword })
+                });
+                const data = await res.json();
+                sessionId = data.session_id;
+
+                if (data.field) {
+                    document.getElementById('field-result').style.display = 'block';
+                    document.getElementById('detected-field').textContent = data.field;
+                    if (data.field_requires_verification) {
+                        document.getElementById('verification-badge').style.display = 'inline';
+                    }
+                }
+
+                goToStep(2);
+                collectData();
+            } catch (e) {
+                alert('오류가 발생했습니다: ' + e.message);
+            }
+        }
+
+        // 자료 수집 데이터
+        let collectedData = [];
+
+        async function collectData() {
+            document.getElementById('loading-data').classList.add('show');
+            document.getElementById('data-review').style.display = 'none';
+            document.getElementById('data-actions').style.display = 'none';
+
+            try {
+                const model = document.getElementById('data-model')?.value || 'gemini-2.0-flash';
+                const keyword = document.getElementById('keyword').value;
+
+                const res = await fetch('/api/workflow/collect-data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, keyword, model })
+                });
+                const data = await res.json();
+                collectedData = data.items || [];
+
+                renderDataItems();
+
+                document.getElementById('loading-data').classList.remove('show');
+                document.getElementById('data-review').style.display = 'block';
+                document.getElementById('data-actions').style.display = 'flex';
+            } catch (e) {
+                // API가 아직 없으면 더미 데이터 사용
+                const keyword = document.getElementById('keyword').value;
+                collectedData = [
+                    `${keyword}의 기본 개념과 정의`,
+                    `${keyword} 관련 최신 법령 및 규정`,
+                    `${keyword} 신고/신청 방법 및 절차`,
+                    `${keyword} 시 주의사항 및 팁`,
+                    `${keyword} 관련 자주 묻는 질문`
+                ];
+                renderDataItems();
+                document.getElementById('loading-data').classList.remove('show');
+                document.getElementById('data-review').style.display = 'block';
+                document.getElementById('data-actions').style.display = 'flex';
+            }
+        }
+
+        function renderDataItems() {
+            const container = document.getElementById('data-container');
+            container.innerHTML = collectedData.map((item, idx) => `
+                <div class="scene-card" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="flex: 1;">📄 ${item}</div>
+                    <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="deleteDataItem(${idx})">🗑️ 삭제</button>
+                </div>
+            `).join('');
+        }
+
+        function deleteDataItem(idx) {
+            collectedData.splice(idx, 1);
+            renderDataItems();
+        }
+
+        function addDataItem() {
+            const input = document.getElementById('new-data-input');
+            if (input.value.trim()) {
+                collectedData.push(input.value.trim());
+                input.value = '';
+                renderDataItems();
+            }
+        }
+
+        async function confirmData() {
+            goToStep(3);
+            generateStory();
+        }
+
+        async function generateStory() {
+            document.getElementById('loading-story').classList.add('show');
+            document.getElementById('story-review').style.display = 'none';
+            document.getElementById('story-actions').style.display = 'none';
+
+            const sceneCount = parseInt(document.getElementById('scene-count').value);
+
+            try {
+                const res = await fetch('/api/workflow/generate-story', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, scene_count: sceneCount })
+                });
+                const data = await res.json();
+                storyData = data.story;
+
+                renderScenes(storyData.scenes);
+
+                document.getElementById('loading-story').classList.remove('show');
+                document.getElementById('story-review').style.display = 'block';
+                document.getElementById('story-actions').style.display = 'flex';
+            } catch (e) {
+                alert('스토리 생성 오류: ' + e.message);
+            }
+        }
+
+        function renderScenes(scenes) {
+            const container = document.getElementById('scenes-container');
+            container.innerHTML = scenes.map((scene, idx) => `
+                <div class="scene-card" id="scene-card-${idx}">
+                    <div class="scene-header">
+                        <span class="scene-num">씬 ${scene.scene_number}</span>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="regenerateScene(${idx})">🔄 재생성</button>
+                            <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="toggleEditScene(${idx})">✏️ 수정</button>
+                            <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; color: var(--danger);" onclick="deleteScene(${idx})">🗑️</button>
+                            <span class="scene-status ${scene.status === 'approved' ? 'approved' : ''}">${scene.status === 'approved' ? '확정' : '검토 필요'}</span>
+                        </div>
+                    </div>
+                    
+                    <!-- 보기 모드 -->
+                    <div class="scene-view" id="scene-view-${idx}">
+                        <div class="scene-desc">🎬 ${scene.scene_description}</div>
+                        ${scene.dialogues.map(d => `
+                            <div class="dialogue">
+                                <span class="dialogue-char">${d.character}:</span> "${d.text}"
+                            </div>
+                        `).join('')}
+                        ${scene.narration ? `<div class="dialogue" style="font-style: italic;">📖 ${scene.narration}</div>` : ''}
+                        ${scene.warnings && scene.warnings.length ? scene.warnings.map(w => `<div class="warning">⚠️ ${w}</div>`).join('') : ''}
+                    </div>
+                    
+                    <!-- 수정 모드 -->
+                    <div class="scene-edit" id="scene-edit-${idx}" style="display: none;">
+                        <div class="form-group" style="margin-bottom: 0.5rem;">
+                            <label style="font-size: 0.75rem;">장면 설명</label>
+                            <textarea id="edit-desc-${idx}" rows="2" style="font-size: 0.875rem;">${scene.scene_description}</textarea>
+                        </div>
+                        ${scene.dialogues.map((d, dIdx) => `
+                            <div class="form-group" style="margin-bottom: 0.5rem;">
+                                <label style="font-size: 0.75rem;">${d.character} 대사</label>
+                                <input type="text" id="edit-dialogue-${idx}-${dIdx}" value="${d.text}" style="font-size: 0.875rem;">
+                            </div>
+                        `).join('')}
+                        ${scene.narration !== undefined ? `
+                            <div class="form-group" style="margin-bottom: 0.5rem;">
+                                <label style="font-size: 0.75rem;">나레이션</label>
+                                <input type="text" id="edit-narration-${idx}" value="${scene.narration || ''}" style="font-size: 0.875rem;">
+                            </div>
+                        ` : ''}
+                        <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                            <button class="btn btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.75rem;" onclick="toggleEditScene(${idx})">취소</button>
+                            <button class="btn btn-primary" style="padding: 0.25rem 0.75rem; font-size: 0.75rem;" onclick="saveScene(${idx})">저장</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function toggleEditScene(idx) {
+            const viewEl = document.getElementById(`scene-view-${idx}`);
+            const editEl = document.getElementById(`scene-edit-${idx}`);
+            if (viewEl.style.display === 'none') {
+                viewEl.style.display = 'block';
+                editEl.style.display = 'none';
+            } else {
+                viewEl.style.display = 'none';
+                editEl.style.display = 'block';
+            }
+        }
+
+        function saveScene(idx) {
+            const scene = storyData.scenes[idx];
+            scene.scene_description = document.getElementById(`edit-desc-${idx}`).value;
+
+            scene.dialogues.forEach((d, dIdx) => {
+                const input = document.getElementById(`edit-dialogue-${idx}-${dIdx}`);
+                if (input) d.text = input.value;
+            });
+
+            const narrationInput = document.getElementById(`edit-narration-${idx}`);
+            if (narrationInput) scene.narration = narrationInput.value;
+
+            scene.status = 'approved';
+            renderScenes(storyData.scenes);
+        }
+
+
+        async function approveScenes() {
+            try {
+                await fetch(`/api/workflow/approve-scenes?session_id=${sessionId}`, { method: 'POST' });
+                goToStep(4);
+                generateImages();
+            } catch (e) {
+                alert('오류: ' + e.message);
+            }
+        }
+
+        async function generateImages() {
+            document.getElementById('loading-images').classList.add('show');
+            document.getElementById('images-review').style.display = 'none';
+            document.getElementById('images-actions').style.display = 'none';
+
+            try {
+                const res = await fetch('/api/workflow/generate-images', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, style: 'webtoon', sub_style: 'normal' })
+                });
+                const data = await res.json();
+                imagesData = data.images;
+
+                const container = document.getElementById('images-container');
+                container.innerHTML = imagesData.map(img => `
+                    <div style="background: var(--bg-input); border-radius: 8px; overflow: hidden;">
+                        ${img.image_url ? `<img src="${img.image_url}" style="width: 100%; aspect-ratio: 4/5; object-fit: cover;">` : '<div style="width: 100%; aspect-ratio: 4/5; display: flex; align-items: center; justify-content: center; color: var(--text-muted);">생성 실패</div>'}
+                        <div style="padding: 0.5rem; text-align: center; font-size: 0.875rem;">씬 ${img.scene_number}</div>
+                    </div>
+                `).join('');
+
+                document.getElementById('loading-images').classList.remove('show');
+                document.getElementById('images-review').style.display = 'block';
+                document.getElementById('images-actions').style.display = 'flex';
+            } catch (e) {
+                alert('이미지 생성 오류: ' + e.message);
+            }
+        }
+
+        async function generateCaption() {
+            goToStep(5);
+            document.getElementById('loading-caption').classList.add('show');
+            document.getElementById('caption-review').style.display = 'none';
+            document.getElementById('caption-actions').style.display = 'none';
+
+            try {
+                const res = await fetch('/api/workflow/generate-caption', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId })
+                });
+                const data = await res.json();
+                captionData = data.caption;
+
+                document.getElementById('caption-hook').value = captionData.hook;
+                document.getElementById('caption-body').value = captionData.body;
+                document.getElementById('caption-tip').value = captionData.expert_tip;
+                document.getElementById('caption-hashtags').value = captionData.hashtags.join(' ');
+
+                document.getElementById('loading-caption').classList.remove('show');
+                document.getElementById('caption-review').style.display = 'block';
+                document.getElementById('caption-actions').style.display = 'flex';
+            } catch (e) {
+                alert('캡션 생성 오류: ' + e.message);
+            }
+        }
+
+        function downloadImages() {
+            if (!imagesData || imagesData.length === 0) {
+                alert('다운로드할 이미지가 없습니다.');
+                return;
+            }
+            // 각 이미지를 개별 다운로드 (ZIP은 백엔드 필요)
+            imagesData.forEach((img, idx) => {
+                if (img.image_url) {
+                    const a = document.createElement('a');
+                    a.href = img.image_url;
+                    a.download = `scene_${img.scene_number}.png`;
+                    a.target = '_blank';
+                    a.click();
+                }
+            });
+            alert('이미지 다운로드를 시작했습니다. 브라우저 설정에 따라 여러 파일이 다운로드됩니다.');
+        }
+
+        async function publishToInstagram() {
+            const hook = document.getElementById('caption-hook').value;
+            const body = document.getElementById('caption-body').value;
+            const tip = document.getElementById('caption-tip').value;
+            const hashtags = document.getElementById('caption-hashtags').value;
+
+            const fullCaption = `${hook}\n\n${body}\n\n💡 ${tip}\n\n${hashtags}`;
+
+            if (!confirm('Instagram에 발행하시겠습니까?\n\n' + fullCaption.substring(0, 200) + '...')) {
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/workflow/publish', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        caption: fullCaption,
+                        images: imagesData.map(i => i.image_url).filter(Boolean)
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('🎉 Instagram 발행 완료!\n\n게시물 ID: ' + data.post_id);
+                } else {
+                    alert('발행 실패: ' + (data.error || '알 수 없는 오류'));
+                }
+            } catch (e) {
+                alert('Instagram 발행을 위해서는 설정에서 API 키를 먼저 입력해주세요.\n\n' + e.message);
+            }
+        }
+
+        // 씬 추가
+        function addNewScene() {
+            const newSceneNum = storyData.scenes.length + 1;
+            const newScene = {
+                scene_number: newSceneNum,
+                scene_description: '새로운 씬 - 클릭하여 수정하세요',
+                dialogues: [
+                    { character: '민지', text: '대사를 입력하세요' }
+                ],
+                narration: '',
+                status: 'pending',
+                warnings: []
+            };
+            storyData.scenes.push(newScene);
+            renderScenes(storyData.scenes);
+        }
+
+        // 씬 삭제
+        function deleteScene(idx) {
+            if (confirm(`씬 ${idx + 1}을 삭제하시겠습니까?`)) {
+                storyData.scenes.splice(idx, 1);
+                // 씬 번호 재정렬
+                storyData.scenes.forEach((s, i) => s.scene_number = i + 1);
+                renderScenes(storyData.scenes);
+            }
+        }
+
+        // 씬 재생성
+        async function regenerateScene(idx) {
+            const scene = storyData.scenes[idx];
+            const model = document.getElementById('story-model')?.value || 'gemini-2.0-flash';
+
+            try {
+                const res = await fetch('/api/workflow/regenerate-scene', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        scene_index: idx,
+                        model
+                    })
+                });
+                const data = await res.json();
+                if (data.scene) {
+                    storyData.scenes[idx] = data.scene;
+                    renderScenes(storyData.scenes);
+                }
+            } catch (e) {
+                alert('재생성 오류: ' + e.message);
+            }
+        }
+
+        // 전체 씬 재생성
+        async function regenerateAllScenes() {
+            if (!confirm('모든 씬을 다시 생성하시겠습니까?')) return;
+            generateStory();
+        }
+
+        // 이미지 재생성
+        async function regenerateImage(sceneIndex) {
+            const model = document.getElementById('image-model')?.value || 'dall-e-3';
+
+            try {
+                const container = document.getElementById('images-container');
+                container.children[sceneIndex].innerHTML = '<div style="width: 100%; aspect-ratio: 4/5; display: flex; align-items: center; justify-content: center;">⏳ 재생성 중...</div>';
+
+                const res = await fetch('/api/workflow/regenerate-image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        scene_index: sceneIndex,
+                        model
+                    })
+                });
+                const data = await res.json();
+                if (data.image) {
+                    imagesData[sceneIndex] = data.image;
+                    renderImages();
+                }
+            } catch (e) {
+                alert('이미지 재생성 오류: ' + e.message);
+            }
+        }
+
+        // 이미지 렌더링 함수
+        function renderImages() {
+            const container = document.getElementById('images-container');
+            container.innerHTML = imagesData.map((img, idx) => `
+                <div style="background: var(--bg-input); border-radius: 8px; overflow: hidden;">
+                    ${img.image_url ? `<img src="${img.image_url}" style="width: 100%; aspect-ratio: 4/5; object-fit: cover;">` : '<div style="width: 100%; aspect-ratio: 4/5; display: flex; align-items: center; justify-content: center; color: var(--text-muted);">생성 실패</div>'}
+                    <div style="padding: 0.5rem; text-align: center; font-size: 0.875rem;">
+                        씬 ${img.scene_number}
+                        <button class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.7rem; margin-left: 0.5rem;" onclick="regenerateImage(${idx})">🔄</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+    </script>
+</body>
+
+</html>

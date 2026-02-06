@@ -1,0 +1,24 @@
+/* Basic styles for Tax Webtoon Auto-Generator */
+:root {
+    --primary: #4f46e5;
+    --primary-hover: #4338ca;
+    --bg: #f9fafb;
+    --card-bg: #ffffff;
+    --text: #1f2937;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+}
+
+.btn-link {
+    color: var(--text);
+    text-decoration: none;
+    font-weight: 500;
+    margin-right: 1.5rem;
+}
+
+.btn-link:hover {
+    color: var(--primary);
+}

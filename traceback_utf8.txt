@@ -1,0 +1,147 @@
+﻿.\venv\Scripts\python
+.exe : Traceback (mos
+t recent call last):
+위치 줄:1 문자:1
++ .\venv\Scripts\pyth
+on.exe -c "import goo
+gle.generativeai" 2>&
+1 | Out- ...
++ ~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
+~
+    + CategoryInfo   
+           : NotSpe  
+  cified: (Traceba   
+ ck (most recent     
+call last)::Stri    n
+g) [], RemoteEx    ce
+ption
+    + FullyQualified 
+   ErrorId : Native  
+  CommandError
+ 
+  File "<string>", li
+ne 1, in <module>
+    import google.gen
+erativeai
+  File "C:\Users\insa
+m\Desktop\Auto Webtoo
+n\venv\Lib\site-packa
+ges\google\generative
+ai\__init__.py", line
+ 47, in <module>
+    from google.gener
+ativeai import cachin
+g
+  File "C:\Users\insa
+m\Desktop\Auto Webtoo
+n\venv\Lib\site-packa
+ges\google\generative
+ai\caching.py", line 
+21, in <module>
+    from google.gener
+ativeai import protos
+  File "C:\Users\insa
+m\Desktop\Auto Webtoo
+n\venv\Lib\site-packa
+ges\google\generative
+ai\protos.py", line 7
+4, in <module>
+    from google.ai.ge
+nerativelanguage_v1be
+ta.types import *
+  File "C:\Users\insa
+m\Desktop\Auto Webtoo
+n\venv\Lib\site-packa
+ges\google\ai\generat
+ivelanguage_v1beta\__
+init__.py", line 21, 
+in <module>
+    from .services.ca
+che_service import Ca
+cheServiceAsyncClient
+, CacheServiceClient
+  File "C:\Users\insa
+m\Desktop\Auto Webtoo
+n\venv\Lib\site-packa
+ges\google\ai\generat
+ivelanguage_v1beta\se
+rvices\cache_service\
+__init__.py", line 16
+, in <module>
+    from .async_clien
+t import CacheService
+AsyncClient
+  File "C:\Users\insa
+m\Desktop\Auto Webtoo
+n\venv\Lib\site-packa
+ges\google\ai\generat
+ivelanguage_v1beta\se
+rvices\cache_service\
+async_client.py", lin
+e 32, in <module>
+    from google.api_c
+ore import exceptions
+ as core_exceptions
+  File "C:\Users\insa
+m\Desktop\Auto Webtoo
+n\venv\Lib\site-packa
+ges\google\api_core\e
+xceptions.py", line 2
+9, in <module>
+    from google.rpc i
+mport error_details_p
+b2
+  File "C:\Users\insa
+m\Desktop\Auto Webtoo
+n\venv\Lib\site-packa
+ges\google\rpc\error_
+details_pb2.py", line
+ 21, in <module>
+    from google.proto
+buf import descriptor
+ as _descriptor
+  File "C:\Users\insa
+m\Desktop\Auto Webtoo
+n\venv\Lib\site-packa
+ges\google\protobuf\d
+escriptor.py", line 1
+7, in <module>
+    from google.proto
+buf.internal import a
+pi_implementation
+  File "C:\Users\insa
+m\Desktop\Auto Webtoo
+n\venv\Lib\site-packa
+ges\google\protobuf\i
+nternal\api_implement
+ation.py", line 51, i
+n <module>
+    if _CanImport('go
+ogle._upb._message'):
+       ~~~~~~~~~~^^^^
+^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\insa
+m\Desktop\Auto Webtoo
+n\venv\Lib\site-packa
+ges\google\protobuf\i
+nternal\api_implement
+ation.py", line 41, i
+n _CanImport
+    mod = importlib.i
+mport_module(mod_name
+)
+  File "C:\Python314\
+Lib\importlib\__init_
+_.py", line 88, in im
+port_module
+    return _bootstrap
+._gcd_import(name[lev
+el:], package, level)
+           ~~~~~~~~~~
+~~~~~~~~~~~~^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^
+TypeError: Metaclasse
+s with custom tp_new 
+are not supported.

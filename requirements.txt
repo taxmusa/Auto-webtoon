@@ -1,0 +1,32 @@
+# FastAPI 서버
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+jinja2==3.1.3
+
+# AI 모델 연동
+google-generativeai==0.3.2
+openai==1.12.0
+
+# 이미지 처리
+Pillow==10.2.0
+
+# HTTP 요청
+httpx==0.26.0
+aiohttp==3.9.3
+
+# 환경 변수
+python-dotenv==1.0.1
+
+# 파일 처리
+aiofiles==23.2.1
+
+# 데이터 검증
+pydantic==2.6.0
+pydantic-settings==2.1.0
+
+# 유틸리티
+python-dateutil==2.8.2
+
+# 배포용
+pyinstaller==6.3.0
