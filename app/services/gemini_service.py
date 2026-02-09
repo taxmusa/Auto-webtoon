@@ -26,11 +26,22 @@ class GeminiService:
         self.model = genai.GenerativeModel("gemini-2.0-flash")
 
     async def detect_field(self, keyword: str, model: str = "gemini-2.0-flash") -> FieldInfo:
-        """AI를 사용하여 키워드에서 분야, 기준 년도, 법정 검증 필요성 자동 감지"""
-        # 사용자 요청 모델 사용
-        current_model = genai.GenerativeModel(model)
+        """AI를 사용하여 키워드에서 분야, 기준 년도, 법정 검증 필요성 자동 감지 - 모델 fallback 지원"""
+        import logging
         import datetime
+        logger = logging.getLogger(__name__)
         current_year_str = str(datetime.datetime.now().year)
+        
+        # Fallback 모델 순서 정의
+        FALLBACK_MODELS = {
+            "gemini-2.0-flash": ["gemini-2.5-flash", "gemini-3-flash-preview"],
+            "gemini-2.5-pro": ["gemini-2.5-flash", "gemini-3-pro-preview"],
+            "gemini-2.5-flash": ["gemini-3-flash-preview"],
+            "gemini-3-pro-preview": ["gemini-3-flash-preview"],
+            "gemini-3-flash-preview": []
+        }
+        
+        models_to_try = [model] + FALLBACK_MODELS.get(model, [])
         
         prompt = f"""키워드 "{keyword}"를 분석하여 다음 정보를 JSON 형식으로 반환하세요.
         현재 시각은 {current_year_str}년입니다. 특별한 언급이 없으면 기준 년도는 {current_year_str}년으로 설정하세요.
@@ -56,29 +67,50 @@ class GeminiService:
             "reason": "한 두 문장 근거"
         }}"""
 
-        try:
-            response = await current_model.generate_content_async(prompt)
-            text = response.text
-            match = re.search(r'\{.*\}', text, re.DOTALL)
-            if match:
-                data = json.loads(match.group())
-            else:
-                raise ValueError("JSON not found in response")
-            
-            return FieldInfo(
-                field=SpecializedField(data.get("field", "일반")),
-                target_year=data.get("target_year", current_year_str),
-                requires_legal_verification=data.get("requires_legal_verification", False),
-                reason=data.get("reason"),
-                confidence_score=0.9
-            )
-        except Exception as e:
-            print(f"Detect field error with {model}: {e}")
-            return FieldInfo(field=SpecializedField.GENERAL, target_year=current_year_str)
+        for try_model in models_to_try:
+            try:
+                logger.info(f"[detect_field] 시도 중: {try_model}")
+                current_model = genai.GenerativeModel(try_model)
+                response = await current_model.generate_content_async(prompt)
+                text = response.text
+                match = re.search(r'\{.*\}', text, re.DOTALL)
+                if match:
+                    data = json.loads(match.group())
+                else:
+                    raise ValueError("JSON not found in response")
+                
+                logger.info(f"[detect_field] 성공: {try_model}")
+                return FieldInfo(
+                    field=SpecializedField(data.get("field", "일반")),
+                    target_year=data.get("target_year", current_year_str),
+                    requires_legal_verification=data.get("requires_legal_verification", False),
+                    reason=data.get("reason"),
+                    confidence_score=0.9
+                )
+            except Exception as e:
+                logger.warning(f"[detect_field] {try_model} 실패: {str(e)}")
+                if try_model != models_to_try[-1]:
+                    continue
+        
+        # 모든 모델 실패 시 기본값 반환
+        logger.error(f"[detect_field] 모든 모델 실패")
+        return FieldInfo(field=SpecializedField.GENERAL, target_year=current_year_str)
 
     async def collect_data(self, keyword: str, field_info: FieldInfo, model: str = "gemini-2.0-flash") -> list:
-        """주제와 관련된 상세 자료 수집 (제목 + 본문)"""
-        current_model = genai.GenerativeModel(model)
+        """주제와 관련된 상세 자료 수집 (제목 + 본문) - 모델 fallback 지원"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Fallback 모델 순서 정의
+        FALLBACK_MODELS = {
+            "gemini-2.0-flash": ["gemini-2.5-flash", "gemini-3-flash-preview"],
+            "gemini-2.5-pro": ["gemini-2.5-flash", "gemini-3-pro-preview"],
+            "gemini-2.5-flash": ["gemini-3-flash-preview"],
+            "gemini-3-pro-preview": ["gemini-3-flash-preview"],
+            "gemini-3-flash-preview": []
+        }
+        
+        models_to_try = [model] + FALLBACK_MODELS.get(model, [])
         
         # 최신 년도 주입
         import datetime
@@ -104,18 +136,32 @@ class GeminiService:
             ...
         ]"""
         
-        try:
-            response = await current_model.generate_content_async(prompt)
-            # JSON 파싱 (리스트 형태 추출)
-            match = re.search(r'\[.*\]', response.text, re.DOTALL)
-            if match:
-                return json.loads(match.group())
-            else:
-                 # JSON 못 찾으면 텍스트라도 반환 시도 or 에러
-                raise ValueError("JSON list not found")
-        except Exception as e:
-            print(f"Collect data error with {model}: {e}")
-            return [{"title": keyword, "content": "정보를 불러오지 못했습니다. 다시 시도해 주세요."}]
+        last_error = None
+        for try_model in models_to_try:
+            try:
+                logger.info(f"[collect_data] 시도 중: {try_model}")
+                current_model = genai.GenerativeModel(try_model)
+                response = await current_model.generate_content_async(prompt)
+                
+                # JSON 파싱 (리스트 형태 추출)
+                match = re.search(r'\[.*\]', response.text, re.DOTALL)
+                if match:
+                    result = json.loads(match.group())
+                    logger.info(f"[collect_data] 성공: {try_model}, {len(result)}개 항목")
+                    return result
+                else:
+                    raise ValueError("JSON list not found in response")
+                    
+            except Exception as e:
+                last_error = e
+                logger.warning(f"[collect_data] {try_model} 실패: {str(e)}")
+                if try_model != models_to_try[-1]:
+                    logger.info(f"[collect_data] 다음 모델로 시도: {models_to_try[models_to_try.index(try_model)+1]}")
+                continue
+        
+        # 모든 모델 실패
+        logger.error(f"[collect_data] 모든 모델 실패. 마지막 오류: {last_error}")
+        return [{"title": keyword, "content": f"정보를 불러오지 못했습니다. ({last_error}) 다시 시도해 주세요."}]
 
     async def generate_story(
         self,
