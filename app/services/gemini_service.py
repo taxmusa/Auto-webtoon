@@ -186,6 +186,10 @@ class GeminiService:
             
         data_str = "\n".join([f"- {d['title']}: {d['content']}" for d in collected_data])
         
+        # 대사 길이 증가 (충분한 설명을 위해)
+        max_dialogue = max(rule_settings.max_dialogue_len, 50)
+        max_narration = max(rule_settings.max_narration_len, 60)
+        
         prompt = f"""당신은 전문 웹툰 스토리 작가입니다. 다음 자료를 바탕으로 웹툰 스토리를 작성하세요.
 
 [자료]
@@ -195,30 +199,38 @@ class GeminiService:
 - 질문자 유형: {character_settings.questioner_type}
 - 전문가 유형: {character_settings.expert_type}
 
-[제약 조건 - 매우 중요]
+[중요 지침 - 대화 품질]
+1. **전문가 대사는 충분히 설명해야 합니다!** 
+   - "연 4.6% 이자가 법정." (X) → 너무 짧음
+   - "연 4.6% 이율로 이자를 지급해야 증여로 보지 않아요." (O) → 적절함
+2. 질문자는 짧게, 전문가는 충분히 설명하는 형태로 작성하세요.
+3. 내용이 많으면 2~3개 씬에 나눠서 설명해도 됩니다. 억지로 한 씬에 압축하지 마세요.
+
+[제약 조건]
 1. 총 씬 개수: {scene_count}
-2. 한 캐릭터 대사: 반드시 {rule_settings.max_dialogue_len}자 이내
+2. 한 캐릭터 대사: {max_dialogue}자 이내 (충분히 활용하세요)
 3. 한 씬당 말풍선: 최대 {rule_settings.max_bubbles_per_scene}개
-4. 나레이션: 반드시 {rule_settings.max_narration_len}자 이내
+4. 나레이션: {max_narration}자 이내
 
 [필수 구조]
-- 캐릭터들이 실제 대화하는 형식을 사용하여 친근하게 설명하세요.
+- 캐릭터들이 실제 대화하는 형식으로 자연스럽게 설명하세요.
 - 각 씬마다 캐릭터의 기분(neutral/happy/sad/surprised/serious/angry)을 지정하세요.
+- 전문적인 내용도 이해하기 쉽게 풀어서 설명하세요.
 
 [출력 형식 (JSON)]
 {{
     "title": "제목",
     "characters": [
-        {{"name": "이름", "role": "역할(전문가/질문자/조력자)", "appearance": "외상 묘사", "personality": "성격"}}
+        {{"name": "이름", "role": "역할(전문가/질문자/조력자)", "appearance": "외모 묘사", "personality": "성격"}}
     ],
     "scenes": [
         {{
             "scene_number": 1,
             "scene_description": "장면 시각적 묘사",
             "dialogues": [
-                {{"character": "이름", "text": "대사(20자내)", "emotion": "기분"}}
+                {{"character": "이름", "text": "대사({max_dialogue}자내)", "emotion": "기분"}}
             ],
-            "narration": "나레이션(30자내, 선택)"
+            "narration": "나레이션({max_narration}자내, 선택)"
         }}
     ]
 }}"""

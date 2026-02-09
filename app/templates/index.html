@@ -1282,38 +1282,65 @@
 
         function renderCharacters() {
             const container = document.getElementById('character-profiles');
-            container.innerHTML = characters.map(c => `
-                <div class="char-card">
+            container.innerHTML = characters.map((c, idx) => `
+                <div class="char-card" style="position: relative;">
                     <div class="char-avatar">👤</div>
                     <div class="char-info">
                         <div class="char-name">${c.name} <span class="char-role">${c.role}</span></div>
                         <div style="font-size: 0.75rem; color: var(--text-muted);">${c.appearance}</div>
                     </div>
+                    <button class="btn btn-secondary" style="position: absolute; top: 0.5rem; right: 0.5rem; padding: 2px 8px; font-size: 0.7rem;" onclick="editCharacter(${idx})">수정</button>
                 </div>
             `).join('');
         }
 
+        function editCharacter(idx) {
+            const char = characters[idx];
+            const newName = prompt('캐릭터 이름:', char.name);
+            if (newName === null) return;
+
+            const newRole = prompt('역할 (전문가/질문자/조력자):', char.role);
+            if (newRole === null) return;
+
+            const newAppearance = prompt('외모 묘사:', char.appearance);
+            if (newAppearance === null) return;
+
+            characters[idx] = {
+                ...char,
+                name: newName || char.name,
+                role: newRole || char.role,
+                appearance: newAppearance || char.appearance
+            };
+
+            // storyData도 업데이트
+            if (storyData && storyData.characters) {
+                storyData.characters[idx] = characters[idx];
+            }
+
+            renderCharacters();
+        }
+
         function renderScenes(scenes) {
             const container = document.getElementById('scenes-container');
-            container.innerHTML = scenes.map(s => {
+            container.innerHTML = scenes.map((s, idx) => {
                 const densityWarnings = validateSceneRules(s);
                 return `
                 <div class="card" style="margin-bottom: 1rem; border: 1px solid ${densityWarnings.length > 0 ? 'var(--warning)' : 'var(--border)'};">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                         <span style="font-weight: 600;">씬 ${s.scene_number}</span>
                         <div style="display: flex; gap: 0.5rem;">
-                             <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;">수정</button>
-                             <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;">재생성</button>
+                             <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" onclick="editScene(${idx})">수정</button>
+                             <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" onclick="regenerateScene(${idx})">재생성</button>
                         </div>
                     </div>
                     <div style="font-size: 0.875rem; margin-bottom: 0.5rem;">🎬 ${s.scene_description}</div>
-                    ${s.dialogues.map(d => `
-                        <div style="background: var(--bg-input); padding: 0.5rem; border-radius: 6px; margin-bottom: 0.25rem; font-size: 0.875rem;">
+                    ${s.dialogues.map((d, dIdx) => `
+                        <div style="background: var(--bg-input); padding: 0.5rem; border-radius: 6px; margin-bottom: 0.25rem; font-size: 0.875rem; cursor: pointer;" onclick="editDialogue(${idx}, ${dIdx})">
                             <span style="font-weight: 600; color: var(--primary);">${d.character}:</span> ${d.text}
                             <span style="float: right; font-size: 0.7rem; color: var(--text-muted);">[${d.emotion}]</span>
                         </div>
                     `).join('')}
-                    ${s.narration ? `<div style="font-style: italic; color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;">💬 ${s.narration}</div>` : ''}
+                    ${s.narration ? `<div style="font-style: italic; color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem; cursor: pointer;" onclick="editNarration(${idx})">💬 ${s.narration}</div>` : ''}
                     
                     ${densityWarnings.map(w => `
                         <div class="rule-warning">⚠️ ${w}</div>
@@ -1326,6 +1353,44 @@
                     ` : ''}
                 </div>
             `}).join('');
+        }
+
+        // 씬 수정 함수
+        function editScene(idx) {
+            const scene = storyData.scenes[idx];
+            const newDesc = prompt('씬 설명:', scene.scene_description);
+            if (newDesc !== null && newDesc.trim()) {
+                storyData.scenes[idx].scene_description = newDesc;
+                renderScenes(storyData.scenes);
+            }
+        }
+
+        // 대사 수정 함수
+        function editDialogue(sceneIdx, dialogueIdx) {
+            const dialogue = storyData.scenes[sceneIdx].dialogues[dialogueIdx];
+            const newText = prompt(`${dialogue.character}의 대사:`, dialogue.text);
+            if (newText !== null && newText.trim()) {
+                storyData.scenes[sceneIdx].dialogues[dialogueIdx].text = newText;
+                renderScenes(storyData.scenes);
+            }
+        }
+
+        // 나레이션 수정 함수
+        function editNarration(sceneIdx) {
+            const scene = storyData.scenes[sceneIdx];
+            const newNarration = prompt('나레이션:', scene.narration || '');
+            if (newNarration !== null) {
+                storyData.scenes[sceneIdx].narration = newNarration;
+                renderScenes(storyData.scenes);
+            }
+        }
+
+        // 씬 재생성 함수
+        async function regenerateScene(idx) {
+            if (!confirm(`씬 ${idx + 1}을 AI로 다시 생성하시겠습니까?`)) return;
+
+            const scene = storyData.scenes[idx];
+            alert('씬 재생성 기능은 추후 구현 예정입니다.\n현재는 수정 기능을 이용해주세요.');
         }
 
         function validateSceneRules(scene) {
