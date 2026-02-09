@@ -1014,6 +1014,7 @@
                 collectedData = data.items || [];
 
                 renderDataItems();
+                saveDataToStorage(); // localStorage에 저장
 
                 // 씬 수 추천 (수동 모드)
                 const recScenes = Math.min(Math.max(collectedData.length * 1.5, 6), 15).toFixed(0);
@@ -1052,6 +1053,7 @@
                 collectedData = data.items || [];
 
                 renderDataItems();
+                saveDataToStorage(); // localStorage에 저장
 
                 const recScenes = Math.min(Math.max(collectedData.length * 1.5, 6), 15).toFixed(0);
                 document.getElementById('total-scene-count').value = recScenes;
@@ -1069,15 +1071,24 @@
         function renderDataItems() {
             const container = document.getElementById('data-container');
             container.innerHTML = collectedData.map((item, idx) => `
-                <div class="char-card" style="cursor:pointer; margin-bottom: 0.5rem; align-items: flex-start; flex-direction: column;" onclick="toggleDataBody(${idx})">
+                <div class="char-card data-item" 
+                     draggable="true"
+                     ondragstart="handleDragStart(event, ${idx})"
+                     ondragend="handleDragEnd(event)"
+                     ondragover="handleDragOver(event, ${idx})"
+                     ondrop="handleDrop(event, ${idx})"
+                     style="cursor: grab; margin-bottom: 0.5rem; align-items: flex-start; flex-direction: column; transition: all 0.2s;">
                     <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
-                        <span style="font-weight: 600;">📄 ${item.title}</span>
+                        <span style="font-weight: 600;" onclick="toggleDataBody(${idx})">
+                            <span style="cursor: grab; margin-right: 0.5rem;">⋮⋮</span>
+                            📄 ${item.title}
+                        </span>
                         <div style="display: flex; gap: 0.5rem;">
                             <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" onclick="event.stopPropagation(); editData(${idx})">수정</button>
                             <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" onclick="event.stopPropagation(); deleteData(${idx})">삭제</button>
                         </div>
                     </div>
-                    <div id="data-body-${idx}" style="display: block; margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-muted); line-height: 1.5; border-top: 1px solid var(--border); padding-top: 0.5rem; width: 100%;">
+                    <div id="data-body-${idx}" onclick="event.stopPropagation();" style="display: block; margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-muted); line-height: 1.5; border-top: 1px solid var(--border); padding-top: 0.5rem; width: 100%;">
                         ${item.content}
                     </div>
                 </div>
@@ -1087,6 +1098,129 @@
         function toggleDataBody(idx) {
             const el = document.getElementById(`data-body-${idx}`);
             el.style.display = el.style.display === 'none' ? 'block' : 'none';
+        }
+
+        // === localStorage 데이터 저장/복원 ===
+        function saveDataToStorage() {
+            if (sessionId && collectedData.length > 0) {
+                localStorage.setItem(`webtoon_data_${sessionId}`, JSON.stringify(collectedData));
+                console.log('[Storage] 데이터 저장됨:', collectedData.length, '개 항목');
+            }
+        }
+
+        function loadDataFromStorage() {
+            if (sessionId) {
+                const saved = localStorage.getItem(`webtoon_data_${sessionId}`);
+                if (saved) {
+                    collectedData = JSON.parse(saved);
+                    console.log('[Storage] 데이터 복원됨:', collectedData.length, '개 항목');
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function clearDataFromStorage() {
+            if (sessionId) {
+                localStorage.removeItem(`webtoon_data_${sessionId}`);
+            }
+        }
+
+        // === 정보 항목 수정 ===
+        function editData(idx) {
+            const item = collectedData[idx];
+            const newTitle = prompt('제목을 수정하세요:', item.title);
+            if (newTitle === null) return;
+
+            const newContent = prompt('내용을 수정하세요:', item.content);
+            if (newContent === null) return;
+
+            collectedData[idx] = { title: newTitle, content: newContent };
+            renderDataItems();
+            saveDataToStorage();
+        }
+
+        // === 정보 항목 삭제 ===
+        function deleteData(idx) {
+            if (confirm(`"${collectedData[idx].title}" 항목을 삭제하시겠습니까?`)) {
+                collectedData.splice(idx, 1);
+                renderDataItems();
+                saveDataToStorage();
+
+                // 씬 수 재계산
+                const recScenes = Math.min(Math.max(collectedData.length * 1.5, 6), 15).toFixed(0);
+                document.getElementById('total-scene-count').value = recScenes;
+                document.getElementById('ai-rec-scenes').innerText = recScenes;
+            }
+        }
+
+        // === 정보 항목 추가 모달 ===
+        function openAddDataModal() {
+            const title = prompt('새 항목의 제목을 입력하세요:');
+            if (!title) return;
+
+            const content = prompt('새 항목의 내용을 입력하세요:');
+            if (!content) return;
+
+            collectedData.push({ title, content });
+            renderDataItems();
+            saveDataToStorage();
+
+            // 씬 수 재계산
+            const recScenes = Math.min(Math.max(collectedData.length * 1.5, 6), 15).toFixed(0);
+            document.getElementById('total-scene-count').value = recScenes;
+            document.getElementById('ai-rec-scenes').innerText = recScenes;
+        }
+
+        // === 드래그 앤 드롭 정렬 ===
+        let draggedIdx = null;
+
+        function handleDragStart(e, idx) {
+            draggedIdx = idx;
+            e.target.style.opacity = '0.5';
+            e.dataTransfer.effectAllowed = 'move';
+        }
+
+        function handleDragEnd(e) {
+            e.target.style.opacity = '1';
+            draggedIdx = null;
+            // 모든 하이라이트 제거
+            document.querySelectorAll('.data-item').forEach(el => {
+                el.style.borderTop = '';
+                el.style.borderBottom = '';
+            });
+        }
+
+        function handleDragOver(e, idx) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+
+            // 드롭 위치 표시
+            const items = document.querySelectorAll('.data-item');
+            items.forEach((el, i) => {
+                el.style.borderTop = '';
+                el.style.borderBottom = '';
+                if (i === idx) {
+                    if (draggedIdx < idx) {
+                        el.style.borderBottom = '3px solid var(--primary)';
+                    } else if (draggedIdx > idx) {
+                        el.style.borderTop = '3px solid var(--primary)';
+                    }
+                }
+            });
+        }
+
+        function handleDrop(e, targetIdx) {
+            e.preventDefault();
+            if (draggedIdx === null || draggedIdx === targetIdx) return;
+
+            // 배열 순서 변경
+            const [removed] = collectedData.splice(draggedIdx, 1);
+            collectedData.splice(targetIdx, 0, removed);
+
+            renderDataItems();
+            saveDataToStorage();
+            console.log('[Drag] 순서 변경 완료');
         }
 
         async function confirmData() {
@@ -1338,6 +1472,21 @@
                 if (sNum < step) s.classList.add('done');
                 if (sNum === step) s.classList.add('active');
             });
+
+            // Step 2로 돌아올 때 저장된 데이터 복원
+            if (step === 2 && collectedData.length === 0) {
+                if (loadDataFromStorage()) {
+                    renderDataItems();
+                    const recScenes = Math.min(Math.max(collectedData.length * 1.5, 6), 15).toFixed(0);
+                    document.getElementById('total-scene-count').value = recScenes;
+                    document.getElementById('ai-rec-scenes').innerText = recScenes;
+
+                    // UI 표시
+                    document.getElementById('loading-data').style.display = 'none';
+                    document.getElementById('data-review-area').style.display = 'block';
+                    document.getElementById('data-actions').style.display = 'flex';
+                }
+            }
 
             if (step === 6) {
                 updateInstaPreview();
