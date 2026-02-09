@@ -347,28 +347,7 @@ class GeminiService:
                 expert_tip="전문가와 상담하면 더 정확해요!",
                 hashtags=FIELD_HASHTAGS.get(field.value, ["#정보", "#꿀팁"])
             )
-    
-    def _validate_scene_density(self, scene: Scene) -> list:
-        """씬의 콘텐츠 밀도 검증"""
-        warnings = []
-        
-        for dialogue in scene.dialogues:
-            if len(dialogue.text) > 20:
-                warnings.append(
-                    f"대사가 너무 깁니다 ({len(dialogue.text)}자 → 20자 권장)"
-                )
-        
-        if len(scene.dialogues) > 2:
-            warnings.append(
-                f"말풍선이 너무 많습니다 ({len(scene.dialogues)}개 → 2개 권장)"
-            )
-        
-        if scene.narration and len(scene.narration) > 30:
-            warnings.append(
-                f"나레이션이 너무 깁니다 ({len(scene.narration)}자 → 30자 권장)"
-            )
-        
-        return warnings
+
 
 
 # 싱글톤 인스턴스
