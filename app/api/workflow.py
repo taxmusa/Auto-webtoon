@@ -315,6 +315,88 @@ async def collect_data(request: CollectDataRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class ParseManualContentRequest(BaseModel):
+    session_id: str
+    content: str
+    title: Optional[str] = None
+
+
+@router.post("/parse-manual-content")
+async def parse_manual_content(request: ParseManualContentRequest):
+    """수동 모드: 사용자가 입력한 텍스트를 파싱하여 자료 항목으로 변환"""
+    session = sessions.get(request.session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    content = request.content.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="Content is required")
+    
+    # 텍스트 파싱: 번호 패턴(1. 2. 3.) 또는 더블 뉴라인으로 분리
+    import re
+    
+    # 번호 패턴으로 분리 시도 (1. 또는 1) 또는 - 로 시작하는 항목)
+    numbered_pattern = r'(?:^|\n)(?:\d+[.\)]\s*|[-•]\s*)'
+    
+    # 먼저 번호 패턴이 있는지 확인
+    if re.search(numbered_pattern, content):
+        # 번호 패턴으로 분리
+        parts = re.split(numbered_pattern, content)
+        parts = [p.strip() for p in parts if p.strip()]
+    else:
+        # 더블 뉴라인으로 분리
+        parts = content.split('\n\n')
+        parts = [p.strip() for p in parts if p.strip()]
+    
+    # 항목이 하나뿐이면 문장 단위로 더 분리 시도
+    if len(parts) == 1 and len(parts[0]) > 200:
+        # 마침표 + 공백으로 분리 (문장 단위)
+        sentences = re.split(r'(?<=[.!?])\s+', parts[0])
+        # 2-3문장씩 그룹핑
+        parts = []
+        for i in range(0, len(sentences), 2):
+            group = ' '.join(sentences[i:i+2])
+            if group.strip():
+                parts.append(group.strip())
+    
+    # 각 파트를 자료 항목으로 변환
+    items = []
+    base_title = request.title or "수동 입력 자료"
+    
+    for i, part in enumerate(parts):
+        # 첫 줄을 제목으로 사용하거나, 없으면 자동 생성
+        lines = part.split('\n')
+        first_line = lines[0].strip()
+        
+        # 첫 줄이 짧으면 제목으로 사용
+        if len(first_line) < 50 and len(lines) > 1:
+            title = first_line
+            content_text = '\n'.join(lines[1:]).strip()
+        else:
+            title = f"{base_title} #{i+1}"
+            content_text = part
+        
+        items.append({
+            "title": title,
+            "content": content_text
+        })
+    
+    # 세션에 저장
+    session.collected_data = items
+    
+    # 수동 모드용 키워드 설정 (스토리 생성에 필요)
+    if request.title:
+        session.keyword = request.title
+    elif not session.keyword:
+        session.keyword = "수동 입력 콘텐츠"
+    
+    return {
+        "session_id": session.session_id,
+        "items": items,
+        "item_count": len(items)
+    }
+
+
 # ============================================
 # 씬/이미지 재생성 API
 # ============================================

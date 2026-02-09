@@ -910,7 +910,41 @@
 
         async function startWorkflow() {
             if (selectedMode === 'manual') {
-                alert('수동 모드 준비 중입니다. 현재는 자동 모드만 지원됩니다.');
+                // 수동 모드: 사용자가 입력한 텍스트를 파싱
+                const manualContent = document.getElementById('manual-script').value.trim();
+                if (!manualContent) {
+                    alert('시나리오 또는 텍스트 내용을 입력해주세요.');
+                    return;
+                }
+
+                const btn = document.getElementById('btn-start-next');
+                btn.innerText = '입력 내용 정리 중...';
+                btn.disabled = true;
+
+                try {
+                    // 세션 생성 (수동 모드)
+                    const startRes = await fetch('/api/workflow/start', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ mode: 'manual' })
+                    });
+                    const startData = await startRes.json();
+                    sessionId = startData.session_id;
+
+                    // Step 2로 이동
+                    goToStep(2);
+
+                    // 수동 모드 전용 데이터 수집 함수 호출
+                    await collectManualData(manualContent);
+
+                    btn.innerText = '다음 단계: 스토리 직접 구성 →';
+                    btn.disabled = false;
+                } catch (e) {
+                    console.error(e);
+                    alert('수동 모드 시작 오류: ' + e.message);
+                    btn.innerText = '다음 단계: 스토리 직접 구성 →';
+                    btn.disabled = false;
+                }
                 return;
             }
 
@@ -947,6 +981,51 @@
                 console.error(e);
                 alert('시작 오류: ' + e.message);
                 document.getElementById('btn-start-next').disabled = false;
+            }
+        }
+
+        // --- Step 2: 수동 모드 자료 파싱 ---
+        async function collectManualData(content) {
+            const loadingEl = document.getElementById('loading-data');
+            const reviewArea = document.getElementById('data-review-area');
+            const actionsEl = document.getElementById('data-actions');
+
+            // 로딩 메시지 변경 (수동 모드용)
+            loadingEl.querySelector('div:last-child').innerText = '입력하신 내용을 정리하고 있습니다...';
+            loadingEl.style.display = 'block';
+            reviewArea.style.display = 'none';
+            actionsEl.style.display = 'none';
+
+            try {
+                const res = await fetch('/api/workflow/parse-manual-content', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        content: content
+                    })
+                });
+                const data = await res.json();
+
+                if (!res.ok) {
+                    throw new Error(data.detail || '파싱 오류');
+                }
+
+                collectedData = data.items || [];
+
+                renderDataItems();
+
+                // 씬 수 추천 (수동 모드)
+                const recScenes = Math.min(Math.max(collectedData.length * 1.5, 6), 15).toFixed(0);
+                document.getElementById('total-scene-count').value = recScenes;
+                document.getElementById('ai-rec-scenes').innerText = recScenes;
+
+                loadingEl.style.display = 'none';
+                reviewArea.style.display = 'block';
+                actionsEl.style.display = 'flex';
+            } catch (e) {
+                alert('내용 파싱 오류: ' + e.message);
+                loadingEl.style.display = 'none';
             }
         }
 
