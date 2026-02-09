@@ -1252,16 +1252,29 @@
                     })
                 });
                 const data = await res.json();
+
+                // API 에러 체크
+                if (!res.ok) {
+                    throw new Error(data.detail || '스토리 생성 실패');
+                }
+
                 storyData = data.story;
+
+                // storyData가 없는 경우 처리
+                if (!storyData) {
+                    throw new Error('스토리 데이터를 받지 못했습니다. 다시 시도해주세요.');
+                }
+
                 characters = storyData.characters || [];
 
                 renderCharacters();
-                renderScenes(storyData.scenes);
+                renderScenes(storyData.scenes || []);
 
                 loadingEl.style.display = 'none';
                 reviewArea.style.display = 'block';
                 actionsEl.style.display = 'flex';
             } catch (e) {
+                console.error('스토리 생성 오류:', e);
                 alert('스토리 생성 오류: ' + e.message);
                 loadingEl.style.display = 'none';
             }

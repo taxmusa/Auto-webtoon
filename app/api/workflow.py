@@ -136,6 +136,10 @@ async def generate_story(request: GenerateStoryRequest):
     rule_settings = session.settings.rules
     
     try:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[generate_story] 스토리 생성 시작 - keyword: {session.keyword}, scene_count: {request.scene_count}")
+        
         story = await gemini.generate_story(
             keyword=session.keyword,
             field_info=field_info,
@@ -144,6 +148,11 @@ async def generate_story(request: GenerateStoryRequest):
             character_settings=character_settings,
             rule_settings=rule_settings
         )
+        
+        if not story:
+            raise ValueError("스토리 생성 결과가 없습니다")
+        
+        logger.info(f"[generate_story] 스토리 생성 완료 - 씬 수: {len(story.scenes) if story.scenes else 0}")
         
         session.story = story
         session.state = WorkflowState.REVIEWING_SCENES
@@ -154,6 +163,11 @@ async def generate_story(request: GenerateStoryRequest):
             "story": story.model_dump()
         }
     except Exception as e:
+        import logging
+        import traceback
+        logger = logging.getLogger(__name__)
+        logger.error(f"[generate_story] 오류: {str(e)}")
+        logger.error(traceback.format_exc())
         session.state = WorkflowState.ERROR
         raise HTTPException(status_code=500, detail=str(e))
 
