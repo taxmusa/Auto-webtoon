@@ -281,6 +281,41 @@ async def generate_caption(request: GenerateCaptionRequest):
 
 
 # ============================================
+# 모델 테스트 API
+# ============================================
+
+class TestModelRequest(BaseModel):
+    model: str = "gemini-2.0-flash"
+
+
+@router.post("/test-model")
+async def test_model(request: TestModelRequest):
+    """특정 AI 모델의 동작 상태 확인"""
+    import google.generativeai as genai
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info(f"[test-model] 테스트 시작: {request.model}")
+    
+    try:
+        model = genai.GenerativeModel(request.model)
+        response = await model.generate_content_async("Say 'Hello' in Korean")
+        
+        return {
+            "model": request.model,
+            "status": "success",
+            "response": response.text[:100] if response.text else "(empty)"
+        }
+    except Exception as e:
+        logger.error(f"[test-model] 모델 오류: {request.model} - {str(e)}")
+        return {
+            "model": request.model,
+            "status": "error",
+            "error": str(e)
+        }
+
+
+# ============================================
 # 자료 수집 API
 # ============================================
 
@@ -293,6 +328,9 @@ class CollectDataRequest(BaseModel):
 @router.post("/collect-data")
 async def collect_data(request: CollectDataRequest):
     """자료 수집"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     session = sessions.get(request.session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -301,18 +339,28 @@ async def collect_data(request: CollectDataRequest):
     
     # AI를 사용해 상세 정보 수집
     try:
-        field_info = session.field_info or await gemini.detect_field(request.keyword)
+        logger.info(f"[collect_data] 모델: {request.model}, 키워드: {request.keyword}")
+        
+        # 사용자 선택 모델 전달
+        field_info = session.field_info or await gemini.detect_field(request.keyword, request.model)
+        logger.info(f"[collect_data] 분야 감지 완료: {field_info.field}")
+        
         items = await gemini.collect_data(request.keyword, field_info, request.model)
+        logger.info(f"[collect_data] 자료 수집 완료: {len(items)}개 항목")
         
         # 세션에 저장 (상세 내용 포함)
         session.collected_data = items
         
         return {
             "session_id": session.session_id,
-            "items": items
+            "items": items,
+            "model_used": request.model
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"[collect_data] 오류 발생 - 모델: {request.model}, 에러: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"자료 수집 오류 ({request.model}): {str(e)}")
 
 
 class ParseManualContentRequest(BaseModel):
