@@ -172,11 +172,17 @@ class GeminiService:
         character_settings: Optional[CharacterSettings] = None,
         rule_settings: Optional[RuleSettings] = None
     ) -> Story:
-        """규칙 기반 스토리 생성"""
+        """규칙 기반 스토리 생성 - 모델 fallback 지원"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
         if not character_settings:
             character_settings = CharacterSettings()
         if not rule_settings:
             rule_settings = RuleSettings()
+        
+        # Fallback 모델 순서 정의
+        models_to_try = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-3-flash-preview"]
             
         data_str = "\n".join([f"- {d['title']}: {d['content']}" for d in collected_data])
         
@@ -217,29 +223,39 @@ class GeminiService:
     ]
 }}"""
 
-        try:
-            response = await self.model.generate_content_async(prompt)
-            data = json.loads(re.search(r'\{.*\}', response.text, re.DOTALL).group())
-            
-            scenes = []
-            for s in data.get("scenes", []):
-                dialogues = [Dialogue(**d) for d in s.get("dialogues", [])]
-                scene = Scene(
-                    scene_number=s.get("scene_number"),
-                    scene_description=s.get("scene_description"),
-                    dialogues=dialogues,
-                    narration=s.get("narration")
-                )
-                scene.warnings = self._validate_scene_density(scene, rule_settings)
-                scenes.append(scene)
+        last_error = None
+        for try_model in models_to_try:
+            try:
+                logger.info(f"[generate_story] 시도 중: {try_model}")
+                current_model = genai.GenerativeModel(try_model)
+                response = await current_model.generate_content_async(prompt)
+                data = json.loads(re.search(r'\{.*\}', response.text, re.DOTALL).group())
                 
-            return Story(
-                title=data.get("title", keyword),
-                scenes=scenes,
-                characters=[CharacterProfile(**c) for c in data.get("characters", [])]
-            )
-        except Exception as e:
-            raise Exception(f"스토리 생성 실패: {str(e)}")
+                scenes = []
+                for s in data.get("scenes", []):
+                    dialogues = [Dialogue(**d) for d in s.get("dialogues", [])]
+                    scene = Scene(
+                        scene_number=s.get("scene_number"),
+                        scene_description=s.get("scene_description"),
+                        dialogues=dialogues,
+                        narration=s.get("narration")
+                    )
+                    scene.warnings = self._validate_scene_density(scene, rule_settings)
+                    scenes.append(scene)
+                
+                logger.info(f"[generate_story] 성공: {try_model}, 씬 수: {len(scenes)}")
+                return Story(
+                    title=data.get("title", keyword),
+                    scenes=scenes,
+                    characters=[CharacterProfile(**c) for c in data.get("characters", [])]
+                )
+            except Exception as e:
+                last_error = e
+                logger.warning(f"[generate_story] {try_model} 실패: {str(e)}")
+                continue
+        
+        # 모든 모델 실패
+        raise Exception(f"스토리 생성 실패: {str(last_error)}")
 
     def _validate_scene_density(self, scene: Scene, rules: RuleSettings) -> list:
         """씬의 텍스트 밀도 검사"""
