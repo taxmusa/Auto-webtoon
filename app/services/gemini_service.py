@@ -12,7 +12,7 @@ import re
 from app.core.config import get_settings, SPECIALIZED_FIELDS, FIELD_HASHTAGS
 from app.models.models import (
     FieldInfo, SpecializedField, Story, Scene, Dialogue,
-    InstagramCaption, CharacterSettings
+    InstagramCaption, CharacterSettings, CharacterProfile
 )
 
 
