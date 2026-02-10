@@ -6,5 +6,6 @@
   "visual_attributes": {},
   "reference_images": [],
   "description": "깔끔하고 선명한 라인과 생동감 넘치는 색감의 표준 웹툰 스타일입니다.",
-  "preview_image": "/app_data/styles/character/char_webtoon/preview.png"
+  "preview_image": "/app_data/styles/character/char_webtoon/preview.png",
+  "is_default": true
 }

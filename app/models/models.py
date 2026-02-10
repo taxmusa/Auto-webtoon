@@ -120,6 +120,9 @@ class CharacterStyle(BaseModel):
     prompt_block: str
     locked_attributes: List[str] = Field(default_factory=list)
     reference_images: List[str] = Field(default_factory=list)
+    preview_image: Optional[str] = None
+    description: Optional[str] = None
+    is_default: bool = False
 
 
 class BackgroundStyle(BaseModel):
@@ -129,6 +132,9 @@ class BackgroundStyle(BaseModel):
     prompt_block: str
     locked_attributes: List[str] = Field(default_factory=list)
     reference_images: List[str] = Field(default_factory=list)
+    preview_image: Optional[str] = None
+    description: Optional[str] = None
+    is_default: bool = False
 
 
 class ManualPromptOverrides(BaseModel):

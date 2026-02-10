@@ -6,5 +6,6 @@
   "visual_attributes": {},
   "reference_images": [],
   "description": "가볍고 웃긴 병맛/낙서 스타일로, 개그 컷에 적합합니다.",
-  "preview_image": "/app_data/styles/character/char_meme_doodle/preview.png"
+  "preview_image": "/app_data/styles/character/char_meme_doodle/preview.png",
+  "is_default": true
 }

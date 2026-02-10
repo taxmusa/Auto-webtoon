@@ -6,5 +6,6 @@
   "visual_attributes": {},
   "reference_images": [],
   "description": "흑백 펜화 스타일로, 출판 만화나 누아르 분위기를 연출합니다.",
-  "preview_image": "/app_data/styles/character/char_bw_pen/preview.png"
+  "preview_image": "/app_data/styles/character/char_bw_pen/preview.png",
+  "is_default": true
 }

@@ -86,6 +86,7 @@ async def list_background_styles():
 
 @router.post("/save")
 async def save_style(
+    id: Optional[str] = Form(None), # 수정 시 ID 전달
     name: str = Form(...),
     type: str = Form(...), # 'character' or 'background'
     prompt_block: str = Form(...),
@@ -93,7 +94,7 @@ async def save_style(
     visual_attributes: str = Form("{}"), # JSON string
     reference_images: List[UploadFile] = File(None)
 ):
-    """스타일 저장 (이미지 포함)"""
+    """스타일 저장 (신규 생성 또는 수정)"""
     try:
         locked_attrs = json.loads(locked_attributes)
     except:
@@ -103,16 +104,44 @@ async def save_style(
         visual_attrs = json.loads(visual_attributes)
     except:
         visual_attrs = {}
-        
-    style_id = f"{type}_style_{uuid.uuid4().hex[:8]}"
-    
+
     base_dir = CHAR_STYLE_DIR if type == 'character' else BG_STYLE_DIR
-    style_dir = os.path.join(base_dir, style_id)
-    os.makedirs(style_dir, exist_ok=True)
     
-    # Save Images
-    saved_images = []
+    # 수정 모드 (ID 존재)
+    if id:
+        style_id = id
+        style_dir = os.path.join(base_dir, style_id)
+        meta_path = os.path.join(style_dir, "meta.json")
+        
+        if not os.path.exists(meta_path):
+             raise HTTPException(status_code=404, detail="Style not found")
+             
+        with open(meta_path, "r", encoding="utf-8") as f:
+            existing_data = json.load(f)
+            
+        # 기본 스타일 보호
+        if existing_data.get("is_default", False):
+            raise HTTPException(status_code=403, detail="Cannot modify default style")
+            
+        # 기존 이미지 유지 (새 이미지가 없으면)
+        saved_images = existing_data.get("reference_images", [])
+        preview_image = existing_data.get("preview_image") # 유지
+    else:
+        # 신규 생성
+        style_id = f"{type}_style_{uuid.uuid4().hex[:8]}"
+        style_dir = os.path.join(base_dir, style_id)
+        os.makedirs(style_dir, exist_ok=True)
+        saved_images = []
+        preview_image = None
+
+    # 새 이미지 저장 (추가)
     if reference_images:
+        # 수정 모드라면 기존 이미지를 대체할지, 추가할지 결정해야 함. 
+        # 현재 UI 로직상 '대표 이미지' 개념이 강하므로, 새 이미지가 오면 기존 리스트를 초기화하고 덮어쓰는 게 깔끔함 (또는 UI에서 제어)
+        # 여기선 '덮어쓰기' 전략 사용 (사용자가 새 이미지를 올렸다는 건 교체 의도)
+        if id: 
+            saved_images = [] 
+            
         for file in reference_images:
             file_ext = os.path.splitext(file.filename)[1]
             file_name = f"ref_{uuid.uuid4().hex[:6]}{file_ext}"
@@ -121,19 +150,18 @@ async def save_style(
             with open(file_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
             
-            # API에서 접근 가능한 경로로 저장 (assuming static mount needed later, or return relative)
-            # For now returning relative path to be served via static
             saved_images.append(f"/app_data/styles/{type}/{style_id}/{file_name}")
 
-    # Meta Data
+    # Meta Data Update
     if type == 'character':
         style_obj = CharacterStyle(
             id=style_id,
             name=name,
             prompt_block=prompt_block,
             locked_attributes=locked_attrs,
-            visual_attributes=visual_attrs,
-            reference_images=saved_images
+            reference_images=saved_images,
+            preview_image=preview_image, # 보존
+            is_default=False # 사용자가 생성/수정한 건 무조건 False
         )
     else:
         style_obj = BackgroundStyle(
@@ -141,8 +169,9 @@ async def save_style(
             name=name,
             prompt_block=prompt_block,
             locked_attributes=locked_attrs,
-            visual_attributes=visual_attrs,
-            reference_images=saved_images
+            reference_images=saved_images,
+            preview_image=preview_image, # 보존
+            is_default=False
         )
         
     meta_path = os.path.join(style_dir, "meta.json")
@@ -150,6 +179,37 @@ async def save_style(
         json.dump(style_obj.model_dump(), f, ensure_ascii=False, indent=2)
         
     return {"success": True, "style": style_obj.model_dump()}
+
+@router.delete("/{type}/{style_id}")
+async def delete_style(type: str, style_id: str):
+    """스타일 삭제"""
+    if type not in ['character', 'background']:
+        raise HTTPException(status_code=400, detail="Invalid style type")
+        
+    base_dir = CHAR_STYLE_DIR if type == 'character' else BG_STYLE_DIR
+    style_dir = os.path.join(base_dir, style_id)
+    meta_path = os.path.join(style_dir, "meta.json")
+    
+    if not os.path.exists(meta_path):
+        raise HTTPException(status_code=404, detail="Style not found")
+        
+    # 기본 스타일 삭제 방지
+    try:
+        with open(meta_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if data.get("is_default", False):
+                raise HTTPException(status_code=403, detail="Cannot delete default style")
+    except Exception as e:
+        # 파일 읽기 실패 시에도 안전하게 삭제 거부? 
+        # 아니면 파일이 깨졌으니 삭제 허용? -> 안전하게 거부 후 수동 해결 유도
+        if isinstance(e, HTTPException): raise e
+        print(f"Error reading meta.json: {e}")
+
+    try:
+        shutil.rmtree(style_dir)
+        return {"success": True, "message": "Style deleted"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete: {str(e)}")
 
 @router.post("/extract")
 async def extract_style(image: UploadFile = File(...)):

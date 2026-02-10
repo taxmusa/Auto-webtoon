@@ -6,5 +6,6 @@
   "visual_attributes": {},
   "reference_images": [],
   "description": "깔끔한 벡터 그래픽 스타일로, 단순한 면과 색상 중심의 디자인입니다.",
-  "preview_image": "/app_data/styles/character/char_flat_vector/preview.png"
+  "preview_image": "/app_data/styles/character/char_flat_vector/preview.png",
+  "is_default": true
 }

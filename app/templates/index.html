@@ -2325,14 +2325,22 @@
                 return;
             }
 
-            listEl.innerHTML = styles.map(s => `
+            listEl.innerHTML = styles.map(s => {
+                const badge = s.is_default
+                    ? '<span style="font-size:0.7rem; background:#444; color:#fff; padding:2px 6px; border-radius:4px; margin-left:6px;">🔒기본</span>'
+                    : '<span style="font-size:0.7rem; background:var(--primary); color:#fff; padding:2px 6px; border-radius:4px; margin-left:6px;">👤커스텀</span>';
+
+                return `
                 <div class="style-item-dark" onclick="viewStyleDetail('${s.id}')" style="padding: 1rem; cursor: pointer;">
-                    <div style="font-weight: bold; margin-bottom: 0.25rem;">${s.name}</div>
+                    <div style="font-weight: bold; margin-bottom: 0.25rem;">
+                        ${s.name} ${badge}
+                    </div>
                     <div style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
                         ${s.description || s.prompt_block}
                     </div>
                 </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         function viewStyleDetail(id) {
@@ -2357,6 +2365,19 @@
             } else {
                 previewEl.innerHTML = 'No Image';
             }
+
+            // 버튼 영역 렌더링 (Added here)
+            const btnContainer = document.getElementById('style-btn-container');
+            if (style.is_default) {
+                btnContainer.innerHTML = `<div style="text-align:center; padding:10px; color:#888; font-size:0.9rem;">🔒 기본 스타일은 수정/삭제할 수 없습니다.</div>`;
+            } else {
+                btnContainer.innerHTML = `
+                    <div style="display:flex; gap:10px; margin-top:1rem;">
+                        <button class="btn btn-secondary" style="flex:1;" onclick="editStyle('${style.id}')">✏️ 수정</button>
+                        <button class="btn btn-danger" style="flex:1;" onclick="deleteStyle('${style.type}', '${style.id}')">🗑️ 삭제</button>
+                    </div>
+                `;
+            }
         }
 
         function selectCurrentStyle() {
@@ -2376,112 +2397,164 @@
                 document.getElementById('manual-bg-prompt').value = window.activeStyleDetail.prompt_block;
             }
 
-
-
-            // --- Creation Form ---
-            function showCreateStyleForm() {
-                document.getElementById('style-detail-view').style.display = 'none';
-                document.getElementById('style-form-view').style.display = 'block';
-
-                // Initialize form
-                document.getElementById('style-form-name').value = '';
-                document.getElementById('style-form-prompt').value = '';
-                document.getElementById('style-form-image').value = '';
-                document.getElementById('style-form-locked-attrs').value = '[]';
-                document.getElementById('style-form-visual-attrs').value = '{}';
-            }
-
-            function cancelCreateStyle() {
-                document.getElementById('style-form-view').style.display = 'none';
-            }
-
-            async function extractStyleFromImage() {
-                const fileInput = document.getElementById('extract-upload');
-                if (!fileInput.files[0]) {
-                    alert('이미지를 선택해주세요.');
-                    return;
-                }
-
-                const formData = new FormData();
-                formData.append('image', fileInput.files[0]);
-
-                document.getElementById('extract-loading').style.display = 'inline';
-
-                try {
-                    const res = await fetch('/api/styles/extract', {
-                        method: 'POST',
-                        body: formData
-                    });
-                    const data = await res.json();
-
-                    if (data.success && data.result) {
-                        const result = data.result;
-                        // Auto-fill based on current type
-                        if (currentStyleType === 'character' && result.character_style) {
-                            document.getElementById('style-form-prompt').value = result.character_style.prompt_block;
-                            document.getElementById('style-form-locked-attrs').value = JSON.stringify(result.character_style.locked_attributes || []);
-                            document.getElementById('style-form-visual-attrs').value = JSON.stringify(result.character_style.visual_attributes || {});
-
-                            if (!document.getElementById('style-form-name').value) {
-                                document.getElementById('style-form-name').value = "Extracted Character Style";
-                            }
-                        } else if (currentStyleType === 'background' && result.background_style) {
-                            document.getElementById('style-form-prompt').value = result.background_style.prompt_block;
-                            document.getElementById('style-form-locked-attrs').value = JSON.stringify(result.background_style.locked_attributes || []);
-                            document.getElementById('style-form-visual-attrs').value = JSON.stringify(result.background_style.visual_attributes || {});
-
-                            if (!document.getElementById('style-form-name').value) {
-                                document.getElementById('style-form-name').value = "Extracted Background Style";
-                            }
-                        }
-                    }
-                } catch (e) {
-                    alert('Extraction failed: ' + e.message);
-                } finally {
-                    document.getElementById('extract-loading').style.display = 'none';
-                }
-            }
-
-            async function submitStyleForm() {
-                const name = document.getElementById('style-form-name').value;
-                const prompt = document.getElementById('style-form-prompt').value;
-                const locked = document.getElementById('style-form-locked-attrs').value;
-                const visual = document.getElementById('style-form-visual-attrs').value;
-                const imageFile = document.getElementById('style-form-image').files[0];
-
-                if (!name || !prompt) {
-                    alert('이름과 프롬프트는 필수입니다.');
-                    return;
-                }
-
-                const formData = new FormData();
-                formData.append('name', name);
-                formData.append('type', currentStyleType);
-                formData.append('prompt_block', prompt);
-                formData.append('locked_attributes', locked);
-                formData.append('visual_attributes', visual);
-                if (imageFile) {
-                    formData.append('reference_images', imageFile);
-                }
-
-                try {
-                    const res = await fetch('/api/styles/save', {
-                        method: 'POST',
-                        body: formData
-                    });
-                    const data = await res.json();
-                    if (data.success) {
-                        alert('저장되었습니다.');
-                        loadStyles(currentStyleType);
-                        document.getElementById('style-form-view').style.display = 'none';
-                    }
-                } catch (e) {
-                    alert('Save failed: ' + e.message);
-                }
-            }
-
             closeStyleManager();
         }
+
+        // --- Creation Form ---
+        function showCreateStyleForm() {
+            document.getElementById('style-detail-view').style.display = 'none';
+            document.getElementById('style-form-view').style.display = 'block';
+
+            // Initialize form (Reset)
+            document.getElementById('style-form-id').value = ''; // New
+            document.getElementById('style-form-title').innerText = '새 스타일 추가';
+            document.getElementById('style-form-name').value = '';
+            document.getElementById('style-form-prompt').value = '';
+            document.getElementById('style-form-image').value = '';
+            document.getElementById('style-form-locked-attrs').value = '[]';
+            document.getElementById('style-form-visual-attrs').value = '{}';
+        }
+
+        function editStyle(id) {
+            const style = stylesData[currentStyleType].find(s => s.id === id);
+            if (!style) return;
+
+            document.getElementById('style-detail-view').style.display = 'none';
+            document.getElementById('style-form-view').style.display = 'block';
+
+            // Pre-fill form
+            document.getElementById('style-form-title').innerText = '스타일 수정';
+            document.getElementById('style-form-id').value = style.id;
+            document.getElementById('style-form-name').value = style.name;
+            document.getElementById('style-form-prompt').value = style.prompt_block;
+            document.getElementById('style-form-locked-attrs').value = JSON.stringify(style.locked_attributes || []);
+            document.getElementById('style-form-visual-attrs').value = JSON.stringify(style.visual_attributes || {});
+            // 이미지는 새로 업로드하지 않으면 유지됨
+        }
+
+        async function deleteStyle(type, id) {
+            if (!confirm('정말 이 스타일을 삭제하시겠습니까?')) return;
+            try {
+                const res = await fetch(`/api/styles/${type}/${id}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (res.ok) {
+                    alert('삭제되었습니다.');
+                    loadStyles(currentStyleType);
+                    document.getElementById('style-detail-view').style.display = 'none';
+                    window.activeStyleDetail = null;
+
+                    // 선택된 스타일이 삭제된 경우 UI 초기화
+                    if (selectedStyles[currentStyleType] && selectedStyles[currentStyleType].id === id) {
+                        selectedStyles[currentStyleType] = null;
+                        const uiId = currentStyleType === 'character' ? 'selected-char-style' : 'selected-bg-style';
+                        document.getElementById(uiId).innerHTML = `<div style="color:var(--text-muted);">선택 안 됨</div>`;
+                    }
+                } else {
+                    alert(data.detail || '삭제 실패');
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        function cancelCreateStyle() {
+            document.getElementById('style-form-view').style.display = 'none';
+        }
+
+        async function extractStyleFromImage() {
+            const fileInput = document.getElementById('extract-upload');
+            if (!fileInput.files[0]) {
+                alert('이미지를 선택해주세요.');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('image', fileInput.files[0]);
+
+            document.getElementById('extract-loading').style.display = 'inline';
+
+            try {
+                const res = await fetch('/api/styles/extract', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+
+                if (data.success && data.result) {
+                    const result = data.result;
+                    // Auto-fill based on current type
+                    if (currentStyleType === 'character' && result.character_style) {
+                        document.getElementById('style-form-prompt').value = result.character_style.prompt_block;
+                        document.getElementById('style-form-locked-attrs').value = JSON.stringify(result.character_style.locked_attributes || []);
+                        document.getElementById('style-form-visual-attrs').value = JSON.stringify(result.character_style.visual_attributes || {});
+
+                        if (!document.getElementById('style-form-name').value) {
+                            document.getElementById('style-form-name').value = "Extracted Character Style";
+                        }
+                    } else if (currentStyleType === 'background' && result.background_style) {
+                        document.getElementById('style-form-prompt').value = result.background_style.prompt_block;
+                        document.getElementById('style-form-locked-attrs').value = JSON.stringify(result.background_style.locked_attributes || []);
+                        document.getElementById('style-form-visual-attrs').value = JSON.stringify(result.background_style.visual_attributes || {});
+
+                        if (!document.getElementById('style-form-name').value) {
+                            document.getElementById('style-form-name').value = "Extracted Background Style";
+                        }
+                    }
+                }
+            } catch (e) {
+                alert('Extraction failed: ' + e.message);
+            } finally {
+                document.getElementById('extract-loading').style.display = 'none';
+            }
+        }
+
+        async function submitStyleForm() {
+            const id = document.getElementById('style-form-id').value; // New
+            const name = document.getElementById('style-form-name').value;
+            const prompt = document.getElementById('style-form-prompt').value;
+            const locked = document.getElementById('style-form-locked-attrs').value;
+            const visual = document.getElementById('style-form-visual-attrs').value;
+            const imageFile = document.getElementById('style-form-image').files[0];
+
+            if (!name || !prompt) {
+                alert('이름과 프롬프트는 필수입니다.');
+                return;
+            }
+
+            const formData = new FormData();
+            if (id) formData.append('id', id); // 수정 시 ID 전송
+            formData.append('name', name);
+            formData.append('type', currentStyleType);
+            formData.append('prompt_block', prompt);
+            formData.append('locked_attributes', locked);
+            formData.append('visual_attributes', visual);
+            if (imageFile) {
+                formData.append('reference_images', imageFile);
+            }
+
+            try {
+                const res = await fetch('/api/styles/save', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('저장되었습니다.');
+                    loadStyles(currentStyleType);
+                    document.getElementById('style-form-view').style.display = 'none';
+                    // 상세 뷰로 돌아가거나 닫기
+                    if (id) {
+                        viewStyleDetail(id); // 수정된 내용 바로 확인
+                    }
+                } else {
+                    alert('Save failed: ' + (data.detail || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Save failed: ' + e.message);
+            }
+        }
+
+
 
         // --- Preview & Generation ---
 
@@ -2582,13 +2655,17 @@
                             style="background: var(--bg-input); color: var(--text); padding: 1rem; border-radius: 4px; font-size: 0.9rem; max-height: 150px; overflow-y: auto; border: 1px solid var(--border);">
                         </p>
                         <div style="margin-top: 2rem; text-align: right;">
-                            <button class="btn btn-primary" onclick="selectCurrentStyle()">이 스타일 선택</button>
+                            <button id="btn-select-style" class="btn btn-primary"
+                                style="width:100%; padding:12px; font-size:1rem;" onclick="selectCurrentStyle()">이 스타일
+                                선택</button>
                         </div>
+                        <div id="style-btn-container"></div>
                     </div>
 
                     <!-- Create/Edit Form Mode -->
                     <div id="style-form-view" style="display: none;">
-                        <h4 style="margin-top: 0;">새 스타일 만들기</h4>
+                        <h3 id="style-form-title" style="margin-top:0;">새 스타일 추가</h3>
+                        <input type="hidden" id="style-form-id">
 
                         <!-- Extraction Option -->
                         <div

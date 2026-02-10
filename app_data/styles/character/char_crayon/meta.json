@@ -6,5 +6,6 @@
   "visual_attributes": {},
   "reference_images": [],
   "description": "크레파스나 색연필로 그린 듯한 따뜻하고 아동 친화적인 질감입니다.",
-  "preview_image": "/app_data/styles/character/char_crayon/preview.png"
+  "preview_image": "/app_data/styles/character/char_crayon/preview.png",
+  "is_default": true
 }

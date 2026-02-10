@@ -6,5 +6,6 @@
   "visual_attributes": {},
   "reference_images": [],
   "description": "90년대 셀 애니메이션 감성의 빈티지한 색감과 노이즈 질감입니다.",
-  "preview_image": "/app_data/styles/character/char_retro_anime/preview.png"
+  "preview_image": "/app_data/styles/character/char_retro_anime/preview.png",
+  "is_default": true
 }

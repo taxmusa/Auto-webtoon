@@ -11,5 +11,6 @@
   "reference_images": [
     "/app_data/styles/character/character_style_07e0e436/ref_87c53b.png"
   ],
-  "preview_image": "/app_data/styles/character/character_style_07e0e436/preview.png"
+  "preview_image": "/app_data/styles/character/character_style_07e0e436/preview.png",
+  "is_default": false
 }

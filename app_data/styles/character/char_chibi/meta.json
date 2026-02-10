@@ -6,5 +6,6 @@
   "visual_attributes": {},
   "reference_images": [],
   "description": "귀엽고 단순화된 SD(Super Deformed) 캐릭터 스타일입니다.",
-  "preview_image": "/app_data/styles/character/char_chibi/preview.png"
+  "preview_image": "/app_data/styles/character/char_chibi/preview.png",
+  "is_default": true
 }

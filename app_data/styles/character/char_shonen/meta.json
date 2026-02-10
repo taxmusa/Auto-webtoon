@@ -6,5 +6,6 @@
   "visual_attributes": {},
   "reference_images": [],
   "description": "소년 만화 스타일로, 역동적인 선과 강렬한 명암 대비가 돋보입니다.",
-  "preview_image": "/app_data/styles/character/char_shonen/preview.png"
+  "preview_image": "/app_data/styles/character/char_shonen/preview.png",
+  "is_default": true
 }

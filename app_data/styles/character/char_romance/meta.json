@@ -6,5 +6,6 @@
   "visual_attributes": {},
   "reference_images": [],
   "description": "로맨스 판타지 웹툰 특유의 화려하고 섬세한 이목구비와 반짝이는 효과가 특징입니다.",
-  "preview_image": "/app_data/styles/character/char_romance/preview.png"
+  "preview_image": "/app_data/styles/character/char_romance/preview.png",
+  "is_default": true
 }
