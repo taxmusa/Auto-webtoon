@@ -1,7 +1,7 @@
 # IMAGE_GENERATION.md - 이미지 생성 로직
 
 > 이 문서는 AI 이미지 생성 관련 모든 로직을 정의합니다.  
-> **v2.0.0** — 5개 모델 지원, 캐릭터 일관성 프롬프트 통합
+> **v2.1.0** — 5개 모델 지원, 캐릭터 일관성 프롬프트 통합, 서브-스타일(비주얼 프리셋) 시스템 추가
 
 ---
 
@@ -128,6 +128,8 @@ def get_generator(model_name: str, api_key: str) -> ImageGeneratorBase:
 ### 3.1 기본 구조
 
 ```
+[RENDERING STYLE / VISUAL PRESET] ← 렌더링 방식 (FROZEN)
++
 [CHARACTER IDENTITY - DO NOT MODIFY] ← 캐릭터 DNA (FROZEN)
 +
 [STYLE CONSISTENCY] ← 아트 스타일 고정
@@ -142,10 +144,17 @@ def get_generator(model_name: str, api_key: str) -> ImageGeneratorBase:
 ### 3.2 캐릭터 일관성 통합 프롬프트
 
 ```python
-def build_scene_prompt(scene, characters, style_config):
+def build_scene_prompt(scene, characters, style_config, sub_style_prompt=None):
     """씬 이미지 생성용 프롬프트 구성"""
     
     prompt_parts = []
+    
+    # 0. 렌더링 스타일 (Visual Preset)
+    if sub_style_prompt:
+        prompt_parts.append(f"""
+[RENDERING STYLE / VISUAL PRESET]
+{sub_style_prompt}
+""")
     
     # 1. 캐릭터 Identity Block (FROZEN - 단어 하나도 변경 금지)
     for i, char in enumerate(characters):

@@ -21,11 +21,15 @@
 │         ▼           ▼                     └──────┬───────┘              │
 │   [키워드 입력]  [직접 입력]                      │                      │
 │         │           │                            ▼                      │
-│         ▼           │                     [이미지 생성]                 │
+│         ▼           │                     [캐릭터 & 스타일 선택] ⭐ NEW      │
 │   [분야 자동 감지]  │                            │                      │
 │         │           │                            ▼                      │
-│         ▼           │                     ┌──────────────┐              │
-│   [정보 수집]  ◀────┘                     │ 이미지 검토  │ ◀── 2차 체크 │
+│         ▼           │                     [이미지 생성]                 │
+│   [정보 수집]  ◀────┘                            │                      │
+│                                                  │                      │
+│                                                  ▼                      │
+│                                           ┌──────────────┐              │
+│                                           │ 이미지 검토  │ ◀── 2차 체크 │
 │                                           │ (재생성/확정)│              │
 │                                           └──────┬───────┘              │
 │                                                  │                      │
@@ -405,29 +409,21 @@ class SceneReviewAction(Enum):
 def build_image_prompt(scene: Scene, settings: ImageSettings) -> str:
     """씬 정보를 바탕으로 이미지 생성 프롬프트 구성"""
     
-    base_style = {
-        "webtoon": "korean webtoon style, clean lines, vibrant colors",
-        "card_news": "modern infographic style, clean design, professional",
-        "simple": "minimalist design, solid background, clean typography"
-    }
-    
-    sub_style = {
-        "ghibli": "studio ghibli inspired, soft colors, dreamy atmosphere",
-        "romance": "soft pastel colors, warm lighting, emotional",
-        "business": "professional, corporate style, clean"
-    }
+    # Base Style (Character & Background)
+    # Rendering Style (Sub Style)
     
     prompt = f"""
-    {base_style[settings.style]}
-    {sub_style.get(settings.sub_style, "")}
+    [RENDERING STYLE / VISUAL PRESET]
+    {settings.sub_style_prompt}
     
+    [SCENE DESCRIPTION]
     Scene: {scene.scene_description}
     
-    Characters:
+    [CHARACTERS]
     - {scene.dialogues[0].character}: speaking
     
+    [EXCLUSION]
     DO NOT include any text, speech bubbles, or letters in the image.
-    The text will be added separately.
     
     Aspect ratio: {settings.aspect_ratio}
     """

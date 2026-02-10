@@ -280,7 +280,8 @@ async def generate_preview(request: GeneratePreviewRequest):
         characters=session.story.characters,
         character_style=char_style,
         background_style=bg_style,
-        manual_overrides=overrides
+        manual_overrides=overrides,
+        sub_style_name=request.sub_style
     )
     
     # Select generator
@@ -319,6 +320,7 @@ async def generate_images(request: GenerateImagesRequest):
     session.settings.image.model = request.model
     session.settings.image.character_style_id = request.character_style_id
     session.settings.image.background_style_id = request.background_style_id
+    session.settings.image.sub_style = request.sub_style
     if request.manual_overrides:
         session.settings.image.manual_overrides = ManualPromptOverrides(**request.manual_overrides)
         
@@ -326,6 +328,7 @@ async def generate_images(request: GenerateImagesRequest):
     char_style = get_character_style(request.character_style_id) if request.character_style_id else None
     bg_style = get_background_style(request.background_style_id) if request.background_style_id else None
     overrides = session.settings.image.manual_overrides
+    sub_style = request.sub_style
 
     # Select generator
     api_key = os.getenv("OPENAI_API_KEY") if "gpt" in request.model or "dall-e" in request.model else os.getenv("GOOGLE_API_KEY")
@@ -345,7 +348,8 @@ async def generate_images(request: GenerateImagesRequest):
                 characters=session.story.characters,
                 character_style=char_style,
                 background_style=bg_style,
-                manual_overrides=overrides
+                manual_overrides=overrides,
+                sub_style_name=sub_style
             )
             
             # Using 1024x1792 for Webtoon (Vertical) if supported

@@ -1,24 +1,110 @@
 from app.models.models import Scene, CharacterProfile, CharacterStyle, BackgroundStyle, ManualPromptOverrides
 from typing import List, Optional
+# ==========================================
+# SUB_STYLES DEFINITION
+# ==========================================
+SUB_STYLES = {
+    # 기존 스타일
+    "ghibli": "studio ghibli inspired, soft colors, dreamy atmosphere, detailed background, cell shading",
+    "romance": "soft pastel colors, warm lighting, emotional, shoujo manga style, sparkling eyes, delicate lines",
+    "business": "professional, corporate style, clean, flat design, infographic style, trustworthy",
+    
+    # 추가 10개 (인스타툰 프리셋)
+    "round_lineart": (
+        "simple round line drawing style, thick black outlines, "
+        "minimal detail, cute rounded shapes, white or solid pastel background, "
+        "no shading, flat colors only, chibi-like proportions with big head, "
+        "hand-drawn feel, doodle aesthetic"
+    ),
+
+    "pastel_flat": (
+        "flat illustration style, soft pastel color palette, "
+        "no gradients, no shadows, clean vector-like shapes, "
+        "simple facial features with dot eyes, minimal background, "
+        "modern Korean illustration style, muted warm tones"
+    ),
+
+    "bold_cartoon": (
+        "bold cartoon style, very thick black outlines 4-5px, "
+        "bright saturated flat colors, exaggerated expressions, "
+        "simple geometric shapes, pop art influence, "
+        "no gradient, solid color fills, high contrast"
+    ),
+
+    "pencil_sketch": (
+        "pencil sketch style, hand-drawn rough lines, "
+        "grayscale with occasional single accent color, "
+        "notebook paper texture, casual doodle feel, "
+        "imperfect lines, crosshatch shading, minimal detail"
+    ),
+
+    "monoline": (
+        "monoline illustration style, single consistent line weight, "
+        "no fill colors, outline only, clean and minimal, "
+        "white background, modern simple aesthetic, "
+        "thin continuous lines, no shading"
+    ),
+
+    "watercolor_soft": (
+        "soft watercolor illustration style, light color bleeding edges, "
+        "pastel tones, gentle brush strokes, slightly transparent colors, "
+        "white paper background showing through, dreamy and warm, "
+        "simple character design with minimal facial features"
+    ),
+
+    "neon_pop": (
+        "neon pop style illustration, dark navy or black background, "
+        "bright neon accent colors pink cyan yellow, "
+        "simple flat character design, glowing edges, "
+        "bold minimal shapes, high visual contrast, modern and trendy"
+    ),
+
+    "emoji_icon": (
+        "emoji-like simple icon style illustration, "
+        "extremely simplified characters, circle heads, dot eyes, "
+        "line mouth, no nose, stick-figure inspired but cute, "
+        "solid bright background, 2-3 colors maximum per scene, "
+        "Google emoji aesthetic, flat design"
+    ),
+
+    "retro_90s": (
+        "1990s retro cartoon style, slightly grainy texture, "
+        "warm vintage color palette with orange brown teal, "
+        "rounded character shapes, simple dot eyes, "
+        "nostalgic feel, VHS-era cartoon aesthetic, "
+        "thick outlines, limited color palette 4-5 colors"
+    ),
+
+    "cutout_collage": (
+        "paper cutout collage style illustration, "
+        "torn paper edges, layered flat shapes, "
+        "craft paper texture, handmade feel, "
+        "simple character shapes from geometric cuts, "
+        "warm earth tones with one bright accent color, "
+        "scrapbook aesthetic, tactile and trendy"
+    ),
+}
 
 def build_styled_prompt(
     scene: Scene,
     characters: List[CharacterProfile],
     character_style: Optional[CharacterStyle] = None,
     background_style: Optional[BackgroundStyle] = None,
-    manual_overrides: Optional[ManualPromptOverrides] = None
+    manual_overrides: Optional[ManualPromptOverrides] = None,
+    sub_style_name: Optional[str] = None
 ) -> str:
     """
     스타일 프리셋이 적용된 최종 프롬프트 구성 (Style System 2.0)
     
     Structure:
-    1. [GLOBAL ART STYLE] (Character Style Prompt)
-    2. [BACKGROUND STYLE]
-    3. [CHARACTER IDENTITY] (DNA)
-    4. [THIS SCENE]
-    5. [LOCKED ATTRIBUTES]
-    6. [EXCLUSION]
-    7. [USER MANUAL OVERRIDE]
+    1. [GLOBAL ART STYLE]
+    2. [SUB STYLE / RENDERING]  <-- Added
+    3. [BACKGROUND STYLE]
+    4. [CHARACTER IDENTITY]
+    5. [THIS SCENE]
+    6. [LOCKED ATTRIBUTES]
+    7. [EXCLUSION]
+    8. [USER MANUAL OVERRIDE]
     """
     
     parts = []
@@ -32,8 +118,16 @@ def build_styled_prompt(
 [GLOBAL ART STYLE - DO NOT DEVIATE]
 {char_prompt}
 """)
+
+    # 2. Sub Style / Rendering Style (New)
+    if sub_style_name and sub_style_name in SUB_STYLES:
+        sub_prompt = SUB_STYLES[sub_style_name]
+        parts.append(f"""
+[RENDERING STYLE / VISUAL PRESET]
+{sub_prompt}
+""")
     
-    # 2. Background Style
+    # 3. Background Style
     bg_prompt = background_style.prompt_block if background_style else "Modern office setting, bright lighting"
     if manual_overrides and manual_overrides.background_style_prompt:
         bg_prompt = manual_overrides.background_style_prompt
@@ -43,7 +137,7 @@ def build_styled_prompt(
 {bg_prompt}
 """)
     
-    # 3. Character Identity
+    # 4. Character Identity
     # Note: CharacterDNA logic is simplified here as we strictly follow the file 'STYLE_SYSTEM.md'.
     # Dealing with simple CharacterProfile from models.py for now.
     # Ideally should come from DNA templates if available.
@@ -67,7 +161,7 @@ Position: {position}
 {identity}
 """)
 
-    # 4. This Scene
+    # 5. This Scene
     # Extract emotion from dialogues
     emotions = [d.emotion for d in scene.dialogues if d.emotion]
     dominant_emotion = emotions[0] if emotions else "neutral"
@@ -79,7 +173,7 @@ Expression: {dominant_emotion}
 Narration: {scene.narration or 'None'}
 """)
     
-    # 5. Locked Attributes
+    # 6. Locked Attributes
     locked = "\n[LOCKED ATTRIBUTES]:\n"
     if character_style and character_style.locked_attributes:
         for attr in character_style.locked_attributes:
@@ -91,7 +185,7 @@ Narration: {scene.narration or 'None'}
             
     parts.append(locked)
     
-    # 6. Exclusion
+    # 7. Exclusion
     parts.append("""
 [EXCLUSION]
 DO NOT include any text, speech bubbles, letters, words, 
@@ -99,7 +193,7 @@ numbers, or typography in the image. The image must be
 completely free of any written content.
 """)
 
-    # 7. Additional Instructions
+    # 8. Additional Instructions
     if manual_overrides and manual_overrides.additional_instructions:
         parts.append(f"""
 [USER MANUAL OVERRIDE]

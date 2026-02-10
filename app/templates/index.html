@@ -914,6 +914,182 @@
                     </div>
                 </div>
 
+                <!-- Image Generation Settings -->
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">이미지 생성 설정</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">AI 모델</label>
+                            <select class="form-select" id="image-model">
+                                <option value="dall-e-3" selected>DALL-E 3 (High Quality)</option>
+                                <option value="gpt-image-1-mini">GPT Image 1 Mini (Fast)</option>
+                                <option value="google-imagen-3">Google Imagen 3</option>
+                            </select>
+                        </div>
+
+                        <!-- Sub Style Selection Grid -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">세부 스타일 선택 (선택사항)</label>
+                            <p class="text-muted small">기본 캐릭터/배경 스타일에 추가로 적용될 렌더링 스타일을 선택하세요.</p>
+
+                            <div id="sub-style-grid"
+                                style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px;">
+                                <!-- Populated by JS -->
+                            </div>
+                            <input type="hidden" id="selected-sub-style" value="">
+                            <div id="selected-sub-style-desc" class="mt-2 text-primary small fw-bold"></div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">화면 비율</label>
+                            <select class="form-select" id="aspect-ratio">
+                                <option value="4:5" selected>4:5 (인스타그램 포트레이트)</option>
+                                <option value="1:1">1:1 (스퀘어)</option>
+                                <option value="9:16">9:16 (스토리/릴스)</option>
+                                <option value="16:9">16:9 (가로형)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <script>
+                    // Sub-style Definitions
+                    const SUB_STYLE_INFO = {
+                        "ghibli": { "name": "지브리", "emoji": "🌿", "desc": "지브리풍 부드러운 색감" },
+                        "romance": { "name": "로맨스", "emoji": "💕", "desc": "파스텔 톤, 따뜻한 감성" },
+                        "business": { "name": "비즈니스", "emoji": "💼", "desc": "깔끔한 전문가 느낌" },
+
+                        "round_lineart": { "name": "동글 라인", "emoji": "✏️", "desc": "둥글둥글 귀여운 선화" },
+                        "pastel_flat": { "name": "파스텔 플랫", "emoji": "🎨", "desc": "부드러운 파스텔 평면 일러스트" },
+                        "bold_cartoon": { "name": "볼드 카툰", "emoji": "💥", "desc": "굵은 선 + 강렬한 색" },
+                        "pencil_sketch": { "name": "연필 스케치", "emoji": "📝", "desc": "손그림 느낌, 캐주얼 낙서풍" },
+                        "monoline": { "name": "모노라인", "emoji": "〰️", "desc": "일정한 선 하나로 그린 미니멀" },
+                        "watercolor_soft": { "name": "수채화", "emoji": "💧", "desc": "물감 번짐 느낌, 부드러운 감성" },
+                        "neon_pop": { "name": "네온 팝", "emoji": "🌙", "desc": "어두운 배경 + 네온 색" },
+                        "emoji_icon": { "name": "이모지", "emoji": "😊", "desc": "극단적으로 단순화, 아이콘 느낌" },
+                        "retro_90s": { "name": "90s 레트로", "emoji": "📼", "desc": "복고풍 빈티지 색감" },
+                        "cutout_collage": { "name": "컷아웃", "emoji": "✂️", "desc": "오려붙인 종이 콜라주" },
+                    };
+
+                    let currentSubStyle = "";
+
+                    function renderSubStyleGrid() {
+                        const grid = document.getElementById('sub-style-grid');
+                        if (!grid) return;
+                        grid.innerHTML = '';
+
+                        // 'None' option
+                        const noneDiv = document.createElement('div');
+                        noneDiv.className = 'sub-style-card selected'; // Default selected
+                        noneDiv.onclick = () => selectSubStyle('', noneDiv);
+                        noneDiv.innerHTML = `
+                        <div style="font-size: 1.5rem;">🚫</div>
+                        <div style="font-size: 0.9rem; font-weight: bold;">없음</div>
+                    `;
+                        grid.appendChild(noneDiv);
+
+                        for (const [key, info] of Object.entries(SUB_STYLE_INFO)) {
+                            const div = document.createElement('div');
+                            div.className = 'sub-style-card';
+                            div.onclick = () => selectSubStyle(key, div);
+
+                            // Preview Image Background
+                            const img = document.createElement('img');
+                            img.src = `/app_data/sub_styles/${key}.png`;
+                            img.className = 'sub-style-preview-bg';
+                            img.onerror = () => img.style.display = 'none'; // Hide if missing
+                            div.appendChild(img);
+
+                            const emojiDiv = document.createElement('div');
+                            emojiDiv.style.fontSize = '1.5rem';
+                            emojiDiv.innerText = info.emoji;
+                            div.appendChild(emojiDiv);
+
+                            const nameDiv = document.createElement('div');
+                            nameDiv.style.fontSize = '0.85rem';
+                            nameDiv.style.fontWeight = 'bold';
+                            nameDiv.innerText = info.name;
+                            div.appendChild(nameDiv);
+
+                            grid.appendChild(div);
+                        }
+                    }
+
+                    function selectSubStyle(key, element) {
+                        currentSubStyle = key;
+                        const input = document.getElementById('selected-sub-style');
+                        if (input) input.value = key;
+
+                        // Update UI
+                        document.querySelectorAll('.sub-style-card').forEach(el => el.classList.remove('selected'));
+                        element.classList.add('selected');
+
+                        // Update Description
+                        const descEl = document.getElementById('selected-sub-style-desc');
+                        if (descEl) {
+                            if (key && SUB_STYLE_INFO[key]) {
+                                descEl.innerText = `선택: ${SUB_STYLE_INFO[key].emoji} ${SUB_STYLE_INFO[key].name} - ${SUB_STYLE_INFO[key].desc}`;
+                            } else {
+                                descEl.innerText = "";
+                            }
+                        }
+                    }
+
+                    // Initialize Grid
+                    document.addEventListener('DOMContentLoaded', () => {
+                        renderSubStyleGrid();
+                    });
+                </script>
+                <style>
+                    .sub-style-card {
+                        border: 1px solid var(--border);
+                        border-radius: 12px;
+                        padding: 10px;
+                        text-align: center;
+                        cursor: pointer;
+                        transition: all 0.2s;
+                        background: var(--bg-card);
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                        gap: 5px;
+                        position: relative;
+                        overflow: hidden;
+                        min-height: 100px;
+                    }
+
+                    .sub-style-card:hover {
+                        border-color: var(--primary);
+                        transform: translateY(-2px);
+                    }
+
+                    .sub-style-card.selected {
+                        border-color: var(--primary);
+                        background: rgba(99, 102, 241, 0.1);
+                        box-shadow: 0 0 0 2px var(--primary);
+                    }
+
+                    .sub-style-preview-bg {
+                        position: absolute;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        object-fit: cover;
+                        opacity: 0.3;
+                        z-index: 0;
+                    }
+
+                    .sub-style-card div {
+                        z-index: 1;
+                        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+                    }
+                </style>
+
+
                 <!-- Layout Settings Tab -->
                 <div id="setting-tab-layout" class="tab-content" style="display: none;">
                     <div class="settings-grid">
@@ -1836,6 +2012,7 @@
             const charStyleId = selectedStyles.character ? selectedStyles.character.id : null;
             const bgStyleId = selectedStyles.background ? selectedStyles.background.id : null;
             const model = document.getElementById('image-model').value;
+            const subStyle = document.getElementById('selected-sub-style').value; // Add sub_style
 
             const overrides = {
                 character_style_prompt: document.getElementById('manual-char-prompt').value,
@@ -1853,6 +2030,7 @@
                         session_id: sessionId,
                         character_style_id: charStyleId,
                         background_style_id: bgStyleId,
+                        sub_style: subStyle, // Pass sub_style
                         manual_overrides: overrides,
                         model: model,
                         aspect_ratio: ratio
@@ -2581,6 +2759,7 @@
                         session_id: sessionId,
                         character_style_id: selectedStyles.character ? selectedStyles.character.id : null,
                         background_style_id: selectedStyles.background ? selectedStyles.background.id : null,
+                        sub_style: document.getElementById('selected-sub-style').value, // Add sub_style
                         manual_overrides: overrides,
                         model: document.getElementById('image-model').value
                     })
