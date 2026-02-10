@@ -212,6 +212,12 @@ class GeminiService:
 3. 한 씬당 말풍선: 최대 {rule_settings.max_bubbles_per_scene}개
 4. 나레이션: {max_narration}자 이내
 
+[지침 - 나레이션 스타일]
+- 나레이션은 완전한 문장보다는 '핵심 요약 스타일'(개조식, 명사형 종결)로 작성하세요.
+- 예시: "단순히 차용증만으로는 부족했습니다." (X) -> "단순히 차용증만으로는 부족." (O)
+- 예시: "실제 상환 내역이 중요합니다." (X) -> "실제 상환 내역이 중요." (O)
+- 군더더기 없는 짧고 간결한 문체를 사용하세요.
+
 [필수 구조]
 - 캐릭터들이 실제 대화하는 형식으로 자연스럽게 설명하세요.
 - 각 씬마다 캐릭터의 기분(neutral/happy/sad/surprised/serious/angry)을 지정하세요.
@@ -362,6 +368,107 @@ class GeminiService:
 
 
 
+    async def extract_style_from_image(self, image_data: bytes) -> dict:
+        """이미지에서 스타일(인물/배경) 분석 및 추출"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # STYLE_SYSTEM.md 3.1 Vision AI Analysis Prompt
+        STYLE_EXTRACTION_PROMPT = """
+        You are an expert visual style analyst for Korean webtoon/cartoon images.
+        
+        Analyze the uploaded image(s) and extract two separate style profiles:
+        
+        ## CHARACTER STYLE (인물 스타일)
+        Describe the following visual attributes of how characters are drawn:
+        - line_style: outline thickness, sketch vs clean, ink quality
+        - color_palette: skin tones (with hex codes), hair colors, clothing color tendencies
+        - proportion: head-to-body ratio, eye size relative to face
+        - shading: cel-shading, gradient, flat color, shadow style
+        - lighting: direction, warmth, shadow intensity on characters
+        - expression_style: how eyes/mouth are drawn, level of expressiveness
+        
+        ## BACKGROUND STYLE (배경 스타일)  
+        Describe the following visual attributes of backgrounds:
+        - setting: type of location (office, outdoor, abstract, etc.)
+        - color_palette: dominant colors with hex codes
+        - lighting: ambient light color, direction, intensity
+        - detail_level: photorealistic, simplified, abstract
+        - depth: depth-of-field blur, flat, layered
+        - texture: smooth gradient, watercolor, flat vector, etc.
+        
+        ## OUTPUT FORMAT
+        Return ONLY valid JSON with these exact keys. Do not include markdown formatting (```json ... ```).
+        {
+          "character_style": {
+            "prompt_block": "<one paragraph prompt that captures all character style attributes>",
+            "visual_attributes": { "line_style": "...", "color_palette": "...", "proportion": "...", "shading": "...", "lighting": "...", "expression_style": "..." },
+            "locked_attributes": ["<top 3-4 most distinctive attributes>"]
+          },
+          "background_style": {
+            "prompt_block": "<one paragraph prompt that captures all background style attributes>",
+            "visual_attributes": { "setting": "...", "color_palette": "...", "lighting": "...", "detail_level": "...", "depth": "...", "texture": "..." },
+            "locked_attributes": ["<top 3-4 most distinctive attributes>"]
+          }
+        }
+        """
+
+        # 이미지 MIME type 감지
+        mime_type = "image/png"
+        if image_data[:3] == b'\xff\xd8\xff':
+            mime_type = "image/jpeg"
+        elif image_data[:4] == b'\x89PNG':
+            mime_type = "image/png"
+        elif image_data[:4] == b'RIFF':
+            mime_type = "image/webp"
+
+        # inline_data 형태로 이미지 전달 (PIL 변환 없이 직접 bytes 사용)
+        image_part = {
+            "inline_data": {
+                "mime_type": mime_type,
+                "data": image_data
+            }
+        }
+
+        # Fallback 모델 순서 (사용자 요청: 3.0 Pro 등 고성능 모델 전용)
+        # model_list.txt 확인 결과 1.5-pro는 없음. 2.5-pro 사용.
+        models_to_try = ["gemini-3-pro-preview", "gemini-2.5-pro", "gemini-2.0-flash"]
+
+        for try_model in models_to_try:
+            try:
+                logger.info(f"[extract_style] 시도 중: {try_model}")
+                model = genai.GenerativeModel(try_model)
+                response = await model.generate_content_async([STYLE_EXTRACTION_PROMPT, image_part])
+                
+                text = response.text
+                # 로깅 추가 (디버깅용)
+                if len(text) < 200:
+                    logger.debug(f"[extract_style] {try_model} 응답(일부): {text}")
+                
+                # 마크다운 코드 블록 제거 시도
+                text = re.sub(r'^```json\s*', '', text, flags=re.MULTILINE)
+                text = re.sub(r'^```\s*', '', text, flags=re.MULTILINE)
+                text = re.sub(r'```\s*$', '', text, flags=re.MULTILINE)
+                
+                match = re.search(r'\{.*\}', text, re.DOTALL)
+                if match:
+                    result = json.loads(match.group())
+                    logger.info(f"[extract_style] 성공: {try_model}")
+                    return result
+                else:
+                    logger.error(f"[extract_style] JSON 파싱 실패. 응답 내용: {text[:500]}...")
+                    raise ValueError("JSON not found in response")
+                    
+            except Exception as e:
+                logger.warning(f"[extract_style] {try_model} 실패: {e}")
+                if try_model != models_to_try[-1]:
+                    continue
+        
+        # 모든 모델 실패 시
+        logger.error("[extract_style] 모든 모델 실패")
+        raise Exception("스타일 추출에 실패했습니다. 다시 시도해주세요.")
+
+
 # 싱글톤 인스턴스
 _gemini_service: Optional[GeminiService] = None
 
@@ -370,3 +477,5 @@ def get_gemini_service() -> GeminiService:
     if _gemini_service is None:
         _gemini_service = GeminiService()
     return _gemini_service
+
+

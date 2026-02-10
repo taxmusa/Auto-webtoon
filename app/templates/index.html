@@ -248,6 +248,65 @@
             cursor: not-allowed;
         }
 
+        /* Outline Button (다크 테마 통일) */
+        .btn-outline {
+            background: transparent;
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn-outline:hover {
+            background: var(--bg-input);
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        /* Small Button */
+        .btn-sm {
+            padding: 0.4rem 0.85rem;
+            font-size: 0.85rem;
+            border-radius: 6px;
+        }
+
+        /* File Input 다크 테마 */
+        input[type="file"] {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            padding: 0.5rem;
+            cursor: pointer;
+        }
+
+        input[type="file"]::file-selector-button {
+            background: var(--bg-card);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.4rem 0.85rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-right: 0.75rem;
+            transition: all 0.2s;
+        }
+
+        input[type="file"]::file-selector-button:hover {
+            background: var(--bg-input);
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        /* 모달 내부 다크 텍스트 통일 */
+        .modal-content-dark h3,
+        .modal-content-dark h4,
+        .modal-content-dark h5,
+        .modal-content-dark label,
+        .modal-content-dark p {
+            color: var(--text);
+        }
+
+
         /* Mode Selection */
         .mode-cards {
             display: grid;
@@ -396,6 +455,115 @@
             cursor: pointer;
             border-bottom: 2px solid transparent;
             color: var(--text-muted);
+            transition: all 0.2s;
+        }
+
+        .tab:hover {
+            color: var(--text);
+        }
+
+        .tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+            font-weight: 600;
+        }
+
+        /* --- Style System 2.0 UI Improvements --- */
+        .style-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .style-select-card {
+            background: var(--bg-card);
+            /* Keep card bg */
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.25rem;
+            transition: all 0.2s;
+        }
+
+        .style-select-card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .style-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .style-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text);
+        }
+
+        .selected-style-display {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 80px;
+            font-weight: 600;
+            color: var(--primary);
+            /* Highlight color */
+            text-align: center;
+            transition: all 0.2s;
+        }
+
+        .selected-style-display:hover {
+            background: var(--bg);
+        }
+
+        /* Modal Dark Theme */
+        .modal-content-dark {
+            background: var(--bg-card) !important;
+            color: var(--text) !important;
+            border: 1px solid var(--border) !important;
+        }
+
+        .modal-header-dark {
+            border-bottom: 1px solid var(--border) !important;
+        }
+
+        .style-list-dark {
+            border-right: 1px solid var(--border) !important;
+        }
+
+        .style-item-dark {
+            border-bottom: 1px solid var(--border) !important;
+            color: var(--text) !important;
+            transition: background 0.1s;
+        }
+
+        .style-item-dark:hover {
+            background: var(--bg-input) !important;
+        }
+
+        .preview-box {
+            background: var(--bg);
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            transition: all 0.2s;
+        }
+
+        .preview-box:hover {
+            border-color: var(--text-muted);
         }
 
         .tab.active {
@@ -432,9 +600,11 @@
             <div class="step-line"></div>
             <div class="step" data-step="4" onclick="navigateToStep(4)"><span class="step-num">4</span> 이미지</div>
             <div class="step-line"></div>
-            <div class="step" data-step="5" onclick="navigateToStep(5)"><span class="step-num">5</span> 캡션</div>
+            <div class="step" data-step="5" onclick="navigateToStep(5)"><span class="step-num">5</span> 편집</div>
             <div class="step-line"></div>
-            <div class="step" data-step="6" onclick="navigateToStep(6)"><span class="step-num">6</span> 발행</div>
+            <div class="step" data-step="6" onclick="navigateToStep(6)"><span class="step-num">6</span> 캡션</div>
+            <div class="step-line"></div>
+            <div class="step" data-step="7" onclick="navigateToStep(7)"><span class="step-num">7</span> 발행</div>
         </div>
     </div>
 
@@ -560,6 +730,10 @@
             </div>
 
             <div id="story-review-area" style="display: none;">
+                <div style="text-align: right; margin-bottom: 10px;">
+                    <button class="btn btn-secondary btn-sm" onclick="openStoryHistoryModal()">📂 이전 스토리 불러오기
+                        (History)</button>
+                </div>
                 <!-- 캐릭터 프로필 섹션 -->
                 <div class="card">
                     <h2 class="card-title">👥 등장인물 프로필</h2>
@@ -597,34 +771,110 @@
                     <div class="tab" onclick="switchSettingTab('layout')">장면 & 비율</div>
                 </div>
 
-                <!-- Image Settings Tab -->
+                <!-- Image Settings Tab (Style System 2.0) -->
                 <div id="setting-tab-image" class="tab-content active">
-                    <div class="settings-grid">
-                        <div class="form-group">
-                            <label>메인 스타일</label>
-                            <select id="image-style" onchange="updateSubStyles()">
-                                <option value="webtoon">웹툰 (스토리텔링 중심)</option>
-                                <option value="card_news">카드뉴스 (정보전달 중심)</option>
-                                <option value="simple">단순 캐러셀 (깔끔한 배경)</option>
-                            </select>
+                    <!-- 1. Style Selection Grid -->
+                    <div class="style-grid">
+                        <!-- Character Style -->
+                        <div class="style-select-card">
+                            <div class="style-header">
+                                <span class="style-title">🧑 인물 스타일</span>
+                                <button class="btn btn-sm btn-outline"
+                                    onclick="openStyleManager('character')">설정</button>
+                            </div>
+                            <div id="selected-char-style" class="selected-style-display">
+                                기본 스타일 (Webtoon)
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label>세부 화풍</label>
-                            <select id="image-sub-style">
-                                <option value="normal">일반</option>
-                                <option value="ghibli">지브리 스타일</option>
-                                <option value="romance">로맨틱 코미디</option>
-                                <option value="business">깔끔한 비즈니스</option>
-                                <option value="comic">코믹 스타일</option>
-                            </select>
+
+                        <!-- Background Style -->
+                        <div class="style-select-card">
+                            <div class="style-header">
+                                <span class="style-title">🏙️ 배경 스타일</span>
+                                <button class="btn btn-sm btn-outline"
+                                    onclick="openStyleManager('background')">설정</button>
+                            </div>
+                            <div id="selected-bg-style" class="selected-style-display">
+                                기본 스타일 (Modern Office)
+                            </div>
                         </div>
                     </div>
+
+                    <!-- 2. Model Selection -->
                     <div class="form-group">
-                        <label>이미지 생성 모델</label>
-                        <select id="image-model">
-                            <option value="dall-e-3">DALL-E 3 (고품질 기본)</option>
-                            <option value="dall-e-2">DALL-E 2 (빠른 생성)</option>
+                        <label style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.75rem;">이미지 생성 모델</label>
+                        <select id="image-model" style="padding: 1rem;">
+                            <optgroup label="OpenAI">
+                                <option value="gpt-image-1-mini" selected>GPT Image 1 Mini (가성비)</option>
+                                <option value="gpt-image-1">GPT Image 1 (균형)</option>
+                                <option value="gpt-image-1.5">GPT Image 1.5 (고품질)</option>
+                                <option value="dall-e-3">DALL-E 3</option>
+                            </optgroup>
+                            <optgroup label="Google">
+                                <option value="nano-banana">Nano Banana (Flash)</option>
+                                <option value="nano-banana-pro">Nano Banana Pro</option>
+                            </optgroup>
                         </select>
+                    </div>
+
+                    <!-- 3. Preview Area -->
+                    <div class="preview-section"
+                        style="border-top: 1px solid var(--border); padding-top: 1.5rem; margin-top: 1.5rem;">
+                        <h4
+                            style="margin-bottom: 1rem; font-size: 1.1rem; display:flex; align-items:center; gap:0.5rem;">
+                            🔍 스타일 미리보기 <span
+                                style="font-size:0.8rem; color:var(--text-muted); font-weight:normal;">(Low
+                                Quality)</span>
+                        </h4>
+                        <div style="display: flex; gap: 1.5rem; align-items: flex-start;">
+                            <div id="preview-image-container" class="preview-box" style="width: 240px; height: 240px;">
+                                <div style="text-align:center;">
+                                    <div style="font-size: 2.5rem; margin-bottom:0.5rem;">🖼️</div>
+                                    <div style="font-size: 0.9rem;">이미지 없음</div>
+                                </div>
+                            </div>
+                            <div style="flex: 1;">
+                                <p
+                                    style="font-size: 0.95rem; color: var(--text-muted); margin-top: 0; line-height: 1.6;">
+                                    현재 선택된 스타일 조합으로 샘플 이미지를 1장 생성합니다.<br>
+                                    <span style="font-size: 0.85rem; opacity: 0.8;">* 실제 생성 결과물보다 품질이 낮을 수 있습니다.</span>
+                                </p>
+                                <button class="btn btn-secondary" onclick="generatePreview()" id="btn-generate-preview"
+                                    style="margin-top: 1rem;">
+                                    샘플 미리보기 생성
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4. Manual Prompt Edit -->
+                    <div class="manual-edit-section" style="margin-top: 2rem;">
+                        <details
+                            style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem;">
+                            <summary style="cursor: pointer; font-weight: 600; color: var(--text); padding: 0.5rem;">✏️
+                                프롬프트 수동 편집 (고급)</summary>
+                            <div style="padding: 1rem; border-top: 1px solid var(--border); margin-top: 0.5rem;">
+                                <div class="form-group">
+                                    <label>인물 스타일 프롬프트</label>
+                                    <textarea id="manual-char-prompt" rows="3" placeholder="자동 생성된 프롬프트를 수정하세요..."
+                                        style="font-family: monospace; font-size: 0.9rem;"></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label>배경 스타일 프롬프트</label>
+                                    <textarea id="manual-bg-prompt" rows="3" placeholder="자동 생성된 프롬프트를 수정하세요..."
+                                        style="font-family: monospace; font-size: 0.9rem;"></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label>추가 지시사항 (Negative Prompt 등)</label>
+                                    <input type="text" id="manual-additional"
+                                        placeholder="예: text, watermark, ugly, deformed">
+                                </div>
+                                <div style="text-align: right;">
+                                    <button class="btn btn-sm btn-outline" onclick="applyManualOverrides()">적용하여 다시
+                                        미리보기</button>
+                                </div>
+                            </div>
+                        </details>
                     </div>
                 </div>
 
@@ -699,8 +949,70 @@
             </div>
         </div>
 
-        <!-- Step 5: 이미지 생성 및 검토 -->
+        <!-- Step 5: 이미지 편집 단계 (NEW) -->
         <div class="step-content" id="step-5">
+            <div class="card">
+                <h2 class="card-title">✏️ 이미지 편집</h2>
+                <p class="card-desc">생성된 이미지의 톤을 조절하고, 각 씬을 확정한 후 다음 단계로 진행하세요.</p>
+
+                <!-- 톤 조절 패널 -->
+                <div
+                    style="background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem;">
+                    <h3 style="font-size: 1rem; margin-bottom: 0.75rem;">🎨 전체 톤 조절</h3>
+                    <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
+                        <input type="text" id="tone-command" placeholder="예: 전체적으로 밝게, 채도 높여, 따뜻하게" style="flex: 1;">
+                        <button class="btn btn-primary" onclick="analyzeToneCommand()"
+                            style="white-space: nowrap;">분석</button>
+                    </div>
+                    <div id="tone-analysis-result"
+                        style="display: none; background: var(--bg-card); border-radius: 8px; padding: 0.75rem; margin-bottom: 0.75rem; font-size: 0.875rem;">
+                    </div>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button class="btn btn-secondary" onclick="quickTone('brightness', 1.2)"
+                            style="font-size: 0.8rem; padding: 6px 12px;">☀️ 밝게</button>
+                        <button class="btn btn-secondary" onclick="quickTone('brightness', 0.8)"
+                            style="font-size: 0.8rem; padding: 6px 12px;">🌙 어둡게</button>
+                        <button class="btn btn-secondary" onclick="quickTone('saturation', 1.3)"
+                            style="font-size: 0.8rem; padding: 6px 12px;">🌈 채도↑</button>
+                        <button class="btn btn-secondary" onclick="quickTone('saturation', 0.7)"
+                            style="font-size: 0.8rem; padding: 6px 12px;">🔲 채도↓</button>
+                        <button class="btn btn-secondary" onclick="quickTone('warm_filter', 1.15)"
+                            style="font-size: 0.8rem; padding: 6px 12px;">🔥 따뜻하게</button>
+                        <button class="btn btn-secondary" onclick="quickTone('cool_filter', 1.15)"
+                            style="font-size: 0.8rem; padding: 6px 12px;">❄️ 차갑게</button>
+                        <button class="btn btn-secondary" onclick="quickTone('contrast', 1.3)"
+                            style="font-size: 0.8rem; padding: 6px 12px;">🔳 대비↑</button>
+                    </div>
+                </div>
+
+                <!-- 진행 상태 바 -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <span style="font-size: 0.875rem; color: var(--text-muted);">확정된 씬: <b
+                            id="edit-confirmed-count">0</b> / <b id="edit-total-count">0</b></span>
+                    <button class="btn btn-secondary" onclick="confirmAllScenes()"
+                        style="font-size: 0.8rem; padding: 6px 12px;">✅ 전체 확정</button>
+                </div>
+                <div
+                    style="background: var(--bg-input); border-radius: 10px; height: 8px; overflow: hidden; margin-bottom: 1.5rem;">
+                    <div id="edit-progress-bar"
+                        style="background: var(--success); height: 100%; width: 0%; transition: width 0.3s;"></div>
+                </div>
+
+                <!-- 씬별 이미지 카드 -->
+                <div id="edit-scenes-container" style="display: flex; flex-direction: column; gap: 1rem;">
+                    <!-- JS로 동적 생성 -->
+                </div>
+            </div>
+
+            <div class="actions" style="margin-top: 1.5rem;">
+                <button class="btn btn-secondary" onclick="goToStep(4)">← 이전</button>
+                <button class="btn btn-primary" id="edit-next-btn" onclick="proceedFromEditStage()" disabled>다음 단계 (캡션
+                    생성) →</button>
+            </div>
+        </div>
+
+        <!-- Step 6: 이미지 생성 및 검토 (기존 Step 5) -->
+        <div class="step-content" id="step-6">
             <div class="loading" id="loading-images">
                 <div class="spinner"></div>
                 <div id="image-progress-text">이미지 렌더링 중...</div>
@@ -727,9 +1039,9 @@
             </div>
 
             <div class="actions" id="image-actions" style="display: none;">
-                <button class="btn btn-secondary" onclick="goToStep(4)">← 이전</button>
+                <button class="btn btn-secondary" onclick="goToStep(5)">← 이전</button>
                 <div style="display: flex; gap: 0.5rem;">
-                    <button class="btn btn-primary" onclick="generateCaption()">캡션 생성 및 발행 준비 →</button>
+                    <button class="btn btn-primary" onclick="goToEditStage()">이미지 편집 →</button>
                 </div>
             </div>
 
@@ -739,8 +1051,8 @@
             </div>
         </div>
 
-        <!-- Step 6: 최종 발행 & Instagram Preview -->
-        <div class="step-content" id="step-6">
+        <!-- Step 7: 최종 발행 & Instagram Preview (기존 Step 6) -->
+        <div class="step-content" id="step-7">
             <div style="display: grid; grid-template-columns: 1fr 380px; gap: 2rem;">
                 <!-- Left: Instagram Mockup -->
                 <div class="card"
@@ -811,7 +1123,7 @@
             </div>
 
             <div class="actions" style="margin-top: 2rem;">
-                <button class="btn btn-secondary" onclick="goToStep(5)">← 이전 단계</button>
+                <button class="btn btn-secondary" onclick="goToStep(6)">← 이전 단계</button>
             </div>
         </div>
     </main>
@@ -865,6 +1177,7 @@
                 });
                 const data = await res.json();
                 sessionId = data.session_id;
+                localStorage.setItem('lastSessionId', sessionId); // 세션 ID 저장
 
                 // 2. 세션 정보 조회 (감지된 결과 확인)
                 const sessionRes = await fetch(`/api/workflow/session/${sessionId}`);
@@ -930,6 +1243,7 @@
                     });
                     const startData = await startRes.json();
                     sessionId = startData.session_id;
+                    localStorage.setItem('lastSessionId', sessionId); // 세션 ID 저장
 
                     // Step 2로 이동
                     goToStep(2);
@@ -969,6 +1283,7 @@
                 });
                 const data = await res.json();
                 sessionId = data.session_id;
+                localStorage.setItem('lastSessionId', sessionId); // 세션 ID 저장
 
                 btn.innerText = '웹툰 제작 시작하기 🚀';
                 btn.disabled = false;
@@ -1258,6 +1573,11 @@
                     throw new Error(data.detail || '스토리 생성 실패');
                 }
 
+                if (data.session_id) {
+                    sessionId = data.session_id;
+                    localStorage.setItem('lastSessionId', sessionId); // 세션 ID 저장 (안전장치)
+                }
+
                 storyData = data.story;
 
                 // storyData가 없는 경우 처리
@@ -1331,6 +1651,7 @@
                         <div style="display: flex; gap: 0.5rem;">
                              <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" onclick="editScene(${idx})">수정</button>
                              <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" onclick="regenerateScene(${idx})">재생성</button>
+                             <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem; background-color: #fee2e2; color: #dc2626; border: 1px solid #fecaca;" onclick="deleteScene(${idx})">삭제</button>
                         </div>
                     </div>
                     <div style="font-size: 0.875rem; margin-bottom: 0.5rem;">🎬 ${s.scene_description}</div>
@@ -1393,13 +1714,95 @@
             alert('씬 재생성 기능은 추후 구현 예정입니다.\n현재는 수정 기능을 이용해주세요.');
         }
 
+        // 씬 삭제 함수
+        function deleteScene(idx) {
+            if (!confirm(`씬 ${idx + 1}을 삭제하시겠습니까?`)) return;
+
+            // 씬 삭제
+            storyData.scenes.splice(idx, 1);
+
+            // 씬 번호 재정렬
+            storyData.scenes.forEach((scene, index) => {
+                scene.scene_number = index + 1;
+            });
+
+            renderScenes(storyData.scenes);
+        }
+
+        // 초기화 시 자동 복원 및 기본 모델 설정
+        window.addEventListener('DOMContentLoaded', async () => {
+            // 1. 기본 모델 설정
+            const modelSelect = document.getElementById('ai-model-select');
+            if (modelSelect) {
+                const selectedOption = modelSelect.querySelector('option[selected]');
+                if (selectedOption) {
+                    modelSelect.value = selectedOption.value;
+                } else {
+                    modelSelect.value = "gemini-3-flash-preview";
+                }
+            }
+
+            // 2. 자동 세션 복원 (개발 효율성)
+            const savedSessionId = localStorage.getItem('lastSessionId');
+            if (savedSessionId) {
+                console.log('Found saved session:', savedSessionId);
+                try {
+                    // 세션 유효성 확인 및 데이터 로드
+                    const res = await fetch(`/api/workflow/session/${savedSessionId}`);
+                    if (res.ok) {
+                        const session = await res.json();
+                        sessionId = session.session_id;
+
+                        // 데이터 복원
+                        if (session.story) {
+                            storyData = session.story;
+                            characters = storyData.characters || [];
+                            collectedData = session.collected_data || [];
+
+                            // UI 렌더링
+                            renderCharacters();
+                            renderScenes(storyData.scenes || []);
+
+                            // 3단계(스토리 편집)로 이동
+                            // 만약 이미지가 생성된 상태라면 4단계나 5단계로 갈 수도 있겠지만, 
+                            // 일단 사용자가 요청한 "3번 탭부터 시작"을 위해 데이터가 있으면 3단계로 이동
+
+                            document.getElementById('loading-story').style.display = 'none';
+                            document.getElementById('story-review-area').style.display = 'block';
+                            document.getElementById('story-actions').style.display = 'flex';
+
+                            goToStep(3);
+
+                            // 만약 이미지 생성 단계까지 갔던 세션이라면?
+                            if (session.images && session.images.length > 0) {
+                                // 선택적으로 5단계 등으로 이동 가능. 일단은 3단계 유지하거나 알림.
+                                console.log('This session has generated images.');
+                            }
+
+                            console.log('Session restored functionality enabled.');
+                        } else if (session.collected_data && session.collected_data.length > 0) {
+                            // 데이터수집은 했지만 스토리는 없는 경우 -> 2단계
+                            collectedData = session.collected_data;
+                            renderDataItems();
+                            goToStep(2);
+                        }
+                    } else {
+                        console.log('Saved session is invalid or expired.');
+                        localStorage.removeItem('lastSessionId');
+                    }
+                } catch (e) {
+                    console.error('Auto-restore failed:', e);
+                }
+            }
+        });
+
         function validateSceneRules(scene) {
             const warnings = [];
             scene.dialogues.forEach(d => {
-                if (d.text.length > 20) warnings.push(`${d.character} 대사가 너무 깁니다 (${d.text.length}자)`);
+                if (d.text.length > 50) warnings.push(`${d.character} 대사가 너무 깁니다 (${d.text.length}자 > 50자)`);
             });
-            if (scene.dialogues.length > 2) warnings.push(`말풍선이 너무 많습니다 (${scene.dialogues.length}개)`);
-            if (scene.narration && scene.narration.length > 30) warnings.push(`나레이션이 너무 깁니다 (${scene.narration.length}자)`);
+            if (scene.dialogues.length > 3) warnings.push(`말풍선이 너무 많습니다 (${scene.dialogues.length}개 > 3개)`);
+            if (scene.narration && scene.narration.length > 60) warnings.push(`나레이션이 너무 깁니다 (${scene.narration.length}자 > 60자)`);
             return warnings;
         }
 
@@ -1420,7 +1823,7 @@
 
         // --- Step 5: 이미지 생성 ---
         async function startImageGeneration() {
-            goToStep(5);
+            goToStep(6);
             const loadingEl = document.getElementById('loading-images');
             const reviewArea = document.getElementById('images-review-area');
 
@@ -1428,8 +1831,18 @@
             reviewArea.style.display = 'none';
 
             const sceneCount = storyData.scenes.length;
-            const style = document.getElementById('image-style').value;
-            const subStyle = document.getElementById('image-sub-style').value;
+
+            // Style System 2.0 Inputs
+            const charStyleId = selectedStyles.character ? selectedStyles.character.id : null;
+            const bgStyleId = selectedStyles.background ? selectedStyles.background.id : null;
+            const model = document.getElementById('image-model').value;
+
+            const overrides = {
+                character_style_prompt: document.getElementById('manual-char-prompt').value,
+                background_style_prompt: document.getElementById('manual-bg-prompt').value,
+                additional_instructions: document.getElementById('manual-additional').value
+            };
+
             const ratio = document.getElementById('aspect-ratio').value;
 
             try {
@@ -1438,8 +1851,10 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         session_id: sessionId,
-                        style: style,
-                        sub_style: subStyle,
+                        character_style_id: charStyleId,
+                        background_style_id: bgStyleId,
+                        manual_overrides: overrides,
+                        model: model,
                         aspect_ratio: ratio
                     })
                 });
@@ -1510,7 +1925,7 @@
                 document.getElementById('final-hashtags').value = caption.hashtags.join(' ');
 
                 loadingEl.style.display = 'none';
-                goToStep(6);
+                goToStep(7);
                 updateInstaPreview();
             } catch (e) {
                 alert('캡션 생성 오류: ' + e.message);
@@ -1551,30 +1966,665 @@
                 if (sNum === step) s.classList.add('active');
             });
 
-            // Step 2로 돌아올 때 저장된 데이터 복원
-            if (step === 2 && collectedData.length === 0) {
-                if (loadDataFromStorage()) {
-                    renderDataItems();
-                    const recScenes = Math.min(Math.max(collectedData.length * 1.5, 6), 15).toFixed(0);
-                    document.getElementById('total-scene-count').value = recScenes;
-                    document.getElementById('ai-rec-scenes').innerText = recScenes;
+            // --- VIEW STATE MANAGEMENT (사용자 경험 개선) ---
+            // 탭 이동 시 '로딩 중' 화면이 아니라 '결과/작업' 화면을 우선 표시하도록 강제
 
-                    // UI 표시
-                    document.getElementById('loading-data').style.display = 'none';
-                    document.getElementById('data-review-area').style.display = 'block';
-                    document.getElementById('data-actions').style.display = 'flex';
+            // Step 2: 자료 수집
+            if (step === 2) {
+                document.getElementById('loading-data').style.display = 'none';
+                document.getElementById('data-review-area').style.display = 'block';
+                document.getElementById('data-actions').style.display = 'flex';
+
+                if (collectedData.length === 0) {
+                    loadDataFromStorage();
+                }
+                renderDataItems();
+            }
+
+            // Step 3: 스토리
+            if (step === 3) {
+                document.getElementById('loading-story').style.display = 'none';
+                document.getElementById('story-review-area').style.display = 'block';
+                document.getElementById('story-actions').style.display = 'flex';
+
+                if (storyData && storyData.scenes) {
+                    renderCharacters();
+                    renderScenes(storyData.scenes);
                 }
             }
 
+            // Step 5: 이미지 편집
+            if (step === 5) {
+                loadEditStageStatus();
+            }
+
+            // Step 6: 이미지 생성 결과 (기존 Step 5)
             if (step === 6) {
+                document.getElementById('loading-images').style.display = 'none';
+                document.getElementById('images-review-area').style.display = 'block';
+                document.getElementById('image-actions').style.display = 'flex';
+            }
+
+            // Step 7: 발행 (기존 Step 6)
+            if (step === 7) {
                 updateInstaPreview();
             }
         }
 
         function navigateToStep(step) {
-            if (step <= currentStep) goToStep(step);
+            // 사용자 요청: 자유로운 탭 이동 허용 (단, 데이터가 없을 수 있음을 감안)
+            goToStep(step);
+        }
+
+        // ============================================
+        // Step 5: 이미지 편집 단계 (Edit Stage) JS
+        // ============================================
+
+        function goToEditStage() {
+            goToStep(5);
+        }
+
+        async function loadEditStageStatus() {
+            if (!sessionId) return;
+            try {
+                const res = await fetch(`/api/edit-stage/${sessionId}/status`);
+                if (!res.ok) return;
+                const data = await res.json();
+                document.getElementById('edit-confirmed-count').innerText = data.confirmed_count;
+                document.getElementById('edit-total-count').innerText = data.total_scenes;
+                const pct = data.total_scenes > 0 ? (data.confirmed_count / data.total_scenes) * 100 : 0;
+                document.getElementById('edit-progress-bar').style.width = `${pct}%`;
+                renderEditScenes(data.scenes);
+                updateEditNextButton(data.all_confirmed);
+            } catch (e) {
+                console.error('편집 상태 로드 실패:', e);
+            }
+        }
+
+        function renderEditScenes(scenes) {
+            const container = document.getElementById('edit-scenes-container');
+            container.innerHTML = scenes.map(s => {
+                const isConfirmed = s.edit_status === 'confirmed';
+                const borderColor = isConfirmed ? 'var(--success)' : 'var(--border)';
+                const statusBadge = isConfirmed
+                    ? '<span style="color: var(--success); font-weight: 600;">✅ 확정됨</span>'
+                    : '<span style="color: var(--warning); font-weight: 600;">⏳ 미확정</span>';
+
+                return `
+                <div style="display: flex; gap: 1rem; background: var(--bg); border: 2px solid ${borderColor}; border-radius: 12px; padding: 1rem; transition: border-color 0.3s;">
+                    <div style="flex-shrink: 0; width: 180px;">
+                        <img src="${s.local_path || s.image_url || ''}" style="width: 100%; border-radius: 8px; background: var(--bg-input);" onerror="this.style.display='none'">
+                    </div>
+                    <div style="flex: 1; display: flex; flex-direction: column; gap: 0.5rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-weight: 700;">씬 ${s.scene_number}</span>
+                            ${statusBadge}
+                        </div>
+                        <div style="font-size: 0.8rem; color: var(--text-muted); max-height: 60px; overflow-y: auto;">
+                            ${(s.prompt_used || '').substring(0, 150)}...
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: auto;">
+                            ${isConfirmed
+                        ? `<button class="btn btn-secondary" onclick="toggleConfirmScene(${s.scene_number}, false)" style="font-size: 0.75rem; padding: 4px 10px;">확정 해제</button>`
+                        : `<button class="btn btn-primary" onclick="toggleConfirmScene(${s.scene_number}, true)" style="font-size: 0.75rem; padding: 4px 10px;">✅ 확정</button>`
+                    }
+                            <button class="btn btn-secondary" onclick="undoScene(${s.scene_number})" style="font-size: 0.75rem; padding: 4px 10px;" ${!s.has_history ? 'disabled' : ''}>↩ 되돌리기</button>
+                            <button class="btn btn-secondary" onclick="openPromptModal(${s.scene_number})" style="font-size: 0.75rem; padding: 4px 10px;">✏️ 프롬프트 수정</button>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function updateEditNextButton(allConfirmed) {
+            const btn = document.getElementById('edit-next-btn');
+            btn.disabled = !allConfirmed;
+            if (allConfirmed) {
+                btn.style.opacity = '1';
+                btn.title = '';
+            } else {
+                btn.style.opacity = '0.5';
+                btn.title = '모든 씬을 확정해야 다음 단계로 진행할 수 있습니다';
+            }
+        }
+
+        async function analyzeToneCommand() {
+            const command = document.getElementById('tone-command').value.trim();
+            if (!command) return;
+            const resultEl = document.getElementById('tone-analysis-result');
+            resultEl.style.display = 'block';
+            resultEl.innerHTML = '분석 중...';
+
+            try {
+                const res = await fetch(`/api/edit-stage/${sessionId}/tone-analyze`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command })
+                });
+                const data = await res.json();
+                if (data.type === 'pillow') {
+                    resultEl.innerHTML = `
+                        <div style="color: var(--success);">${data.message}</div>
+                        <button class="btn btn-primary" onclick="applyToneEffects(${JSON.stringify(data.effects).replace(/"/g, '&quot;')})" style="margin-top: 0.5rem; font-size: 0.8rem;">전체 적용</button>
+                    `;
+                } else if (data.type === 'ai_required') {
+                    resultEl.innerHTML = `<div style="color: var(--warning);">${data.message}</div>`;
+                } else {
+                    resultEl.innerHTML = `<div style="color: var(--text-muted);">${data.message}</div>`;
+                }
+            } catch (e) {
+                resultEl.innerHTML = `<div style="color: var(--danger);">오류: ${e.message}</div>`;
+            }
+        }
+
+        async function quickTone(effect, value) {
+            await applyToneEffects([{ effect, value }]);
+        }
+
+        async function applyToneEffects(effects) {
+            try {
+                const res = await fetch(`/api/edit-stage/${sessionId}/tone-apply`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ effects, scene_numbers: null })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    loadEditStageStatus(); // UI 새로고침
+                }
+            } catch (e) {
+                alert('톤 조절 실패: ' + e.message);
+            }
+        }
+
+        async function toggleConfirmScene(sceneNum, confirm) {
+            const endpoint = confirm ? 'confirm' : 'unconfirm';
+            try {
+                await fetch(`/api/edit-stage/${sessionId}/scene/${sceneNum}/${endpoint}`, { method: 'POST' });
+                loadEditStageStatus();
+            } catch (e) {
+                alert('확정 변경 실패: ' + e.message);
+            }
+        }
+
+        async function confirmAllScenes() {
+            try {
+                await fetch(`/api/edit-stage/${sessionId}/confirm-all`, { method: 'POST' });
+                loadEditStageStatus();
+            } catch (e) {
+                alert('전체 확정 실패: ' + e.message);
+            }
+        }
+
+        async function undoScene(sceneNum) {
+            try {
+                await fetch(`/api/edit-stage/${sessionId}/scene/${sceneNum}/undo`, { method: 'POST' });
+                loadEditStageStatus();
+            } catch (e) {
+                alert('되돌리기 실패: ' + e.message);
+            }
+        }
+
+        function openPromptModal(sceneNum) {
+            const newPrompt = prompt(`씬 ${sceneNum}의 프롬프트를 수정하세요 (빈칸이면 기존 프롬프트 유지):`);
+            if (newPrompt !== null) {
+                regenerateScene(sceneNum, newPrompt || null);
+            }
+        }
+
+        async function regenerateScene(sceneNum, newPrompt) {
+            try {
+                const res = await fetch(`/api/edit-stage/${sessionId}/scene/${sceneNum}/regenerate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ scene_number: sceneNum, new_prompt: newPrompt })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    loadEditStageStatus();
+                }
+            } catch (e) {
+                alert('재생성 실패: ' + e.message);
+            }
+        }
+
+        async function proceedFromEditStage() {
+            // 캡션 생성 시작
+            generateCaption();
         }
     </script>
+    <!-- Story History Modal -->
+    <div id="history-modal" class="modal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+        <div class="modal-content"
+            style="background: #1e1e1e; color: #ffffff; padding: 20px; border-radius: 8px; width: 500px; max-width: 90%; border: 1px solid #444;">
+            <h3 style="margin-top:0; border-bottom:1px solid #444; padding-bottom:10px;">이전 스토리 불러오기 (최근 5개)</h3>
+            <div id="history-list" style="margin: 15px 0; max-height: 300px; overflow-y: auto;">
+                Loading...
+            </div>
+            <div style="text-align: right;">
+                <button class="btn btn-secondary"
+                    onclick="document.getElementById('history-modal').style.display='none'">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function openStoryHistoryModal() {
+            const modal = document.getElementById('history-modal');
+            const list = document.getElementById('history-list');
+            modal.style.display = 'flex';
+            list.innerHTML = '<div>Loading...</div>';
+
+            try {
+                const res = await fetch('/api/workflow/history/stories');
+                const files = await res.json();
+
+                if (files.length === 0) {
+                    list.innerHTML = '<div style="color: #aaa;">저장된 스토리가 없습니다.</div>';
+                    return;
+                }
+
+                list.innerHTML = files.map(f => `
+                <div style="background: #2d2d2d; border: 1px solid #444; padding: 10px; margin-bottom: 5px; cursor: pointer; border-radius: 4px; color: #eee;" 
+                     onclick="loadStory('${f.filename}')" 
+                     onmouseover="this.style.background='#3d3d3d'" 
+                     onmouseout="this.style.background='#2d2d2d'">
+                     onmouseover="this.style.background='#f5f5f5'" 
+                     onmouseout="this.style.background='white'">
+                    <div style="font-weight: bold;">${f.keyword}</div>
+                    <div style="font-size: 0.8em; color: #666;">
+                        ${new Date(f.timestamp).toLocaleString()} | ${f.title} (${f.scene_count} scenes)
+                    </div>
+                </div>
+            `).join('');
+            } catch (e) {
+                list.innerHTML = `<div style="color:red">Error: ${e.message}</div>`;
+            }
+        }
+
+        async function loadStory(filename) {
+            if (!confirm('현재 작업 내용을 덮어쓰고 스토리를 불러오시겠습니까?')) return;
+
+            try {
+                const res = await fetch('/api/workflow/history/load', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, filename: filename })
+                });
+                const data = await res.json();
+
+                if (data.session_id) {
+                    sessionId = data.session_id;
+                    localStorage.setItem('lastSessionId', sessionId); // 세션 ID 저장
+                }
+
+                if (data.success) {
+                    storyData = data.story;
+                    collectedData = data.collected_data || [];
+                    characters = storyData.characters || [];
+
+                    // Update UI
+                    document.getElementById('history-modal').style.display = 'none';
+
+                    renderCharacters();
+                    renderScenes(storyData.scenes);
+
+                    // Show Step 3 areas
+                    document.getElementById('loading-story').style.display = 'none';
+                    document.getElementById('story-review-area').style.display = 'block';
+                    document.getElementById('story-actions').style.display = 'flex';
+
+                    // Go to step 3 if not already
+                    goToStep(3);
+
+                    alert('스토리를 성공적으로 불러왔습니다.');
+                }
+            } catch (e) {
+                alert('Failed to load: ' + e.message);
+            }
+        }
+
+        // --- Style System 2.0 Logic ---
+        let currentStyleType = 'character';
+        let stylesData = { character: [], background: [] };
+        let selectedStyles = { character: null, background: null };
+        let manualOverrides = { charPrompt: '', bgPrompt: '', additional: '' };
+
+        function openStyleManager(type) {
+            currentStyleType = type;
+            document.getElementById('style-manager-modal').style.display = 'flex';
+            document.getElementById('style-modal-title').innerText = type === 'character' ? '인물 스타일 관리' : '배경 스타일 관리';
+
+            // Reset Form View
+            document.getElementById('style-detail-view').style.display = 'none';
+            document.getElementById('style-form-view').style.display = 'none';
+
+            loadStyles(type);
+        }
+
+        function closeStyleManager() {
+            document.getElementById('style-manager-modal').style.display = 'none';
+        }
+
+        async function loadStyles(type) {
+            const listEl = document.getElementById('style-list');
+            listEl.innerHTML = '<div style="padding:1rem;">Loading...</div>';
+
+            try {
+                const res = await fetch(`/api/styles/${type}`);
+                stylesData[type] = await res.json();
+                renderStyleList(stylesData[type]);
+            } catch (e) {
+                listEl.innerHTML = `<div style="color:red; padding:1rem;">Error: ${e.message}</div>`;
+            }
+        }
+
+        function renderStyleList(styles) {
+            const listEl = document.getElementById('style-list');
+            if (styles.length === 0) {
+                listEl.innerHTML = '<div style="padding:1rem; color:var(--text-muted);">저장된 스타일이 없습니다.</div>';
+                return;
+            }
+
+            listEl.innerHTML = styles.map(s => `
+                <div class="style-item-dark" onclick="viewStyleDetail('${s.id}')" style="padding: 1rem; cursor: pointer;">
+                    <div style="font-weight: bold; margin-bottom: 0.25rem;">${s.name}</div>
+                    <div style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                        ${s.description || s.prompt_block}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function viewStyleDetail(id) {
+            const style = stylesData[currentStyleType].find(s => s.id === id);
+            if (!style) return;
+
+            window.activeStyleDetail = style;
+
+            document.getElementById('style-form-view').style.display = 'none';
+            document.getElementById('style-detail-view').style.display = 'block';
+
+            document.getElementById('detail-name').innerText = style.name;
+            document.getElementById('detail-prompt').innerText = style.prompt_block;
+
+            const previewEl = document.getElementById('detail-preview');
+            if (style.reference_images && style.reference_images.length > 0) {
+                previewEl.innerHTML = `<img src="${style.reference_images[0]}" style="max-width:100%; max-height:100%; border-radius:4px;">`;
+            } else {
+                previewEl.innerHTML = 'No Image';
+            }
+        }
+
+        function selectCurrentStyle() {
+            if (!window.activeStyleDetail) return;
+            selectedStyles[currentStyleType] = window.activeStyleDetail;
+
+            // Update UI card
+            const uiId = currentStyleType === 'character' ? 'selected-char-style' : 'selected-bg-style';
+            document.getElementById(uiId).innerHTML = `
+                <div style="font-weight:bold; color: #333;">${window.activeStyleDetail.name}</div>
+            `;
+
+            // Pre-fill manual prompt
+            if (currentStyleType === 'character') {
+                document.getElementById('manual-char-prompt').value = window.activeStyleDetail.prompt_block;
+            } else {
+                document.getElementById('manual-bg-prompt').value = window.activeStyleDetail.prompt_block;
+            }
+
+
+
+            // --- Creation Form ---
+            function showCreateStyleForm() {
+                document.getElementById('style-detail-view').style.display = 'none';
+                document.getElementById('style-form-view').style.display = 'block';
+
+                // Initialize form
+                document.getElementById('style-form-name').value = '';
+                document.getElementById('style-form-prompt').value = '';
+                document.getElementById('style-form-image').value = '';
+                document.getElementById('style-form-locked-attrs').value = '[]';
+                document.getElementById('style-form-visual-attrs').value = '{}';
+            }
+
+            function cancelCreateStyle() {
+                document.getElementById('style-form-view').style.display = 'none';
+            }
+
+            async function extractStyleFromImage() {
+                const fileInput = document.getElementById('extract-upload');
+                if (!fileInput.files[0]) {
+                    alert('이미지를 선택해주세요.');
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('image', fileInput.files[0]);
+
+                document.getElementById('extract-loading').style.display = 'inline';
+
+                try {
+                    const res = await fetch('/api/styles/extract', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await res.json();
+
+                    if (data.success && data.result) {
+                        const result = data.result;
+                        // Auto-fill based on current type
+                        if (currentStyleType === 'character' && result.character_style) {
+                            document.getElementById('style-form-prompt').value = result.character_style.prompt_block;
+                            document.getElementById('style-form-locked-attrs').value = JSON.stringify(result.character_style.locked_attributes || []);
+                            document.getElementById('style-form-visual-attrs').value = JSON.stringify(result.character_style.visual_attributes || {});
+
+                            if (!document.getElementById('style-form-name').value) {
+                                document.getElementById('style-form-name').value = "Extracted Character Style";
+                            }
+                        } else if (currentStyleType === 'background' && result.background_style) {
+                            document.getElementById('style-form-prompt').value = result.background_style.prompt_block;
+                            document.getElementById('style-form-locked-attrs').value = JSON.stringify(result.background_style.locked_attributes || []);
+                            document.getElementById('style-form-visual-attrs').value = JSON.stringify(result.background_style.visual_attributes || {});
+
+                            if (!document.getElementById('style-form-name').value) {
+                                document.getElementById('style-form-name').value = "Extracted Background Style";
+                            }
+                        }
+                    }
+                } catch (e) {
+                    alert('Extraction failed: ' + e.message);
+                } finally {
+                    document.getElementById('extract-loading').style.display = 'none';
+                }
+            }
+
+            async function submitStyleForm() {
+                const name = document.getElementById('style-form-name').value;
+                const prompt = document.getElementById('style-form-prompt').value;
+                const locked = document.getElementById('style-form-locked-attrs').value;
+                const visual = document.getElementById('style-form-visual-attrs').value;
+                const imageFile = document.getElementById('style-form-image').files[0];
+
+                if (!name || !prompt) {
+                    alert('이름과 프롬프트는 필수입니다.');
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('name', name);
+                formData.append('type', currentStyleType);
+                formData.append('prompt_block', prompt);
+                formData.append('locked_attributes', locked);
+                formData.append('visual_attributes', visual);
+                if (imageFile) {
+                    formData.append('reference_images', imageFile);
+                }
+
+                try {
+                    const res = await fetch('/api/styles/save', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        alert('저장되었습니다.');
+                        loadStyles(currentStyleType);
+                        document.getElementById('style-form-view').style.display = 'none';
+                    }
+                } catch (e) {
+                    alert('Save failed: ' + e.message);
+                }
+            }
+
+            closeStyleManager();
+        }
+
+        // --- Preview & Generation ---
+
+        async function generatePreview() {
+            const btn = document.getElementById('btn-generate-preview');
+            const previewContainer = document.getElementById('preview-image-container');
+
+            btn.innerText = 'Creating Preview...';
+            btn.disabled = true;
+            previewContainer.innerHTML = '<div style="font-size:2rem;">⏳</div>';
+
+            // Build overrides
+            const overrides = {
+                character_style_prompt: document.getElementById('manual-char-prompt').value,
+                background_style_prompt: document.getElementById('manual-bg-prompt').value,
+                additional_instructions: document.getElementById('manual-additional').value
+            };
+
+            try {
+                const res = await fetch('/api/workflow/generate-preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        character_style_id: selectedStyles.character ? selectedStyles.character.id : null,
+                        background_style_id: selectedStyles.background ? selectedStyles.background.id : null,
+                        manual_overrides: overrides,
+                        model: document.getElementById('image-model').value
+                    })
+                });
+
+                if (res.status === 200) {
+                    const data = await res.json();
+                    if (data.success) {
+                        let imgSrc = '';
+                        if (data.image_b64) {
+                            imgSrc = `data:image/png;base64,${data.image_b64}`;
+                        } else if (data.image_url) {
+                            imgSrc = data.image_url;
+                        }
+                        previewContainer.innerHTML = `<img src="${imgSrc}" style="width:100%; height:100%; object-fit:contain; border-radius:8px;">`;
+                        console.log("Preview generated with prompt:", data.prompt_used);
+                    } else {
+                        alert('Preview generation failed: ' + (data.error || 'Unknown error'));
+                        previewContainer.innerHTML = '<div style="color:red; padding:1rem;">Error</div>';
+                    }
+                } else {
+                    const err = await res.json();
+                    alert('Preview error: ' + err.detail);
+                    previewContainer.innerHTML = '<div style="color:red; padding:1rem;">Error</div>';
+                }
+            } catch (e) {
+                alert('Preview failed: ' + e.message);
+                previewContainer.innerHTML = '<span style="color:red">Error</span>';
+            } finally {
+                btn.innerText = '샘플 미리보기 생성';
+                btn.disabled = false;
+            }
+        }
+
+        function applyManualOverrides() {
+            generatePreview();
+        }
+    </script>
+
+    <!-- Style Manager Modal -->
+    <div id="style-manager-modal" class="modal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+        <div class="modal-content modal-content-dark"
+            style="padding: 0; border-radius: 8px; width: 800px; max-width: 95%; height: 80vh; display: flex; flex-direction: column;">
+            <div class="modal-header modal-header-dark"
+                style="padding: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0;" id="style-modal-title">스타일 관리</h3>
+                <button class="btn btn-sm btn-secondary" onclick="closeStyleManager()">닫기</button>
+            </div>
+
+            <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 1rem; display: flex;">
+                <!-- Left: List -->
+                <div class="style-list-dark"
+                    style="width: 300px; padding-right: 1rem; display: flex; flex-direction: column;">
+                    <button class="btn btn-primary" style="margin-bottom: 1rem;" onclick="showCreateStyleForm()">+ 새 스타일
+                        추가</button>
+                    <div id="style-list" style="flex: 1; overflow-y: auto;">
+                        <div style="padding: 1rem; text-align: center; color: var(--text-muted);">Loading...</div>
+                    </div>
+                </div>
+
+                <!-- Right: Details / Form -->
+                <div style="flex: 1; padding-left: 1rem;">
+                    <!-- View Details Mode -->
+                    <div id="style-detail-view" style="display: none;">
+                        <h4 id="detail-name" style="margin-top: 0;">Style Name</h4>
+                        <div id="detail-preview"
+                            style="width: 100%; height: 200px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 1rem; display: flex; align-items: center; justify-content: center; color: var(--text-muted);">
+                            No Image
+                        </div>
+                        <p id="detail-prompt"
+                            style="background: var(--bg-input); color: var(--text); padding: 1rem; border-radius: 4px; font-size: 0.9rem; max-height: 150px; overflow-y: auto; border: 1px solid var(--border);">
+                        </p>
+                        <div style="margin-top: 2rem; text-align: right;">
+                            <button class="btn btn-primary" onclick="selectCurrentStyle()">이 스타일 선택</button>
+                        </div>
+                    </div>
+
+                    <!-- Create/Edit Form Mode -->
+                    <div id="style-form-view" style="display: none;">
+                        <h4 style="margin-top: 0;">새 스타일 만들기</h4>
+
+                        <!-- Extraction Option -->
+                        <div
+                            style="background: var(--bg-input); border: 1px solid var(--border); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                            <h5 style="margin: 0 0 0.5rem 0;">📸 이미지에서 스타일 추출 (Vision AI)</h5>
+                            <input type="file" id="extract-upload" accept="image/*" style="margin-bottom: 0.5rem;">
+                            <button class="btn btn-sm btn-outline" onclick="extractStyleFromImage()">분석 및 자동 입력</button>
+                            <span id="extract-loading"
+                                style="display: none; margin-left: 0.5rem; font-size: 0.9rem; color: var(--text-muted);">분석
+                                중...</span>
+                        </div>
+
+                        <div class="form-group">
+                            <label>스타일 이름</label>
+                            <input type="text" id="style-form-name" placeholder="예: 따뜻한 감성 웹툰">
+                        </div>
+                        <div class="form-group">
+                            <label>프롬프트 (Prompt Block)</label>
+                            <textarea id="style-form-prompt" rows="5" placeholder="스타일을 묘사하는 프롬프트..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>대표 이미지 등록 (선택)</label>
+                            <input type="file" id="style-form-image" accept="image/*">
+                        </div>
+
+                        <!-- Hidden Fields for JSON data -->
+                        <input type="hidden" id="style-form-locked-attrs" value="[]">
+                        <input type="hidden" id="style-form-visual-attrs" value="{}">
+
+                        <div style="text-align: right; margin-top: 1rem;">
+                            <button class="btn btn-secondary" onclick="cancelCreateStyle()">취소</button>
+                            <button class="btn btn-primary" onclick="submitStyleForm()">저장</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>
