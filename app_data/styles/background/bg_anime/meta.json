@@ -1,0 +1,10 @@
+{
+  "id": "bg_anime",
+  "name": "애니메이션 배경 (Anime)",
+  "prompt_block": "Anime background art, Makoto Shinkai style, high detailed clouds, vibrant blue sky, pictorial lighting, emotional atmosphere, lens flare, intricate details, vast scale",
+  "locked_attributes": [],
+  "visual_attributes": {},
+  "reference_images": [],
+  "description": "애니메이션 배경처럼 청량하고 디테일한 하늘과 풍경 묘사입니다.",
+  "preview_image": "/app_data/styles/background/bg_anime/preview.png"
+}

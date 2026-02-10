@@ -1,0 +1,10 @@
+{
+  "id": "bg_realistic",
+  "name": "실사풍 배경 (Realistic)",
+  "prompt_block": "Photorealistic background, 8k resolution, cinematic lighting, unreal engine 5 render style, highly detailed textures, dramatic lighting, depth of field, photography style",
+  "locked_attributes": [],
+  "visual_attributes": {},
+  "reference_images": [],
+  "description": "실사 영화처럼 사실적인 라이팅과 질감을 가진 고품질 배경입니다.",
+  "preview_image": "/app_data/styles/background/bg_realistic/preview.png"
+}

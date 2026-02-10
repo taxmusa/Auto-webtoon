@@ -1,0 +1,10 @@
+{
+  "id": "char_shonen",
+  "name": "소년만화/액션 (Shonen)",
+  "prompt_block": "Japanese Shonen manga style, highly dynamic action pose, sharp ink lines, dramatic shading, intense expression, speed lines, high contrast, vibrant colors, detailed muscles and clothes",
+  "locked_attributes": [],
+  "visual_attributes": {},
+  "reference_images": [],
+  "description": "소년 만화 스타일로, 역동적인 선과 강렬한 명암 대비가 돋보입니다.",
+  "preview_image": "/app_data/styles/character/char_shonen/preview.png"
+}

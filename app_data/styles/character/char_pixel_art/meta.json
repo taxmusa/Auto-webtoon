@@ -1,0 +1,10 @@
+{
+  "id": "char_pixel_art",
+  "name": "픽셀 아트 (Pixel Art)",
+  "prompt_block": "Pixel art style, 16-bit game graphics, retro video game style, dot art, limited color palette, jagged edges, sprite art, nostalgic gaming atmosphere",
+  "locked_attributes": [],
+  "visual_attributes": {},
+  "reference_images": [],
+  "description": "도트 그래픽 스타일로, 레트로 게임 같은 분위기를 줍니다.",
+  "preview_image": "/app_data/styles/character/char_pixel_art/preview.png"
+}

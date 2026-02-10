@@ -1,0 +1,10 @@
+{
+  "id": "char_ghibli",
+  "name": "지브리 스타일 (Ghibli)",
+  "prompt_block": "Studio Ghibli art style, Hayao Miyazaki style, cel shaded, hand-drawn animation feel, soft colors, gouache texture, expressive eyes, nostalgic atmosphere, retro anime style",
+  "locked_attributes": [],
+  "visual_attributes": {},
+  "reference_images": [],
+  "description": "지브리 스튜디오 풍의 감성적이고 부드러운 색채와 동화 같은 분위기입니다.",
+  "preview_image": "/app_data/styles/character/char_ghibli/preview.png"
+}

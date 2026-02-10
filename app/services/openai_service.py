@@ -66,7 +66,8 @@ Important rules:
         sub_style: SubStyle = SubStyle.NORMAL,
         questioner_type: str = "일반인",
         expert_type: str = "세무사",
-        aspect_ratio: str = "4:5"
+        aspect_ratio: str = "4:5",
+        model: str = "dall-e-3"
     ) -> GeneratedImage:
         """DALL-E로 이미지 생성"""
         
@@ -88,8 +89,17 @@ Important rules:
             )
         
         try:
+            # 모델 매핑 및 Fallback
+            api_model = model
+            if model.startswith("gpt-image") or model.startswith("dall-e"):
+                pass # 그대로 사용
+            else:
+                # OpenAI 모델이 아니면 DALL-E 3로 Fallback (추후 구현 필요)
+                print(f"Model {model} not supported in OpenAIService, falling back to dall-e-3")
+                api_model = "dall-e-3"
+
             response = await self.client.images.generate(
-                model="dall-e-3",
+                model=api_model,
                 prompt=prompt,
                 size=size,
                 quality="standard",
@@ -119,13 +129,14 @@ Important rules:
         sub_style: SubStyle = SubStyle.NORMAL,
         aspect_ratio: str = "4:5",
         questioner_type: str = "일반인",
-        expert_type: str = "세무사"
+        expert_type: str = "세무사",
+        model: str = "dall-e-3"
     ) -> list[GeneratedImage]:
         """여러 씬의 이미지를 순차 생성"""
         results = []
         for scene in scenes:
             result = await self.generate_image(
-                scene, style, sub_style, questioner_type, expert_type, aspect_ratio
+                scene, style, sub_style, questioner_type, expert_type, aspect_ratio, model
             )
             results.append(result)
         return results

@@ -23,6 +23,7 @@ class WorkflowState(str, Enum):
     GENERATING_STORY = "generating_story"
     REVIEWING_SCENES = "reviewing_scenes"
     GENERATING_IMAGES = "generating_images"
+    EDITING_IMAGES = "editing_images"       # ★ 이미지 편집 단계 (NEW)
     REVIEWING_IMAGES = "reviewing_images"
     OVERLAYING_TEXT = "overlaying_text"
     GENERATING_CAPTION = "generating_caption"
@@ -112,13 +113,50 @@ class SubStyle(str, Enum):
     MINIMAL = "minimal"
 
 
+class CharacterStyle(BaseModel):
+    """인물 스타일 (v2.0)"""
+    id: str
+    name: str
+    prompt_block: str
+    locked_attributes: List[str] = Field(default_factory=list)
+    reference_images: List[str] = Field(default_factory=list)
+
+
+class BackgroundStyle(BaseModel):
+    """배경 스타일 (v2.0)"""
+    id: str
+    name: str
+    prompt_block: str
+    locked_attributes: List[str] = Field(default_factory=list)
+    reference_images: List[str] = Field(default_factory=list)
+
+
+class ManualPromptOverrides(BaseModel):
+    """수동 프롬프트 오버라이드"""
+    character_style_prompt: Optional[str] = None
+    background_style_prompt: Optional[str] = None
+    additional_instructions: Optional[str] = None
+
+
+class ImageEditStatus(str, Enum):
+    """이미지 편집 상태"""
+    PENDING = "pending"         # 미확정
+    CONFIRMED = "confirmed"     # 확정됨
+    REGENERATING = "regenerating"  # 재생성 중
+
+
 class GeneratedImage(BaseModel):
     """생성된 이미지"""
     scene_number: int
     prompt_used: str
     image_url: Optional[str] = None
     local_path: Optional[str] = None
+    original_path: Optional[str] = None   # ★ 톤 조절 전 원본 경로
     status: str = "pending"     # pending | generated | approved
+    edit_status: ImageEditStatus = ImageEditStatus.PENDING  # ★ 편집 확정 상태
+    image_history: List[str] = Field(default_factory=list)  # ★ 이전 이미지 경로 이력
+    prompt_history: List[str] = Field(default_factory=list)  # ★ 이전 프롬프트 이력
+    tone_adjusted: bool = False  # ★ 톤 조절 적용 여부
 
 
 # ============================================
@@ -201,7 +239,13 @@ class ImageSettings(BaseModel):
     sub_style: SubStyle = SubStyle.NORMAL
     use_mascot: bool = True
     model: str = "dall-e-3"
+    model: str = "dall-e-3"
     add_next_episode_tag: bool = True   # "다음 화에 계속" 태그 추가
+    
+    # Style System 2.0
+    character_style_id: Optional[str] = None
+    background_style_id: Optional[str] = None
+    manual_overrides: Optional[ManualPromptOverrides] = None
 
 
 class OutputSettings(BaseModel):
@@ -249,5 +293,7 @@ class WorkflowSession(BaseModel):
     publish_data: Optional[PublishData] = None
     settings: ProjectSettings = Field(default_factory=ProjectSettings)
     collected_data: List[dict] = Field(default_factory=list) # 수집된 자료 저장
+    # ★ 이미지 편집 단계 관련
+    global_tone_adjustments: List[dict] = Field(default_factory=list)  # 전체 톤 조절 이력
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)

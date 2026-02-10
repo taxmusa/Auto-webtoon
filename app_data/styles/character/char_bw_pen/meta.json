@@ -1,0 +1,10 @@
+{
+  "id": "char_bw_pen",
+  "name": "흑백 펜화 (B&W Pen)",
+  "prompt_block": "Black and white ink drawing, pen and ink style, crosshatching, manga inking, monochrome, high contrast, detailed line work, no color, traditional comic art",
+  "locked_attributes": [],
+  "visual_attributes": {},
+  "reference_images": [],
+  "description": "흑백 펜화 스타일로, 출판 만화나 누아르 분위기를 연출합니다.",
+  "preview_image": "/app_data/styles/character/char_bw_pen/preview.png"
+}

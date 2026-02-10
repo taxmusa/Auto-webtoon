@@ -464,26 +464,28 @@ async def generate_images_batch(
     return results
 ```
 
----
-
-### 2.7 Step 7: 이미지 검토 UI (2차 체크포인트)
-
-**입력**: 생성된 이미지 목록
-**출력**: 확정된 이미지 목록
-
-#### 2.7.1 이미지 검토 액션
-
-```python
-class ImageReviewAction(Enum):
-    APPROVE = "approve"         # 이 이미지 확정
-    REGENERATE = "regenerate"   # 재생성 (같은 프롬프트)
-    REGENERATE_NEW = "regenerate_new"  # 재생성 (프롬프트 수정)
-    UPLOAD_CUSTOM = "upload_custom"    # 직접 이미지 업로드
-```
-
----
-
-### 2.8 Step 8: 텍스트 오버레이
+467: ---
+468: 
+469: ### 2.7 Step 7: 이미지 편집 (3차 체크포인트) - ★ NEW
+470: 
+471: **입력**: 생성된 이미지 목록
+472: **출력**: 확정된 이미지 목록 (톤 조절 및 씬별 수정 완료)
+473: 
+474: > 상세 내용은 `docs/IMAGE_EDIT_STAGE.md` 참조
+475: 
+476: #### 2.7.1 이미지 편집 액션
+477: 
+478: ```python
+479: class ImageEditAction(Enum):
+480:     CONFIRM = "confirm"           # 씬 확정
+481:     TONE_ADJUST = "tone_adjust"   # 전체 톤 조절
+482:     REGENERATE = "regenerate"     # 프롬프트 수정 후 재생성
+483:     UPLOAD = "upload"             # 사용자 이미지 업로드
+484: ```
+485: 
+486: ---
+487: 
+488: ### 2.8 Step 8: 텍스트 오버레이
 
 **입력**: 확정된 이미지 + Story
 **출력**: 텍스트가 합성된 최종 이미지

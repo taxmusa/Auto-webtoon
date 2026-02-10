@@ -10,12 +10,25 @@ import uuid
 from app.models.models import (
     WorkflowSession, WorkflowState, WorkflowMode,
     Story, Scene, InstagramCaption, ProjectSettings,
-    CharacterSettings, ImageStyle, SubStyle, SpecializedField
+    CharacterSettings, ImageStyle, SubStyle, SpecializedField,
+    ManualPromptOverrides
 )
 from app.services.gemini_service import get_gemini_service
 from app.services.openai_service import get_openai_service
+from app.services.image_generator import get_generator
+from app.services.prompt_builder import build_styled_prompt
+from app.api.styles import get_character_style, get_background_style
+import os
+import json
+import glob
+import glob
+from datetime import datetime
+import logging
 
 router = APIRouter(prefix="/api/workflow", tags=["workflow"])
+
+# 로거 설정
+logger = logging.getLogger(__name__)
 
 # 메모리 기반 세션 저장 (실제 서비스에서는 DB 사용)
 sessions: dict[str, WorkflowSession] = {}
@@ -58,6 +71,20 @@ class GenerateImagesRequest(BaseModel):
     style: str = "webtoon"
     sub_style: str = "normal"
     aspect_ratio: str = "4:5"
+    model: str = "gpt-image-1-mini"
+    
+    # Style System 2.0
+    character_style_id: Optional[str] = None
+    background_style_id: Optional[str] = None
+    manual_overrides: Optional[dict] = None
+
+
+class GeneratePreviewRequest(BaseModel):
+    session_id: str
+    character_style_id: Optional[str] = None
+    background_style_id: Optional[str] = None
+    manual_overrides: Optional[dict] = None # ManualPromptOverrides
+    model: str = "gpt-image-1-mini"
 
 
 class GenerateCaptionRequest(BaseModel):
@@ -157,6 +184,12 @@ async def generate_story(request: GenerateStoryRequest):
         session.story = story
         session.state = WorkflowState.REVIEWING_SCENES
         
+        # 스토리 히스토리 저장
+        try:
+            save_story_to_history(session)
+        except Exception as e:
+            logger.error(f"Failed to save story history: {e}")
+        
         return {
             "session_id": session.session_id,
             "state": session.state.value,
@@ -222,39 +255,156 @@ async def approve_all_scenes(session_id: str):
     return {"success": True, "state": session.state.value}
 
 
+@router.post("/generate-preview")
+async def generate_preview(request: GeneratePreviewRequest):
+    """스타일 미리보기 생성 (1장)"""
+    session = sessions.get(request.session_id)
+    if not session or not session.story:
+        raise HTTPException(status_code=404, detail="Session or story not found")
+
+    # Load styles
+    char_style = get_character_style(request.character_style_id) if request.character_style_id else None
+    bg_style = get_background_style(request.background_style_id) if request.background_style_id else None
+    
+    # Manual overrides
+    overrides = None
+    if request.manual_overrides:
+        overrides = ManualPromptOverrides(**request.manual_overrides)
+
+    # Use first scene or placeholder
+    target_scene = session.story.scenes[0] if session.story.scenes else Scene(scene_number=1, scene_description="A placeholder scene", dialogues=[])
+    
+    # Build Prompt
+    prompt = build_styled_prompt(
+        scene=target_scene,
+        characters=session.story.characters,
+        character_style=char_style,
+        background_style=bg_style,
+        manual_overrides=overrides
+    )
+    
+    # Select generator
+    api_key = os.getenv("OPENAI_API_KEY") if "gpt" in request.model or "dall-e" in request.model else os.getenv("GOOGLE_API_KEY")
+    generator = get_generator(request.model, api_key)
+    
+    try:
+        # Generate single image
+        logger.info(f"Generating preview with model {request.model}")
+        
+        image_data = await generator.generate(prompt, size="1024x1024", quality="standard") # Standard/Low for preview
+        
+        # Save to temp
+        import base64
+        if isinstance(image_data, bytes):
+            b64_img = base64.b64encode(image_data).decode('utf-8')
+            return {"success": True, "image_b64": b64_img, "prompt_used": prompt}
+        else:
+             return {"success": True, "image_url": image_data, "prompt_used": prompt}
+            
+    except Exception as e:
+        logger.error(f"Preview generation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/generate-images")
 async def generate_images(request: GenerateImagesRequest):
-    """이미지 생성"""
+    """이미지 일괄 생성 (Style System 2.0)"""
     session = sessions.get(request.session_id)
     if not session or not session.story:
         raise HTTPException(status_code=404, detail="Session or story not found")
     
     session.state = WorkflowState.GENERATING_IMAGES
     
-    openai_service = get_openai_service()
+    # Settings storage
+    session.settings.image.model = request.model
+    session.settings.image.character_style_id = request.character_style_id
+    session.settings.image.background_style_id = request.background_style_id
+    if request.manual_overrides:
+        session.settings.image.manual_overrides = ManualPromptOverrides(**request.manual_overrides)
+        
+    # Load styles
+    char_style = get_character_style(request.character_style_id) if request.character_style_id else None
+    bg_style = get_background_style(request.background_style_id) if request.background_style_id else None
+    overrides = session.settings.image.manual_overrides
+
+    # Select generator
+    api_key = os.getenv("OPENAI_API_KEY") if "gpt" in request.model or "dall-e" in request.model else os.getenv("GOOGLE_API_KEY")
+    generator = get_generator(request.model, api_key)
     
-    style = ImageStyle(request.style)
-    sub_style = SubStyle(request.sub_style)
+    generated_images = []
+    import asyncio
     
-    # 세션에 설정 저장
-    session.settings.image_style = style
-    session.settings.sub_style = sub_style
-    # aspect_ratio 처리 (OpenAI Service에서 지원하도록 전달)
+    # Async batch generation (simplified loop for now, ideally parallel)
+    # Using semaphore to limit concurrency if needed, but let's do sequential or chunks for stability first
+    # or simple asyncio.gather
     
-    images = await openai_service.generate_images_batch(
-        scenes=session.story.scenes,
-        style=style,
-        sub_style=sub_style,
-        aspect_ratio=request.aspect_ratio
-    )
+    async def generate_single_scene(scene):
+        try:
+            prompt = build_styled_prompt(
+                scene=scene,
+                characters=session.story.characters,
+                character_style=char_style,
+                background_style=bg_style,
+                manual_overrides=overrides
+            )
+            
+            # Using 1024x1792 for Webtoon (Vertical) if supported
+            size = "1024x1792" if request.aspect_ratio == "4:5" or request.aspect_ratio == "9:16" else "1024x1024"
+            # OpenAI supports 1024x1792. Gemini might vary.
+            
+            image_data = await generator.generate(prompt, size=size)
+            
+            # Save file
+            filename = f"scene_{scene.scene_number}_{uuid.uuid4().hex[:6]}.png"
+            filepath = os.path.join("output", filename)
+            os.makedirs("output", exist_ok=True)
+            
+            import base64
+            with open(filepath, "wb") as f:
+                if isinstance(image_data, bytes):
+                    f.write(image_data)
+                else:
+                    # If URL, need to download. For now assume bytes or b64
+                    pass
+            
+            return {
+                "scene_number": scene.scene_number,
+                "prompt_used": prompt,
+                "local_path": filepath,
+                "status": "generated"
+            }
+        except Exception as e:
+            print(f"Error generating scene {scene.scene_number}: {e}")
+            return {
+                "scene_number": scene.scene_number,
+                "prompt_used": "Error",
+                "status": "error",
+                "error": str(e)
+            }
+
+    # Parallel execution
+    tasks = [generate_single_scene(scene) for scene in session.story.scenes]
+    results = await asyncio.gather(*tasks)
     
-    session.images = images
+    # Map to GeneratedImage objects
+    from app.models.models import GeneratedImage
+    session.images = []
+    for res in results:
+        if res.get("local_path"):
+            img = GeneratedImage(
+                scene_number=res["scene_number"],
+                prompt_used=res["prompt_used"],
+                local_path=res["local_path"],
+                status="generated"
+            )
+            session.images.append(img)
+            
     session.state = WorkflowState.REVIEWING_IMAGES
     
     return {
         "session_id": session.session_id,
         "state": session.state.value,
-        "images": [img.model_dump() for img in images]
+        "images": [img.model_dump() for img in session.images]
     }
 
 
@@ -602,3 +752,113 @@ async def publish(request: PublishRequest):
             "success": False,
             "error": str(e)
         }
+
+
+# ============================================
+# 9. 스토리 히스토리 API
+# ============================================
+
+@router.get("/history/stories")
+async def list_story_history():
+    """저장된 스토리 목록 조회 (최신순 5개)"""
+    history_dir = "output/stories"
+    if not os.path.exists(history_dir):
+        return []
+    
+    files = glob.glob(os.path.join(history_dir, "*.json"))
+    files.sort(key=os.path.getmtime, reverse=True)
+    
+    recent_files = files[:5]
+    result = []
+    
+    for f in recent_files:
+        try:
+            filename = os.path.basename(f)
+            with open(f, "r", encoding="utf-8") as file:
+                data = json.load(file)
+                result.append({
+                    "filename": filename,
+                    "keyword": data.get("keyword", "Unknown"),
+                    "timestamp": data.get("timestamp", ""),
+                    "title": data.get("story", {}).get("title", "Untitled"),
+                    "scene_count": len(data.get("story", {}).get("scenes", []))
+                })
+        except Exception as e:
+            print(f"Error reading history file {f}: {e}")
+            
+    return result
+
+
+class LoadStoryRequest(BaseModel):
+    session_id: Optional[str] = None
+    filename: str
+
+
+@router.post("/history/load")
+async def load_story_history(request: LoadStoryRequest):
+    """저장된 스토리 불러오기"""
+    # 세션 ID가 없거나 유효하지 않으면 새 세션 생성
+    session = sessions.get(request.session_id) if request.session_id else None
+    
+    if not session:
+        # Create new session
+        new_id = str(uuid.uuid4())
+        session = WorkflowSession(session_id=new_id)
+        sessions[new_id] = session
+        # We will return this new ID
+    
+    history_dir = "output/stories"
+    filepath = os.path.join(history_dir, request.filename)
+    
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="Story file not found")
+        
+    try:
+        with open(filepath, "r", encoding="utf-8") as file:
+            data = json.load(file)
+            
+        # 세션 복원
+        session.keyword = data.get("keyword")
+        session.story = Story(**data.get("story"))
+        session.state = WorkflowState.REVIEWING_SCENES
+        
+        # 수집 데이터도 복원 (있다면)
+        if "collected_data" in data:
+            session.collected_data = data["collected_data"]
+            
+        # 이미지 데이터 복원 (있다면)
+        # 이전 저장 파일에는 이미지가 없을 수 있음 (UserRequest: "직전 내용으로 산출되게 해줘" implies loading state)
+        
+        return {
+            "success": True,
+            "session_id": session.session_id, # Return the (possibly new) session ID
+            "story": session.story.model_dump(),
+            "collected_data": session.collected_data
+        }
+    except Exception as e:
+        logger.error(f"Failed to load story: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to load story: {str(e)}")
+
+
+def save_story_to_history(session: WorkflowSession):
+    """스토리를 JSON 파일로 저장"""
+    history_dir = "output/stories"
+    os.makedirs(history_dir, exist_ok=True)
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_keyword = "".join([c for c in (session.keyword or "unknown") if c.isalnum() or c in (' ', '_', '-')]).strip()
+    filename = f"{timestamp}_{safe_keyword}.json"
+    filepath = os.path.join(history_dir, filename)
+    
+    data = {
+        "timestamp": datetime.now().isoformat(),
+        "keyword": session.keyword,
+        "story": session.story.model_dump(),
+        "collected_data": session.collected_data,
+        "character_settings": session.settings.character.model_dump()
+    }
+    
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    
+    print(f"Story saved to {filepath}")

@@ -1,0 +1,261 @@
+{
+  "timestamp": "2026-02-09T19:14:11.752087",
+  "keyword": "수동 입력 콘텐츠",
+  "story": {
+    "title": "합법적인 자금 이동, 세무사의 꿀팁!",
+    "scenes": [
+      {
+        "scene_number": 1,
+        "scene_description": "카페, 김민지와 박세현이 테이블에 앉아 있다.",
+        "dialogues": [
+          {
+            "character": "김민지",
+            "text": "세무사님, 합법적으로 자금을 옮기는 방법이 궁금해요!",
+            "emotion": "happy"
+          },
+          {
+            "character": "박세현",
+            "text": "직접 증여 외에도 다양한 전략이 있습니다. 몇 가지 알려드릴게요.",
+            "emotion": "neutral"
+          }
+        ],
+        "narration": "합법적인 자금 이동 전략, 궁금증 폭발!",
+        "status": "pending",
+        "warnings": [
+          "김민지 대사가 너무 깁니다 (29자 > 20자)",
+          "박세현 대사가 너무 깁니다 (36자 > 20자)"
+        ],
+        "layout_meta": {}
+      },
+      {
+        "scene_number": 2,
+        "scene_description": "박세현이 서류를 보여주며 설명한다.",
+        "dialogues": [
+          {
+            "character": "박세현",
+            "text": "첫 번째는 차용증을 활용하는 겁니다. 돈을 빌려주는 형식으로요.",
+            "emotion": "neutral"
+          },
+          {
+            "character": "김민지",
+            "text": "빌려준다구요? 그냥 주는 거랑 뭐가 다르죠?",
+            "emotion": "surprised"
+          }
+        ],
+        "narration": "첫 번째 전략, 차용증 활용법!",
+        "status": "pending",
+        "warnings": [
+          "박세현 대사가 너무 깁니다 (35자 > 20자)",
+          "김민지 대사가 너무 깁니다 (24자 > 20자)"
+        ],
+        "layout_meta": {}
+      },
+      {
+        "scene_number": 3,
+        "scene_description": "박세현이 차용증 예시를 보여준다.",
+        "dialogues": [
+          {
+            "character": "박세현",
+            "text": "중요한 건 이자를 지급해야 한다는 점입니다. 법정 이자율은 연 4.6%에요.",
+            "emotion": "serious"
+          },
+          {
+            "character": "김민지",
+            "text": "4.6%요? 꽤 높은데요...",
+            "emotion": "neutral"
+          }
+        ],
+        "narration": "법정 이자율, 연 4.6% 기억!",
+        "status": "pending",
+        "warnings": [
+          "박세현 대사가 너무 깁니다 (42자 > 20자)"
+        ],
+        "layout_meta": {}
+      },
+      {
+        "scene_number": 4,
+        "scene_description": "박세현이 손짓을 하며 설명한다.",
+        "dialogues": [
+          {
+            "character": "박세현",
+            "text": "하지만 무이자 한도도 있습니다. 이자 차액이 연간 1,000만원 미만이면 괜찮아요.",
+            "emotion": "happy"
+          },
+          {
+            "character": "김민지",
+            "text": "연간 천만원 미만이요? 그럼 대출 금액은 얼마까지 가능한가요?",
+            "emotion": "surprised"
+          }
+        ],
+        "narration": "무이자 한도 활용법, 중요!",
+        "status": "pending",
+        "warnings": [
+          "박세현 대사가 너무 깁니다 (46자 > 20자)",
+          "김민지 대사가 너무 깁니다 (34자 > 20자)"
+        ],
+        "layout_meta": {}
+      },
+      {
+        "scene_number": 5,
+        "scene_description": "박세현이 계산기를 두드리는 모습.",
+        "dialogues": [
+          {
+            "character": "박세현",
+            "text": "약 2억 1,700만 원 이하 대출 시 무이자가 가능합니다.",
+            "emotion": "neutral"
+          },
+          {
+            "character": "김민지",
+            "text": "오, 생각보다 꽤 큰 금액이네요!",
+            "emotion": "happy"
+          }
+        ],
+        "narration": "약 2억 1,700만 원 이하, 무이자 대출 가능!",
+        "status": "pending",
+        "warnings": [
+          "박세현 대사가 너무 깁니다 (33자 > 20자)"
+        ],
+        "layout_meta": {}
+      },
+      {
+        "scene_number": 6,
+        "scene_description": "박세현이 서류를 강조하며 설명한다.",
+        "dialogues": [
+          {
+            "character": "박세현",
+            "text": "필수 요건은 실제 원리금 상환 내역이 통장으로 증빙되어야 한다는 겁니다.",
+            "emotion": "serious"
+          },
+          {
+            "character": "김민지",
+            "text": "통장 내역 증빙... 잊지 않겠습니다.",
+            "emotion": "serious"
+          }
+        ],
+        "narration": "통장 내역 증빙 필수! 차용증 공증도 고려.",
+        "status": "pending",
+        "warnings": [
+          "박세현 대사가 너무 깁니다 (40자 > 20자)",
+          "김민지 대사가 너무 깁니다 (21자 > 20자)"
+        ],
+        "layout_meta": {}
+      },
+      {
+        "scene_number": 7,
+        "scene_description": "박세현이 미소 지으며 설명한다.",
+        "dialogues": [
+          {
+            "character": "박세현",
+            "text": "두 번째는 자녀 명의 주식/펀드 계좌를 활용하는 방법입니다.",
+            "emotion": "happy"
+          },
+          {
+            "character": "김민지",
+            "text": "주식/펀드 계좌요? 이건 또 어떻게 하는 건가요?",
+            "emotion": "surprised"
+          }
+        ],
+        "narration": "두 번째 전략, 주식/펀드 계좌 활용!",
+        "status": "pending",
+        "warnings": [
+          "박세현 대사가 너무 깁니다 (33자 > 20자)",
+          "김민지 대사가 너무 깁니다 (27자 > 20자)"
+        ],
+        "layout_meta": {}
+      },
+      {
+        "scene_number": 8,
+        "scene_description": "박세현이 그래프를 보여주며 설명한다.",
+        "dialogues": [
+          {
+            "character": "박세현",
+            "text": "미성년자일 때 2,000만 원 증여, 성인 될 때 5,000만 원 증여하는 방식입니다.",
+            "emotion": "neutral"
+          },
+          {
+            "character": "김민지",
+            "text": "시간을 나눠서 증여하는 거군요!",
+            "emotion": "happy"
+          }
+        ],
+        "narration": "시간 분산 증여, 절세 효과 극대화!",
+        "status": "pending",
+        "warnings": [
+          "박세현 대사가 너무 깁니다 (48자 > 20자)"
+        ],
+        "layout_meta": {}
+      },
+      {
+        "scene_number": 9,
+        "scene_description": "김민지가 감사 인사를 한다.",
+        "dialogues": [
+          {
+            "character": "박세현",
+            "text": "자산 가치 상승분에 대한 증여세를 피할 수 있습니다.",
+            "emotion": "neutral"
+          },
+          {
+            "character": "김민지",
+            "text": "정말 감사합니다! 많은 도움이 됐어요!",
+            "emotion": "happy"
+          }
+        ],
+        "narration": "자산 가치 상승분, 증여세 절세!",
+        "status": "pending",
+        "warnings": [
+          "박세현 대사가 너무 깁니다 (29자 > 20자)",
+          "김민지 대사가 너무 깁니다 (21자 > 20자)"
+        ],
+        "layout_meta": {}
+      }
+    ],
+    "characters": [
+      {
+        "name": "김민지",
+        "role": "질문자",
+        "appearance": "평범한 20대 여성, 밝은 표정",
+        "personality": "궁금한 것이 많고 꼼꼼함"
+      },
+      {
+        "name": "박세현",
+        "role": "세무사",
+        "appearance": "30대 후반, 차분하고 신뢰감 있는 인상",
+        "personality": "친절하고 꼼꼼하게 설명하는 스타일"
+      }
+    ],
+    "total_series": 1,
+    "scenes_per_series": []
+  },
+  "collected_data": [
+    {
+      "title": "합법적으로 자금을 전달하는 전략",
+      "content": "직접적인 증여 외에 활용할 수 있는 방법들입니다."
+    },
+    {
+      "title": "① 차용증 작성 (금전소비대차)",
+      "content": "돈을 '주는' 것이 아니라 '빌려주는' 형식을 취하는 방법입니다."
+    },
+    {
+      "title": "수동 입력 자료 #3",
+      "content": "적정 이자율: 법정 이자율은 **연 4.6%**입니다."
+    },
+    {
+      "title": "수동 입력 자료 #4",
+      "content": "무이자 한도: 이자 차액이 연간 1,000만 원 미만인 경우(약 2억 1,700만 원 이하 대출 시) 무이자로 빌려주더라도 증여세를 묻지 않습니다."
+    },
+    {
+      "title": "수동 입력 자료 #5",
+      "content": "필수 요건: 실제 원리금 상환 내역이 통장 계좌로 증빙되어야 하며, 차용증에 대한 공증이나 확정일자를 받아두는 것이 안전합니다."
+    },
+    {
+      "title": "② 자녀 명의 주식/펀드 계좌 활용",
+      "content": "미성년자일 때 2,000만 원을 증여하고, 이를 10년 뒤 성인이 되었을 때 다시 5,000만 원을 증여하는 방식으로 시간을 나누어 증여하면 자산 가치 상승분(운영 수익)에 대해서는 증여세를 피할 수 있습니다."
+    }
+  ],
+  "character_settings": {
+    "questioner_type": "일반인",
+    "expert_type": "세무사",
+    "presets": [],
+    "auto_emotion": true
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "id": "char_retro_anime",
+  "name": "90년대 셀 애니 (Retro Anime)",
+  "prompt_block": "90s anime style, cel shaded, retro aesthetic, VHS quality, limited color palette, classic anime eyes, hard shadows, nostalgic atmosphere, Sailor Moon style",
+  "locked_attributes": [],
+  "visual_attributes": {},
+  "reference_images": [],
+  "description": "90년대 셀 애니메이션 감성의 빈티지한 색감과 노이즈 질감입니다.",
+  "preview_image": "/app_data/styles/character/char_retro_anime/preview.png"
+}

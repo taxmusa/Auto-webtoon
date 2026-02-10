@@ -2230,8 +2230,6 @@
                      onclick="loadStory('${f.filename}')" 
                      onmouseover="this.style.background='#3d3d3d'" 
                      onmouseout="this.style.background='#2d2d2d'">
-                     onmouseover="this.style.background='#f5f5f5'" 
-                     onmouseout="this.style.background='white'">
                     <div style="font-weight: bold;">${f.keyword}</div>
                     <div style="font-size: 0.8em; color: #666;">
                         ${new Date(f.timestamp).toLocaleString()} | ${f.title} (${f.scene_count} scenes)
@@ -2350,7 +2348,11 @@
             document.getElementById('detail-prompt').innerText = style.prompt_block;
 
             const previewEl = document.getElementById('detail-preview');
-            if (style.reference_images && style.reference_images.length > 0) {
+
+            // 우선순위: 1. preview_image (생성된 대표 이미지) 2. reference_images (사용자 업로드)
+            if (style.preview_image) {
+                previewEl.innerHTML = `<img src="${style.preview_image}" style="max-width:100%; max-height:100%; border-radius:4px;">`;
+            } else if (style.reference_images && style.reference_images.length > 0) {
                 previewEl.innerHTML = `<img src="${style.reference_images[0]}" style="max-width:100%; max-height:100%; border-radius:4px;">`;
             } else {
                 previewEl.innerHTML = 'No Image';

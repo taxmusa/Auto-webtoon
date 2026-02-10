@@ -1,0 +1,10 @@
+{
+  "id": "char_romance",
+  "name": "로맨스 판타지 (RoPan)",
+  "prompt_block": "Korean romance fantasy webtoon style, shoujo manhwa style, incredibly detailed sparkling eyes, flowing detailed hair, soft lighting, bloom effect, pastel and vibrant colors, extremely beautiful characters, jewelry and lace details",
+  "locked_attributes": [],
+  "visual_attributes": {},
+  "reference_images": [],
+  "description": "로맨스 판타지 웹툰 특유의 화려하고 섬세한 이목구비와 반짝이는 효과가 특징입니다.",
+  "preview_image": "/app_data/styles/character/char_romance/preview.png"
+}

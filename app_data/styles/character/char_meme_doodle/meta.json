@@ -1,0 +1,10 @@
+{
+  "id": "char_meme_doodle",
+  "name": "병맛 낙서 (Meme Doodle)",
+  "prompt_block": "Funny doodle style, poorly drawn on purpose, meme style, rough sketch lines, exaggerated funny expressions, stick figure-ish, ms paint style, crudely drawn, internet comic style",
+  "locked_attributes": [],
+  "visual_attributes": {},
+  "reference_images": [],
+  "description": "가볍고 웃긴 병맛/낙서 스타일로, 개그 컷에 적합합니다.",
+  "preview_image": "/app_data/styles/character/char_meme_doodle/preview.png"
+}

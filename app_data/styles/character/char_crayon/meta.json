@@ -1,0 +1,10 @@
+{
+  "id": "char_crayon",
+  "name": "크레파스/동화 (Crayon)",
+  "prompt_block": "Child's crayon drawing style, rough texture, wax crayon strokes, messy coloring, bright primary colors, innocent and cute, storybook illustration, hand drawn on paper texture",
+  "locked_attributes": [],
+  "visual_attributes": {},
+  "reference_images": [],
+  "description": "크레파스나 색연필로 그린 듯한 따뜻하고 아동 친화적인 질감입니다.",
+  "preview_image": "/app_data/styles/character/char_crayon/preview.png"
+}

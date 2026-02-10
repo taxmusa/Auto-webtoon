@@ -1,0 +1,10 @@
+{
+  "id": "char_flat_vector",
+  "name": "플랫 벡터 (Flat Vector)",
+  "prompt_block": "Flat vector art style, clean minimalistic design, no gradients, solid colors, bold geometric shapes, corporate art style, icon style, modern illustration, simple shading",
+  "locked_attributes": [],
+  "visual_attributes": {},
+  "reference_images": [],
+  "description": "깔끔한 벡터 그래픽 스타일로, 단순한 면과 색상 중심의 디자인입니다.",
+  "preview_image": "/app_data/styles/character/char_flat_vector/preview.png"
+}

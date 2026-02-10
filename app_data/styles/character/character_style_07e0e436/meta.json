@@ -1,0 +1,15 @@
+{
+  "id": "character_style_07e0e436",
+  "name": "꽃미남 박지광세무사",
+  "prompt_block": "Korean webtoon style illustration of a handsome young male character ('flower boy' aesthetic). He features short, textured dark hair with distinct high-contrast white glossy highlights. The face has fair skin, a sharp jawline, and expressive eyes, often accented with a soft, airbrushed blush on the cheeks and nose tip. The character is dressed in clean, casual contemporary fashion (beige cardigan, slate blue button-down, white undershirt). The art style utilizes crisp, variable-width black ink outlines and sharp cel-shading for shadows on the neck and clothing folds.",
+  "locked_attributes": [
+    "High-contrast white hair highlights",
+    "Crisp black contour lines",
+    "Soft airbrushed cheek blush",
+    "Cel-shaded clothing folds"
+  ],
+  "reference_images": [
+    "/app_data/styles/character/character_style_07e0e436/ref_87c53b.png"
+  ],
+  "preview_image": "/app_data/styles/character/character_style_07e0e436/preview.png"
+}

@@ -1,0 +1,261 @@
+{
+  "timestamp": "2026-02-09T19:36:04.733385",
+  "keyword": "수동 입력 콘텐츠",
+  "story": {
+    "title": "합법적으로 자녀에게 자금 전달하는 방법",
+    "scenes": [
+      {
+        "scene_number": 1,
+        "scene_description": "세무사 사무실, 김민준이 박세무 세무사와 상담하고 있다.",
+        "dialogues": [
+          {
+            "character": "김민준",
+            "text": "세무사님, 자녀에게 돈을 주고 싶은데 세금 때문에 고민입니다.",
+            "emotion": "neutral"
+          },
+          {
+            "character": "박세무",
+            "text": "합법적으로 자금을 전달하는 방법이 몇 가지 있습니다. 직접 증여 외에도요.",
+            "emotion": "happy"
+          }
+        ],
+        "narration": "자녀에게 자금 전달, 고민되는 세금 문제.",
+        "status": "pending",
+        "warnings": [
+          "김민준 대사가 너무 깁니다 (34자 > 20자)",
+          "박세무 대사가 너무 깁니다 (41자 > 20자)"
+        ],
+        "layout_meta": {}
+      },
+      {
+        "scene_number": 2,
+        "scene_description": "박세무 세무사가 서류를 보여주며 설명한다.",
+        "dialogues": [
+          {
+            "character": "박세무",
+            "text": "첫 번째는 차용증을 작성하는 겁니다. 금전소비대차 형식으로요.",
+            "emotion": "serious"
+          },
+          {
+            "character": "김민준",
+            "text": "빌려주는 형식으로요? 어떻게 하는 건가요?",
+            "emotion": "surprised"
+          }
+        ],
+        "narration": "자금 전달 전략 1. 금전소비대차 활용.",
+        "status": "pending",
+        "warnings": [
+          "박세무 대사가 너무 깁니다 (34자 > 20자)",
+          "김민준 대사가 너무 깁니다 (23자 > 20자)"
+        ],
+        "layout_meta": {}
+      },
+      {
+        "scene_number": 3,
+        "scene_description": "박세무 세무사가 차용증 예시를 보여준다.",
+        "dialogues": [
+          {
+            "character": "박세무",
+            "text": "돈을 '주는' 것이 아니라 '빌려주는' 겁니다. 이자를 받는 조건으로요.",
+            "emotion": "serious"
+          },
+          {
+            "character": "김민준",
+            "text": "이자요? 이자율은 어떻게 되나요?",
+            "emotion": "neutral"
+          }
+        ],
+        "narration": "핵심: '주는' 것이 아닌 '빌려주는' 형식.",
+        "status": "pending",
+        "warnings": [
+          "박세무 대사가 너무 깁니다 (40자 > 20자)"
+        ],
+        "layout_meta": {}
+      },
+      {
+        "scene_number": 4,
+        "scene_description": "박세무 세무사가 이자율에 대해 설명한다.",
+        "dialogues": [
+          {
+            "character": "박세무",
+            "text": "법정 이자율은 연 4.6%입니다. 이 이율로 이자를 지급해야 증여로 보지 않아요.",
+            "emotion": "serious"
+          },
+          {
+            "character": "김민준",
+            "text": "4.6%요? 꽤 높은데요….",
+            "emotion": "neutral"
+          }
+        ],
+        "narration": "법정 이자율은 연 4.6%.",
+        "status": "pending",
+        "warnings": [
+          "박세무 대사가 너무 깁니다 (45자 > 20자)"
+        ],
+        "layout_meta": {}
+      },
+      {
+        "scene_number": 5,
+        "scene_description": "박세무 세무사가 무이자 한도에 대해 설명한다.",
+        "dialogues": [
+          {
+            "character": "박세무",
+            "text": "이자 차액이 연간 1,000만 원 미만이면 무이자로 빌려줘도 괜찮습니다.",
+            "emotion": "serious"
+          },
+          {
+            "character": "김민준",
+            "text": "무이자도 가능하다니, 좋네요!",
+            "emotion": "happy"
+          }
+        ],
+        "narration": "무이자 한도 활용 가능.",
+        "status": "pending",
+        "warnings": [
+          "박세무 대사가 너무 깁니다 (40자 > 20자)"
+        ],
+        "layout_meta": {}
+      },
+      {
+        "scene_number": 6,
+        "scene_description": "박세무 세무사가 중요 요건을 강조한다.",
+        "dialogues": [
+          {
+            "character": "박세무",
+            "text": "중요한 건 실제 원리금 상환 내역이 통장으로 증빙되어야 합니다!",
+            "emotion": "serious"
+          },
+          {
+            "character": "박세무",
+            "text": "차용증 공증이나 확정일자를 받아두는 것도 안전하고요.",
+            "emotion": "serious"
+          }
+        ],
+        "narration": "실제 상환 내역 증빙 필수! 공증/확정일자 권장.",
+        "status": "pending",
+        "warnings": [
+          "박세무 대사가 너무 깁니다 (35자 > 20자)",
+          "박세무 대사가 너무 깁니다 (29자 > 20자)"
+        ],
+        "layout_meta": {}
+      },
+      {
+        "scene_number": 7,
+        "scene_description": "박세무 세무사가 주식/펀드 계좌 활용법을 설명한다.",
+        "dialogues": [
+          {
+            "character": "박세무",
+            "text": "두 번째 방법은 자녀 명의 주식/펀드 계좌를 활용하는 겁니다.",
+            "emotion": "serious"
+          },
+          {
+            "character": "김민준",
+            "text": "주식/펀드 계좌요? 이것도 절세에 도움이 되나요?",
+            "emotion": "surprised"
+          }
+        ],
+        "narration": "자금 전달 전략 2. 주식/펀드 계좌 활용.",
+        "status": "pending",
+        "warnings": [
+          "박세무 대사가 너무 깁니다 (34자 > 20자)",
+          "김민준 대사가 너무 깁니다 (27자 > 20자)"
+        ],
+        "layout_meta": {}
+      },
+      {
+        "scene_number": 8,
+        "scene_description": "박세무 세무사가 시간을 나누어 증여하는 방법을 설명한다.",
+        "dialogues": [
+          {
+            "character": "박세무",
+            "text": "미성년자일 때 2,000만 원 증여, 성인일 때 5,000만 원 증여하는 식으로요.",
+            "emotion": "serious"
+          },
+          {
+            "character": "박세무",
+            "text": "시간을 나누어 증여하면 자산 가치 상승분에 대한 세금을 피할 수 있습니다.",
+            "emotion": "serious"
+          }
+        ],
+        "narration": "시간 분산 증여, 자산 가치 상승분 절세 효과.",
+        "status": "pending",
+        "warnings": [
+          "박세무 대사가 너무 깁니다 (46자 > 20자)",
+          "박세무 대사가 너무 깁니다 (41자 > 20자)"
+        ],
+        "layout_meta": {}
+      },
+      {
+        "scene_number": 9,
+        "scene_description": "김민준이 박세무 세무사에게 감사 인사를 한다.",
+        "dialogues": [
+          {
+            "character": "김민준",
+            "text": "정말 감사합니다! 덕분에 좋은 정보를 얻어갑니다.",
+            "emotion": "happy"
+          },
+          {
+            "character": "박세무",
+            "text": "언제든지 궁금한 점이 있다면 다시 찾아주세요.",
+            "emotion": "happy"
+          }
+        ],
+        "narration": "합법적인 자금 전달, 전문가와 상담하세요.",
+        "status": "pending",
+        "warnings": [
+          "김민준 대사가 너무 깁니다 (27자 > 20자)",
+          "박세무 대사가 너무 깁니다 (25자 > 20자)"
+        ],
+        "layout_meta": {}
+      }
+    ],
+    "characters": [
+      {
+        "name": "김민준",
+        "role": "질문자",
+        "appearance": "평범한 회사원, 30대",
+        "personality": "궁금한 것이 많고 꼼꼼함"
+      },
+      {
+        "name": "박세무",
+        "role": "전문가",
+        "appearance": "깔끔한 정장 차림의 40대 세무사",
+        "personality": "친절하고 명확하게 설명하는 스타일"
+      }
+    ],
+    "total_series": 1,
+    "scenes_per_series": []
+  },
+  "collected_data": [
+    {
+      "title": "합법적으로 자금을 전달하는 전략",
+      "content": "직접적인 증여 외에 활용할 수 있는 방법들입니다."
+    },
+    {
+      "title": "① 차용증 작성 (금전소비대차)",
+      "content": "돈을 '주는' 것이 아니라 '빌려주는' 형식을 취하는 방법입니다."
+    },
+    {
+      "title": "수동 입력 자료 #3",
+      "content": "적정 이자율: 법정 이자율은 **연 4.6%**입니다."
+    },
+    {
+      "title": "수동 입력 자료 #4",
+      "content": "무이자 한도: 이자 차액이 연간 1,000만 원 미만인 경우(약 2억 1,700만 원 이하 대출 시) 무이자로 빌려주더라도 증여세를 묻지 않습니다."
+    },
+    {
+      "title": "수동 입력 자료 #5",
+      "content": "필수 요건: 실제 원리금 상환 내역이 통장 계좌로 증빙되어야 하며, 차용증에 대한 공증이나 확정일자를 받아두는 것이 안전합니다."
+    },
+    {
+      "title": "② 자녀 명의 주식/펀드 계좌 활용",
+      "content": "미성년자일 때 2,000만 원을 증여하고, 이를 10년 뒤 성인이 되었을 때 다시 5,000만 원을 증여하는 방식으로 시간을 나누어 증여하면 자산 가치 상승분(운영 수익)에 대해서는 증여세를 피할 수 있습니다."
+    }
+  ],
+  "character_settings": {
+    "questioner_type": "일반인",
+    "expert_type": "세무사",
+    "presets": [],
+    "auto_emotion": true
+  }
+}

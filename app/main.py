@@ -6,6 +6,8 @@ import os
 from dotenv import load_dotenv
 
 from app.api.workflow import router as workflow_router
+from app.api.styles import router as styles_router
+from app.api.edit_stage import router as edit_stage_router
 
 # 환경 변수 로드
 load_dotenv()
@@ -14,9 +16,12 @@ app = FastAPI(title="Tax Webtoon Auto-Generator")
 
 # 라우터 등록
 app.include_router(workflow_router)
+app.include_router(styles_router)
+app.include_router(edit_stage_router)
 
 # 정적 파일 및 템플릿 설정
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.mount("/app_data", StaticFiles(directory="app_data"), name="app_data")
 templates = Jinja2Templates(directory="app/templates")
 
 @app.get("/", response_class=HTMLResponse)
