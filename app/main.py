@@ -3,7 +3,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 import os
+import logging
 from dotenv import load_dotenv
+
+# 앱 로거 레벨 설정 (타이밍·디버그 메시지가 콘솔에 표시되도록)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s: %(message)s")
 
 from app.api.workflow import router as workflow_router
 from app.api.styles import router as styles_router

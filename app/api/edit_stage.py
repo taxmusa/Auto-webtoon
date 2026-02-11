@@ -285,7 +285,7 @@ async def regenerate_scene(session_id: str, scene_num: int, req: SceneRegenerate
         if "gpt" in model_name or "dall-e" in model_name:
             api_key = os.getenv("OPENAI_API_KEY")
         else:
-            api_key = os.getenv("GOOGLE_API_KEY")
+            api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
         generator = get_generator(model_name, api_key)
 

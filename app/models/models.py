@@ -141,6 +141,7 @@ class ManualPromptOverrides(BaseModel):
     """수동 프롬프트 오버라이드"""
     character_style_prompt: Optional[str] = None
     background_style_prompt: Optional[str] = None
+    style_prompt: Optional[str] = None # 통합된 스타일 프롬프트 (v2.0)
     additional_instructions: Optional[str] = None
 
 
@@ -244,7 +245,6 @@ class ImageSettings(BaseModel):
     style: ImageStyle = ImageStyle.WEBTOON
     sub_style: SubStyle = SubStyle.NORMAL
     use_mascot: bool = True
-    model: str = "dall-e-3"
     model: str = "dall-e-3"
     add_next_episode_tag: bool = True   # "다음 화에 계속" 태그 추가
     

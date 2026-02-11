@@ -773,96 +773,196 @@
 
                 <!-- Image Settings Tab (Style System 2.0) -->
                 <div id="setting-tab-image" class="tab-content active">
-                    <!-- 1. Style Selection Grid -->
-                    <div class="style-grid">
-                        <!-- Character Style -->
-                        <div class="style-select-card">
-                            <div class="style-header">
-                                <span class="style-title">🧑 인물 스타일</span>
-                                <button class="btn btn-sm btn-outline"
-                                    onclick="openStyleManager('character')">설정</button>
-                            </div>
-                            <div id="selected-char-style" class="selected-style-display">
-                                기본 스타일 (Webtoon)
-                            </div>
-                        </div>
+                    <!-- 1. Model Selection (Moved to Top) -->
+                    <div class="form-group" style="margin-bottom: 2rem;">
+                        <label style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.75rem;">이미지 생성 모델</label>
+                        <select id="image-model" style="padding: 1rem; width: 100%;">
+                            <!-- Gemini Models (Powered by Google) -->
+                            <optgroup label="Google Gemini (초고속/지능형)">
+                                <option value="nano-banana">Nano Banana (Gemini 2.5 Flash Image - 빠름)
+                                </option>
+                                <option value="nano-banana-pro">Nano Banana Pro (Preview - 고품질)</option>
+                            </optgroup>
 
-                        <!-- Background Style -->
-                        <div class="style-select-card">
-                            <div class="style-header">
-                                <span class="style-title">🏙️ 배경 스타일</span>
-                                <button class="btn btn-sm btn-outline"
-                                    onclick="openStyleManager('background')">설정</button>
+                            <!-- GPT/DALL-E Models (Powered by OpenAI) -->
+                            <optgroup label="OpenAI DALL-E (예술적/다양성)">
+                                <option value="gpt-image-1">GPT Image 1 (DALL-E 3 표준)</option>
+                                <option value="gpt-image-1-mini" selected>GPT Image 1 Mini (가성비 DALL-E - 기본값)</option>
+                                <option value="gpt-image-1.5">GPT Image 1.5 (고해상도 최적화)</option>
+                                <option value="dall-e-3">DALL-E 3 (고품질 원본)</option>
+                                <option value="dall-e-2">DALL-E 2 (경제적)</option>
+                            </optgroup>
+                        </select>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem;">
+                            * 기본 모델은 'GPT Image 1 Mini'입니다. 초고속 미리보기를 원하시면 'Nano Banana'를 권장합니다.
+                        </p>
+                    </div>
+
+                    <!-- 2. Legacy Style Area (Hidden) -->
+                    <div id="legacy-character-bg-style" style="display: none !important;">
+                        <div class="style-grid">
+                            <!-- Character Style -->
+                            <div class="style-select-card">
+                                <div class="style-header">
+                                    <span class="style-title">🧑 인물 스타일</span>
+                                    <button class="btn btn-sm btn-outline"
+                                        onclick="openStyleManager('character')">설정</button>
+                                </div>
+                                <div id="selected-char-style" class="selected-style-display">
+                                    기본 스타일 (Webtoon)
+                                </div>
                             </div>
-                            <div id="selected-bg-style" class="selected-style-display">
-                                기본 스타일 (Modern Office)
+
+                            <!-- Background Style -->
+                            <div class="style-select-card">
+                                <div class="style-header">
+                                    <span class="style-title">🏙️ 배경 스타일</span>
+                                    <button class="btn btn-sm btn-outline"
+                                        onclick="openStyleManager('background')">설정</button>
+                                </div>
+                                <div id="selected-bg-style" class="selected-style-display">
+                                    기본 스타일 (Modern Office)
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- 2. Model Selection -->
-                    <div class="form-group">
-                        <label style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.75rem;">이미지 생성 모델</label>
-                        <select id="image-model" style="padding: 1rem;">
-                            <optgroup label="OpenAI">
-                                <option value="gpt-image-1-mini" selected>GPT Image 1 Mini (가성비)</option>
-                                <option value="gpt-image-1">GPT Image 1 (균형)</option>
-                                <option value="gpt-image-1.5">GPT Image 1.5 (고품질)</option>
-                                <option value="dall-e-3">DALL-E 3</option>
-                            </optgroup>
-                            <optgroup label="Google">
-                                <option value="nano-banana">Nano Banana (Flash)</option>
-                                <option value="nano-banana-pro">Nano Banana Pro</option>
-                            </optgroup>
-                        </select>
+                    <!-- 3. New Style Selection Area -->
+                    <div class="style-section" style="margin-bottom: 2rem;">
+                        <style>
+                            .new-style-card {
+                                background: var(--bg-card);
+                                border: 1px solid var(--border);
+                                border-radius: 8px;
+                                padding: 1rem;
+                                display: flex;
+                                flex-direction: column;
+                                align-items: center;
+                                justify-content: center;
+                                cursor: pointer;
+                                transition: all 0.2s;
+                                min-height: 110px;
+                                position: relative;
+                            }
+
+                            .new-style-card:hover {
+                                border-color: var(--primary);
+                                transform: translateY(-2px);
+                            }
+
+                            .new-style-card.selected {
+                                border-color: var(--primary);
+                                background: rgba(99, 102, 241, 0.1);
+                                box-shadow: 0 0 0 2px var(--primary);
+                            }
+
+                            .new-style-emoji {
+                                font-size: 2rem;
+                                margin-bottom: 0.5rem;
+                            }
+
+                            .new-style-name {
+                                font-size: 0.9rem;
+                                font-weight: 600;
+                                text-align: center;
+                            }
+
+                            .new-style-thumb {
+                                width: 100%;
+                                height: 80px;
+                                /* Increased height */
+                                object-fit: cover;
+                                border-radius: 4px;
+                                margin-bottom: 0.5rem;
+                                background-color: var(--bg-input);
+                                /* Placeholder bg */
+                            }
+
+                            /* Fallback for no thumbnail */
+                            .new-style-no-thumb {
+                                width: 100%;
+                                height: 80px;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                background: linear-gradient(135deg, var(--bg-input) 0%, var(--bg-card) 100%);
+                                border-radius: 4px;
+                                margin-bottom: 0.5rem;
+                                font-size: 2.5rem;
+                            }
+
+                            .delete-btn-card {
+                                position: absolute;
+                                top: 4px;
+                                right: 4px;
+                                background: rgba(0, 0, 0, 0.5);
+                                color: white;
+                                border: none;
+                                border-radius: 50%;
+                                width: 20px;
+                                height: 20px;
+                                font-size: 12px;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                            }
+
+                            .delete-btn-card:hover {
+                                background: var(--danger);
+                            }
+                        </style>
+
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1rem; border-top: 1px solid var(--border); padding-top: 1.5rem;">
+                            <div>
+                                <h3 style="margin-bottom: 0.5rem; font-size: 1.1rem;">── 스타일 선택 ──</h3>
+                                <p style="color: var(--text-muted); font-size: 0.9rem;">이미지에 적용될 렌더링 스타일을 선택하세요.</p>
+                            </div>
+                            <!-- 업로드 버튼은 그리드 마지막에 카드로 배치되거나 별도로 배치될 수 있음. 요청대로 카드 그리드와 함께 페이징 처리 위함이 아니라 항상 보이게 하려면 여기 둠 -->
+                            <button class="btn btn-sm btn-secondary" onclick="openCustomStyleUploadModal()">＋ 커스텀 스타일
+                                관리</button>
+                        </div>
+
+                        <!-- Style Grid -->
+                        <div id="new-style-grid"
+                            style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1rem;">
+                            <!-- Javascript will populate this -->
+                        </div>
+
+                        <!-- Pagination -->
+                        <div id="style-pagination"
+                            style="display: flex; justify-content: center; gap: 1rem; align-items: center; margin-bottom: 1.5rem;">
+                            <button class="btn btn-sm btn-outline" onclick="prevStylePage()">← 이전</button>
+                            <span id="style-page-indicator" style="font-size: 0.85rem; color: var(--text-muted);">1 /
+                                1</span>
+                            <button class="btn btn-sm btn-outline" onclick="nextStylePage()">다음 →</button>
+                        </div>
+
+                        <div id="selected-style-label"
+                            style="background: var(--bg-input); padding: 12px; border-radius: 8px; margin-bottom: 1rem; border: 1px solid var(--primary); color: var(--text);">
+                            선택: 🚫 없음 - 기본 스타일만 사용
+                        </div>
                     </div>
 
                     <!-- 3. Preview Area -->
-                    <div class="preview-section"
-                        style="border-top: 1px solid var(--border); padding-top: 1.5rem; margin-top: 1.5rem;">
-                        <h4
-                            style="margin-bottom: 1rem; font-size: 1.1rem; display:flex; align-items:center; gap:0.5rem;">
-                            🔍 스타일 미리보기 <span
-                                style="font-size:0.8rem; color:var(--text-muted); font-weight:normal;">(Low
-                                Quality)</span>
-                        </h4>
-                        <div style="display: flex; gap: 1.5rem; align-items: flex-start;">
-                            <div id="preview-image-container" class="preview-box" style="width: 240px; height: 240px;">
-                                <div style="text-align:center;">
-                                    <div style="font-size: 2.5rem; margin-bottom:0.5rem;">🖼️</div>
-                                    <div style="font-size: 0.9rem;">이미지 없음</div>
-                                </div>
-                            </div>
-                            <div style="flex: 1;">
-                                <p
-                                    style="font-size: 0.95rem; color: var(--text-muted); margin-top: 0; line-height: 1.6;">
-                                    현재 선택된 스타일 조합으로 샘플 이미지를 1장 생성합니다.<br>
-                                    <span style="font-size: 0.85rem; opacity: 0.8;">* 실제 생성 결과물보다 품질이 낮을 수 있습니다.</span>
-                                </p>
-                                <button class="btn btn-secondary" onclick="generatePreview()" id="btn-generate-preview"
-                                    style="margin-top: 1rem;">
-                                    샘플 미리보기 생성
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+
 
                     <!-- 4. Manual Prompt Edit -->
                     <div class="manual-edit-section" style="margin-top: 2rem;">
-                        <details
-                            style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem;">
-                            <summary style="cursor: pointer; font-weight: 600; color: var(--text); padding: 0.5rem;">✏️
-                                프롬프트 수동 편집 (고급)</summary>
-                            <div style="padding: 1rem; border-top: 1px solid var(--border); margin-top: 0.5rem;">
+                        <div
+                            style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem;">
+                            <h4 style="font-weight: 600; color: var(--text); margin-bottom: 1rem; font-size: 1rem;">✏️
+                                프롬프트 수동 편집 (고급)</h4>
+                            <div style="padding-top: 0.5rem;">
                                 <div class="form-group">
-                                    <label>인물 스타일 프롬프트</label>
-                                    <textarea id="manual-char-prompt" rows="3" placeholder="자동 생성된 프롬프트를 수정하세요..."
-                                        style="font-family: monospace; font-size: 0.9rem;"></textarea>
-                                </div>
-                                <div class="form-group">
-                                    <label>배경 스타일 프롬프트</label>
-                                    <textarea id="manual-bg-prompt" rows="3" placeholder="자동 생성된 프롬프트를 수정하세요..."
-                                        style="font-family: monospace; font-size: 0.9rem;"></textarea>
+                                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                                        ⓘ 위에서 스타일을 선택하면 프롬프트가 자동으로 채워집니다. 직접 수정할 수도 있습니다.
+                                    </p>
+                                    <label>스타일 프롬프트</label>
+                                    <textarea id="style-prompt-textarea" rows="4"
+                                        placeholder="선택한 스타일의 프롬프트가 여기에 표시됩니다."
+                                        style="font-family: monospace; font-size: 0.9rem; line-height: 1.4;"></textarea>
                                 </div>
                                 <div class="form-group">
                                     <label>추가 지시사항 (Negative Prompt 등)</label>
@@ -870,11 +970,15 @@
                                         placeholder="예: text, watermark, ugly, deformed">
                                 </div>
                                 <div style="text-align: right;">
-                                    <button class="btn btn-sm btn-outline" onclick="applyManualOverrides()">적용하여 다시
-                                        미리보기</button>
+                                    <button class="btn btn-sm btn-outline" id="btn-manual-apply"
+                                        onclick="generatePreview()">적용하여 다시 미리보기</button>
+                                </div>
+                                <div id="manual-preview-result"
+                                    style="margin-top: 1rem; text-align: center; min-height: 200px; display: none; background: var(--bg-input); border-radius: 8px; align-items: center; justify-content: center;">
+                                    <span style="color: var(--text-muted);">미리보기가 여기에 표시됩니다.</span>
                                 </div>
                             </div>
-                        </details>
+                        </div>
                     </div>
                 </div>
 
@@ -914,132 +1018,412 @@
                     </div>
                 </div>
 
-                <!-- Image Generation Settings -->
-                <div class="card mb-4">
-                    <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0">이미지 생성 설정</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <label class="form-label">AI 모델</label>
-                            <select class="form-select" id="image-model">
-                                <option value="dall-e-3" selected>DALL-E 3 (High Quality)</option>
-                                <option value="gpt-image-1-mini">GPT Image 1 Mini (Fast)</option>
-                                <option value="google-imagen-3">Google Imagen 3</option>
-                            </select>
-                        </div>
-
-                        <!-- Sub Style Selection Grid -->
-                        <div class="mb-4">
-                            <label class="form-label fw-bold">세부 스타일 선택 (선택사항)</label>
-                            <p class="text-muted small">기본 캐릭터/배경 스타일에 추가로 적용될 렌더링 스타일을 선택하세요.</p>
-
-                            <div id="sub-style-grid"
-                                style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px;">
-                                <!-- Populated by JS -->
-                            </div>
-                            <input type="hidden" id="selected-sub-style" value="">
-                            <div id="selected-sub-style-desc" class="mt-2 text-primary small fw-bold"></div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">화면 비율</label>
-                            <select class="form-select" id="aspect-ratio">
-                                <option value="4:5" selected>4:5 (인스타그램 포트레이트)</option>
-                                <option value="1:1">1:1 (스퀘어)</option>
-                                <option value="9:16">9:16 (스토리/릴스)</option>
-                                <option value="16:9">16:9 (가로형)</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
+                <!-- Image Generation Settings (Duplicate removed) -->
+                <!-- Removed per request -->
 
                 <script>
-                    // Sub-style Definitions
-                    const SUB_STYLE_INFO = {
-                        "ghibli": { "name": "지브리", "emoji": "🌿", "desc": "지브리풍 부드러운 색감" },
-                        "romance": { "name": "로맨스", "emoji": "💕", "desc": "파스텔 톤, 따뜻한 감성" },
-                        "business": { "name": "비즈니스", "emoji": "💼", "desc": "깔끔한 전문가 느낌" },
+                    // ==========================================
+                    // New Style System (Preset + Custom)
+                    // ==========================================
 
-                        "round_lineart": { "name": "동글 라인", "emoji": "✏️", "desc": "둥글둥글 귀여운 선화" },
-                        "pastel_flat": { "name": "파스텔 플랫", "emoji": "🎨", "desc": "부드러운 파스텔 평면 일러스트" },
-                        "bold_cartoon": { "name": "볼드 카툰", "emoji": "💥", "desc": "굵은 선 + 강렬한 색" },
-                        "pencil_sketch": { "name": "연필 스케치", "emoji": "📝", "desc": "손그림 느낌, 캐주얼 낙서풍" },
-                        "monoline": { "name": "모노라인", "emoji": "〰️", "desc": "일정한 선 하나로 그린 미니멀" },
-                        "watercolor_soft": { "name": "수채화", "emoji": "💧", "desc": "물감 번짐 느낌, 부드러운 감성" },
-                        "neon_pop": { "name": "네온 팝", "emoji": "🌙", "desc": "어두운 배경 + 네온 색" },
-                        "emoji_icon": { "name": "이모지", "emoji": "😊", "desc": "극단적으로 단순화, 아이콘 느낌" },
-                        "retro_90s": { "name": "90s 레트로", "emoji": "📼", "desc": "복고풍 빈티지 색감" },
-                        "cutout_collage": { "name": "컷아웃", "emoji": "✂️", "desc": "오려붙인 종이 콜라주" },
+                    const PRESET_STYLES = {
+                        "none": {
+                            "name": "없음", "emoji": "🚫",
+                            "desc": "기본 스타일만 사용",
+                            "prompt": "",
+                            "is_preset": true
+                        },
+                        "ghibli": {
+                            "name": "지브리", "emoji": "🌿",
+                            "desc": "지브리풍 부드러운 색감",
+                            "prompt": "studio ghibli inspired, soft colors, dreamy atmosphere, watercolor-like backgrounds, gentle lighting, whimsical characters",
+                            "is_preset": true
+                        },
+                        "romance": {
+                            "name": "로맨스", "emoji": "💕",
+                            "desc": "파스텔 톤, 따뜻한 감성",
+                            "prompt": "soft pastel colors, warm lighting, emotional atmosphere, delicate character expressions, romantic webtoon style, pink and peach tones",
+                            "is_preset": true
+                        },
+                        "business": {
+                            "name": "비즈니스", "emoji": "💼",
+                            "desc": "깔끔한 전문가 느낌",
+                            "prompt": "professional, corporate style, clean lines, modern office setting, neutral color palette, business casual characters",
+                            "is_preset": true
+                        },
+                        "round_lineart": {
+                            "name": "동글 라인", "emoji": "✏️",
+                            "desc": "둥글둥글 귀여운 선화, 인스타툰 대표 스타일",
+                            "prompt": "simple round line drawing style, thick black outlines, minimal detail, cute rounded shapes, white or solid pastel background, no shading, flat colors only, chibi-like proportions with big head, hand-drawn feel, doodle aesthetic",
+                            "is_preset": true
+                        },
+                        "pastel_flat": {
+                            "name": "파스텔 플랫", "emoji": "🎨",
+                            "desc": "부드러운 파스텔 평면 일러스트",
+                            "prompt": "flat illustration style, soft pastel color palette, no gradients, no shadows, clean vector-like shapes, simple facial features with dot eyes, minimal background, modern Korean illustration style, muted warm tones",
+                            "is_preset": true
+                        },
+                        "bold_cartoon": {
+                            "name": "볼드 카툰", "emoji": "💥",
+                            "desc": "굵은 선 + 강렬한 색, 눈에 띄는 피드",
+                            "prompt": "bold cartoon style, very thick black outlines 4-5px, bright saturated flat colors, exaggerated expressions, simple geometric shapes, pop art influence, no gradient, solid color fills, high contrast",
+                            "is_preset": true
+                        },
+                        "pencil_sketch": {
+                            "name": "연필 스케치", "emoji": "📝",
+                            "desc": "손그림 느낌, 캐주얼 낙서풍",
+                            "prompt": "pencil sketch style, hand-drawn rough lines, grayscale with occasional single accent color, notebook paper texture, casual doodle feel, imperfect lines, crosshatch shading, minimal detail",
+                            "is_preset": true
+                        },
+                        "monoline": {
+                            "name": "모노라인", "emoji": "〰️",
+                            "desc": "일정한 선 하나로 그린 미니멀",
+                            "prompt": "monoline illustration style, single consistent line weight, no fill colors, outline only, clean and minimal, white background, modern simple aesthetic, thin continuous lines, no shading",
+                            "is_preset": true
+                        },
+                        "watercolor_soft": {
+                            "name": "수채화", "emoji": "💧",
+                            "desc": "물감 번짐 느낌, 부드러운 감성",
+                            "prompt": "soft watercolor illustration style, light color bleeding edges, pastel tones, gentle brush strokes, slightly transparent colors, white paper background showing through, dreamy and warm, simple character design with minimal facial features",
+                            "is_preset": true
+                        },
+                        "neon_pop": {
+                            "name": "네온 팝", "emoji": "🌙",
+                            "desc": "어두운 배경 + 네온 색, 강렬한 임팩트",
+                            "prompt": "neon pop style illustration, dark navy or black background, bright neon accent colors pink cyan yellow, simple flat character design, glowing edges, bold minimal shapes, high visual contrast, modern and trendy",
+                            "is_preset": true
+                        },
+                        "emoji_icon": {
+                            "name": "이모지", "emoji": "😊",
+                            "desc": "극단적으로 단순화, 아이콘 느낌",
+                            "prompt": "emoji-like simple icon style illustration, extremely simplified characters, circle heads, dot eyes, line mouth, no nose, stick-figure inspired but cute, solid bright background, 2-3 colors maximum per scene, Google emoji aesthetic, flat design",
+                            "is_preset": true
+                        },
+                        "retro_90s": {
+                            "name": "90s 레트로", "emoji": "📼",
+                            "desc": "복고풍 빈티지 색감",
+                            "prompt": "1990s retro cartoon style, slightly grainy texture, warm vintage color palette with orange brown teal, rounded character shapes, simple dot eyes, nostalgic feel, VHS-era cartoon aesthetic, thick outlines, limited color palette 4-5 colors",
+                            "is_preset": true
+                        },
+                        "cutout_collage": {
+                            "name": "컷아웃", "emoji": "✂️",
+                            "desc": "오려붙인 종이 콜라주, 트렌디",
+                            "prompt": "paper cutout collage style illustration, torn paper edges, layered flat shapes, craft paper texture, handmade feel, simple character shapes from geometric cuts, warm earth tones with one bright accent color, scrapbook aesthetic, tactile and trendy",
+                            "is_preset": true
+                        },
+                        "char_webtoon": {
+                            "name": "기본 웹툰", "emoji": "📖",
+                            "desc": "깔끔하고 선명한 라인, 표준 웹툰 스타일",
+                            "prompt": "Korean webtoon style, digital art, manhwa style, clean heavy outlines, vibrant colors, detailed shading, expressive faces, standard rectangular panels format",
+                            "is_preset": true
+                        },
+                        "char_bw_pen": {
+                            "name": "흑백 펜화", "emoji": "✒️",
+                            "desc": "흑백 펜화 스타일, 출판 만화/누아르",
+                            "prompt": "Black and white ink drawing, pen and ink style, crosshatching, manga inking, monochrome, high contrast, detailed line work, no color, traditional comic art",
+                            "is_preset": true
+                        },
+                        "char_shonen": {
+                            "name": "소년만화/액션", "emoji": "⚔️",
+                            "desc": "역동적인 선과 강렬한 명암 대비",
+                            "prompt": "Japanese Shonen manga style, highly dynamic action pose, sharp ink lines, dramatic shading, intense expression, speed lines, high contrast, vibrant colors, detailed muscles and clothes",
+                            "is_preset": true
+                        },
+                        "char_flat_vector": {
+                            "name": "플랫 벡터", "emoji": "📐",
+                            "desc": "단순한 면과 색상 중심의 디자인",
+                            "prompt": "Flat vector art style, clean minimalistic design, no gradients, solid colors, bold geometric shapes, corporate art style, icon style, modern illustration, simple shading",
+                            "is_preset": true
+                        },
+                        "char_chibi": {
+                            "name": "SD/치비", "emoji": "👶",
+                            "desc": "귀여운 SD 캐릭터 스타일",
+                            "prompt": "Chibi style, super deformed, big head small body, cute exaggerate expressions, simple coloring, kawaii aesthetic, soft outlines",
+                            "is_preset": true
+                        },
+                        "char_retro_anime": {
+                            "name": "레트로 애니", "emoji": "📺",
+                            "desc": "90년대 셀 애니메이션 감성",
+                            "prompt": "90s anime style, cel shading, retro aesthetic, slightly grainy, vibrant but vintage colors, detailed eyes, classic anime character design",
+                            "is_preset": true
+                        },
+                        "char_pixel_art": {
+                            "name": "픽셀 아트", "emoji": "👾",
+                            "desc": "레트로 게임 도트 감성",
+                            "prompt": "Pixel art style, 8-bit or 16-bit game graphic, limitations of color palette, blocky shapes, retro game aesthetic, detailed sprite work",
+                            "is_preset": true
+                        },
+                        "bg_anime": {
+                            "name": "애니메이션 배경 (Anime)", "emoji": "🏙️",
+                            "desc": "청량하고 디테일한 하늘과 풍경",
+                            "prompt": "Anime background art, Makoto Shinkai style, high detailed clouds, vibrant blue sky, pictorial lighting, emotional atmosphere, lens flare, intricate details, vast scale",
+                            "is_preset": true
+                        },
+                        "bg_realistic": {
+                            "name": "실사풍 배경 (Realistic)", "emoji": "📷",
+                            "desc": "영화 같은 사실적인 라이팅과 질감",
+                            "prompt": "Photorealistic background, 8k resolution, cinematic lighting, unreal engine 5 render style, highly detailed textures, dramatic lighting, depth of field, photography style",
+                            "is_preset": true
+                        },
+                        "bg_simple": {
+                            "name": "단순 배경 (Simple)", "emoji": "🎨",
+                            "desc": "인물에 집중할 수 있는 단순한 배경",
+                            "prompt": "Simple minimal background, flat colors, abstract shapes, soft gradient, vector art style, clean, less detail to focus on character, corporate memphis style, illustration",
+                            "is_preset": true
+                        }
                     };
 
-                    let currentSubStyle = "";
+                    let currentSelectedStyle = "none";
+                    // sessionId matches global decl in main script
+                    let customStyles = {}; // Load from API later
+                    let stylePage = 1;
+                    const itemsPerPage = 12;
 
-                    function renderSubStyleGrid() {
-                        const grid = document.getElementById('sub-style-grid');
-                        if (!grid) return;
-                        grid.innerHTML = '';
+                    // Fixed: Missing variables for preview generation
+                    let currentStyleType = 'character';
+                    let selectedStyles = {
+                        character: null,
+                        background: null
+                    };
+                    let stylesData = { character: [], background: [] };
+                    let manualOverrides = { charPrompt: '', bgPrompt: '', additional: '' };
 
-                        // 'None' option
-                        const noneDiv = document.createElement('div');
-                        noneDiv.className = 'sub-style-card selected'; // Default selected
-                        noneDiv.onclick = () => selectSubStyle('', noneDiv);
-                        noneDiv.innerHTML = `
-                        <div style="font-size: 1.5rem;">🚫</div>
-                        <div style="font-size: 0.9rem; font-weight: bold;">없음</div>
-                    `;
-                        grid.appendChild(noneDiv);
+                    async function loadCustomStyles() {
+                        try {
+                            const [charRes, bgRes] = await Promise.all([
+                                fetch('/api/styles/character'),
+                                fetch('/api/styles/background')
+                            ]);
 
-                        for (const [key, info] of Object.entries(SUB_STYLE_INFO)) {
-                            const div = document.createElement('div');
-                            div.className = 'sub-style-card';
-                            div.onclick = () => selectSubStyle(key, div);
+                            const charStyles = await charRes.json();
+                            const bgStyles = await bgRes.json();
 
-                            // Preview Image Background
-                            const img = document.createElement('img');
-                            img.src = `/app_data/sub_styles/${key}.png`;
-                            img.className = 'sub-style-preview-bg';
-                            img.onerror = () => img.style.display = 'none'; // Hide if missing
-                            div.appendChild(img);
+                            customStyles = {}; // Reset
 
-                            const emojiDiv = document.createElement('div');
-                            emojiDiv.style.fontSize = '1.5rem';
-                            emojiDiv.innerText = info.emoji;
-                            div.appendChild(emojiDiv);
+                            // Process Character Styles
+                            charStyles.forEach(s => {
+                                customStyles[s.id] = {
+                                    id: s.id,
+                                    name: s.name,
+                                    emoji: "🧑",
+                                    desc: s.description || "사용자 정의 인물 스타일",
+                                    prompt: s.prompt_block,
+                                    thumbnail: s.preview_image || (s.reference_images && s.reference_images.length > 0 ? s.reference_images[0] : null),
+                                    is_preset: s.is_default || false,
+                                    type: 'character'
+                                };
+                            });
 
-                            const nameDiv = document.createElement('div');
-                            nameDiv.style.fontSize = '0.85rem';
-                            nameDiv.style.fontWeight = 'bold';
-                            nameDiv.innerText = info.name;
-                            div.appendChild(nameDiv);
+                            // Process Background Styles
+                            bgStyles.forEach(s => {
+                                customStyles[s.id] = {
+                                    id: s.id,
+                                    name: s.name,
+                                    emoji: "🏙️",
+                                    desc: s.description || "사용자 정의 배경 스타일",
+                                    prompt: s.prompt_block,
+                                    thumbnail: s.preview_image || (s.reference_images && s.reference_images.length > 0 ? s.reference_images[0] : null),
+                                    is_preset: s.is_default || false,
+                                    type: 'background'
+                                };
+                            });
 
-                            grid.appendChild(div);
+                            renderNewStyleGrid();
+
+                        } catch (e) {
+                            console.error("Failed to load custom styles:", e);
                         }
                     }
 
-                    function selectSubStyle(key, element) {
-                        currentSubStyle = key;
-                        const input = document.getElementById('selected-sub-style');
-                        if (input) input.value = key;
+                    function getAllStyles() {
+                        // 1. Get all unique IDs
+                        const presetIds = Object.keys(PRESET_STYLES);
+                        const customIds = Object.keys(customStyles);
+                        const allIds = Array.from(new Set([...presetIds, ...customIds]));
 
-                        // Update UI
-                        document.querySelectorAll('.sub-style-card').forEach(el => el.classList.remove('selected'));
-                        element.classList.add('selected');
+                        // 2. Map IDs to Style Objects (Prioritize API data)
+                        let combined = allIds.map(id => {
+                            // If API has data, use it (it contains valid preview paths from app_data)
+                            if (customStyles[id]) {
+                                const style = { ...customStyles[id] };
 
-                        // Update Description
-                        const descEl = document.getElementById('selected-sub-style-desc');
-                        if (descEl) {
-                            if (key && SUB_STYLE_INFO[key]) {
-                                descEl.innerText = `선택: ${SUB_STYLE_INFO[key].emoji} ${SUB_STYLE_INFO[key].name} - ${SUB_STYLE_INFO[key].desc}`;
+                                // Fallback: If it matches a PRESET_STYLE key, ensure is_preset is true
+                                // This covers cases where API might miss the flag, or to respect frontend logic
+                                if (PRESET_STYLES[id]) {
+                                    style.is_preset = true;
+                                }
+                                return style;
                             } else {
-                                descEl.innerText = "";
+                                // Only in PRESET (Virtual presets)
+                                const preset = { id, ...PRESET_STYLES[id] };
+                                if (id !== 'none') {
+                                    preset.thumbnail = `/static/img/presets/${id}.png`;
+                                }
+                                preset.is_preset = true;
+                                preset.type = currentStyleType; // Fallback type if unknown
+                                return preset;
+                            }
+                        });
+
+                        // 3. Move 'none' to top
+                        combined = combined.filter(s => s.id !== 'none');
+                        if (PRESET_STYLES['none']) {
+                            combined.unshift({ id: 'none', ...PRESET_STYLES['none'], is_preset: true, type: currentStyleType });
+                        }
+
+                        return combined;
+                    }
+
+                    function renderNewStyleGrid() {
+                        const grid = document.getElementById('new-style-grid');
+                        if (!grid) return;
+                        grid.innerHTML = '';
+
+                        const allStyles = getAllStyles();
+                        const totalPages = Math.ceil(allStyles.length / itemsPerPage) || 1;
+                        if (stylePage > totalPages) stylePage = totalPages;
+
+                        const start = (stylePage - 1) * itemsPerPage;
+                        const end = start + itemsPerPage;
+                        const pageItems = allStyles.slice(start, end);
+
+                        document.getElementById('style-page-indicator').innerText = `${stylePage} / ${totalPages}`;
+
+                        pageItems.forEach(style => {
+                            const card = document.createElement('div');
+                            card.className = `new-style-card ${currentSelectedStyle === style.id ? 'selected' : ''}`;
+                            card.onclick = () => onStyleCardClick(style.id);
+
+                            let contentHtml = '';
+                            if (style.thumbnail) {
+                                contentHtml = `<img src="${style.thumbnail}" class="new-style-thumb" onerror="this.replaceWith(document.createElement('div')); this.className='new-style-no-thumb'; this.innerText='${style.emoji || '🖼️'}';">`;
+                            } else {
+                                contentHtml = `<div class="new-style-no-thumb">${style.emoji || '🖼️'}</div>`;
+                            }
+
+                            // If it has thumbnail, emoji is redundant or can be small badge. 
+                            // But if we use new-style-no-thumb, the emoji is inside it.
+                            // So we only show separate emoji if we have a real thumbnail.
+                            if (style.thumbnail) {
+                                contentHtml += `<div style="font-size:0.8rem; margin-bottom:0.2rem;">${style.emoji || ''}</div>`;
+                            }
+
+                            // Badge Logic
+                            let badge = '';
+                            if (style.is_preset) {
+                                if (style.id !== 'none') {
+                                    badge = '<span class="style-badge preset">🔒 기본</span>';
+                                } else {
+                                    // 'none' style
+                                    badge = '<span class="style-badge preset">🚫 없음</span>';
+                                }
+                            } else {
+                                badge = '<span class="style-badge custom">👤 커스텀</span>';
+                            }
+
+                            contentHtml += `<div class="new-style-name">${style.name}</div>`;
+                            contentHtml += `<div style="text-align:center;">${badge}</div>`;
+
+
+                            // Delete button for custom styles
+                            if (!style.is_preset) {
+                                contentHtml += `<button class="delete-btn-card" onclick="event.stopPropagation(); deleteCustomStyle('${style.id}', '${style.type}')">✕</button>`;
+                            }
+
+                            card.innerHTML = contentHtml;
+                            grid.appendChild(card);
+                        });
+                    }
+
+                    function onStyleCardClick(styleId) {
+                        currentSelectedStyle = styleId;
+                        renderNewStyleGrid(); // Re-render to update selected state
+
+                        let style = PRESET_STYLES[styleId];
+                        if (!style && customStyles[styleId]) style = customStyles[styleId];
+                        if (!style) return;
+
+                        // Update Prompt Textarea
+                        const promptArea = document.getElementById('style-prompt-textarea');
+                        if (promptArea) {
+                            promptArea.value = style.prompt;
+                        }
+
+                        // Update Label
+                        const label = document.getElementById('selected-style-label');
+                        if (label) {
+                            const desc = style.desc ? ` - ${style.desc}` : '';
+                            label.innerText = `선택: ${style.emoji || '🖼️'} ${style.name}${desc}`;
+                        }
+
+                        // Fixed: Update selectedStyles for Preview
+                        // Reset first to match single-selection UI
+                        selectedStyles = { character: null, background: null };
+
+                        if (style.type === 'background') {
+                            selectedStyles.background = style;
+                            currentStyleType = 'background';
+                        } else {
+                            // Default to character for presets without explicit type
+                            selectedStyles.character = style;
+                            currentStyleType = 'character';
+                        }
+                    }
+
+                    function nextStylePage() {
+                        const total = getAllStyles().length;
+                        const totalPages = Math.ceil(total / itemsPerPage);
+                        if (stylePage < totalPages) {
+                            stylePage++;
+                            renderNewStyleGrid();
+                        }
+                    }
+
+                    function prevStylePage() {
+                        if (stylePage > 1) {
+                            stylePage--;
+                            renderNewStyleGrid();
+                        }
+                    }
+
+                    function openCustomStyleUploadModal() {
+                        // Open the new Style Manager
+                        // Default to character style, or ask user? 
+                        // For now, let's open character style and they can switch tab if implemented, 
+                        // or just default to character.
+                        openStyleManager('character');
+                    }
+
+                    async function deleteCustomStyle(id, type) {
+                        if (confirm('정말 이 스타일을 삭제하시겠습니까?')) {
+                            try {
+                                const res = await fetch(`/api/styles/${type}/${id}`, { method: 'DELETE' });
+                                const data = await res.json();
+                                if (data.success) {
+                                    alert('삭제되었습니다.');
+                                    loadCustomStyles(); // Reload
+                                } else {
+                                    alert('삭제 실패: ' + data.detail);
+                                }
+                            } catch (e) {
+                                alert('삭제 오류: ' + e);
                             }
                         }
                     }
 
                     // Initialize Grid
                     document.addEventListener('DOMContentLoaded', () => {
-                        renderSubStyleGrid();
+                        // Restore session ID if exists
+                        const savedSession = localStorage.getItem('lastSessionId');
+                        if (savedSession) {
+                            sessionId = savedSession;
+                            console.log("Restored session ID:", sessionId);
+                        }
+
+                        renderNewStyleGrid();
+                        loadCustomStyles(); // Load custom styles from API
+                        // Default select 'none'
+                        onStyleCardClick('none');
                     });
                 </script>
                 <style>
@@ -1086,6 +1470,52 @@
                     .sub-style-card div {
                         z-index: 1;
                         text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+                    }
+
+                    .style-badge {
+                        display: inline-block;
+                        font-size: 0.7rem;
+                        padding: 2px 6px;
+                        border-radius: 4px;
+                        margin-bottom: 4px;
+                        font-weight: 600;
+                    }
+
+                    .style-badge.preset {
+                        background: rgba(0, 0, 0, 0.6);
+                        color: #eee;
+                        border: 1px solid #555;
+                    }
+
+                    .style-badge.custom {
+                        background: var(--primary);
+                        color: #fff;
+                        border: 1px solid rgba(255, 255, 255, 0.2);
+                    }
+
+                    .delete-btn-card {
+                        position: absolute;
+                        top: 5px;
+                        right: 5px;
+                        background: rgba(0, 0, 0, 0.6);
+                        color: #fff;
+                        border: none;
+                        border-radius: 50%;
+                        width: 20px;
+                        height: 20px;
+                        font-size: 12px;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        opacity: 0.7;
+                        transition: opacity 0.2s;
+                        z-index: 10;
+                    }
+
+                    .delete-btn-card:hover {
+                        opacity: 1;
+                        background: rgba(220, 38, 38, 0.8);
                     }
                 </style>
 
@@ -2012,12 +2442,15 @@
             const charStyleId = selectedStyles.character ? selectedStyles.character.id : null;
             const bgStyleId = selectedStyles.background ? selectedStyles.background.id : null;
             const model = document.getElementById('image-model').value;
-            const subStyle = document.getElementById('selected-sub-style').value; // Add sub_style
+            // Style System 2.0 Check
+            const stylePromptEl = document.getElementById('style-prompt-textarea');
+            const stylePrompt = stylePromptEl ? stylePromptEl.value : '';
 
             const overrides = {
-                character_style_prompt: document.getElementById('manual-char-prompt').value,
-                background_style_prompt: document.getElementById('manual-bg-prompt').value,
-                additional_instructions: document.getElementById('manual-additional').value
+                character_style_prompt: "",
+                background_style_prompt: "",
+                style_prompt: stylePrompt,
+                additional_instructions: ""
             };
 
             const ratio = document.getElementById('aspect-ratio').value;
@@ -2028,9 +2461,9 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         session_id: sessionId,
-                        character_style_id: charStyleId,
-                        background_style_id: bgStyleId,
-                        sub_style: subStyle, // Pass sub_style
+                        character_style_id: selectedStyles.character ? selectedStyles.character.id : null,
+                        background_style_id: selectedStyles.background ? selectedStyles.background.id : null,
+                        sub_style: "", // Deprecated in V2
                         manual_overrides: overrides,
                         model: model,
                         aspect_ratio: ratio
@@ -2462,10 +2895,17 @@
         }
 
         // --- Style System 2.0 Logic ---
-        let currentStyleType = 'character';
-        let stylesData = { character: [], background: [] };
-        let selectedStyles = { character: null, background: null };
-        let manualOverrides = { charPrompt: '', bgPrompt: '', additional: '' };
+
+        // Variables moved to top of script
+
+        // Variables moved to top of script
+
+        function openCustomStyleUploadModal() {
+            // Default to 'character', or we could ask the user? 
+            // Since the user is likely looking for the style manager, checking character tab first is safe.
+            // Or use currentStyleType if set.
+            openStyleManager(currentStyleType || 'character');
+        }
 
         function openStyleManager(type) {
             currentStyleType = type;
@@ -2481,6 +2921,7 @@
 
         function closeStyleManager() {
             document.getElementById('style-manager-modal').style.display = 'none';
+            loadCustomStyles(); // Refresh main grid
         }
 
         async function loadStyles(type) {
@@ -2490,7 +2931,10 @@
             try {
                 const res = await fetch(`/api/styles/${type}`);
                 stylesData[type] = await res.json();
-                renderStyleList(stylesData[type]);
+                console.log('Loaded styles:', stylesData[type]); // Debugging
+                // Filter out default styles for the manager list
+                const customOnly = stylesData[type].filter(s => s.is_default !== true);
+                renderStyleList(customOnly);
             } catch (e) {
                 listEl.innerHTML = `<div style="color:red; padding:1rem;">Error: ${e.message}</div>`;
             }
@@ -2504,17 +2948,34 @@
             }
 
             listEl.innerHTML = styles.map(s => {
-                const badge = s.is_default
+                let badge = s.is_default
                     ? '<span style="font-size:0.7rem; background:#444; color:#fff; padding:2px 6px; border-radius:4px; margin-left:6px;">🔒기본</span>'
                     : '<span style="font-size:0.7rem; background:var(--primary); color:#fff; padding:2px 6px; border-radius:4px; margin-left:6px;">👤커스텀</span>';
 
+                // For preset 'none', maybe no badge or special
+                if (s.id === 'none') badge = '<span class="style-badge preset">🚫 없음</span>';
+
+                // Assuming 'previewHtml' is defined elsewhere or not needed here,
+                // and 'style' refers to 's' in this map function.
+                // The original code already had a badge and similar structure.
+                // I'm integrating the new badge logic and content structure.
+
+                // If there's a preview_image or reference_images, create a preview.
+                let previewHtml = '';
+                if (s.preview_image) {
+                    previewHtml = `<img src="${s.preview_image}" style="width:100%; height:100px; object-fit:cover; border-radius:4px; margin-bottom:0.5rem;">`;
+                } else if (s.reference_images && s.reference_images.length > 0) {
+                    previewHtml = `<img src="${s.reference_images[0]}" style="width:100%; height:100px; object-fit:cover; border-radius:4px; margin-bottom:0.5rem;">`;
+                }
+
+
                 return `
                 <div class="style-item-dark" onclick="viewStyleDetail('${s.id}')" style="padding: 1rem; cursor: pointer;">
-                    <div style="font-weight: bold; margin-bottom: 0.25rem;">
-                        ${s.name} ${badge}
-                    </div>
-                    <div style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
-                        ${s.description || s.prompt_block}
+                    ${previewHtml}
+                    <div style="font-weight: bold; font-size: 0.9rem; margin-bottom: 0.2rem;">${s.name}</div>
+                    ${badge}
+                    <div style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-top: 4px;">
+                        ${s.description || s.prompt_block || ''}
                     </div>
                 </div>
                 `;
@@ -2591,6 +3052,9 @@
             document.getElementById('style-form-image').value = '';
             document.getElementById('style-form-locked-attrs').value = '[]';
             document.getElementById('style-form-visual-attrs').value = '{}';
+
+            const helpText = document.getElementById('style-form-image-help');
+            if (helpText) helpText.innerText = '';
         }
 
         function editStyle(id) {
@@ -2607,7 +3071,13 @@
             document.getElementById('style-form-prompt').value = style.prompt_block;
             document.getElementById('style-form-locked-attrs').value = JSON.stringify(style.locked_attributes || []);
             document.getElementById('style-form-visual-attrs').value = JSON.stringify(style.visual_attributes || {});
-            // 이미지는 새로 업로드하지 않으면 유지됨
+
+            // Show existing image count
+            const imgCount = style.reference_images ? style.reference_images.length : 0;
+            const helpText = document.getElementById('style-form-image-help');
+            if (helpText) {
+                helpText.innerText = `현재 ${imgCount}장의 이미지가 저장되어 있습니다. 추가하려면 파일을 선택하세요.`;
+            }
         }
 
         async function deleteStyle(type, id) {
@@ -2692,7 +3162,7 @@
             const prompt = document.getElementById('style-form-prompt').value;
             const locked = document.getElementById('style-form-locked-attrs').value;
             const visual = document.getElementById('style-form-visual-attrs').value;
-            const imageFile = document.getElementById('style-form-image').files[0];
+            const imageInput = document.getElementById('style-form-image');
 
             if (!name || !prompt) {
                 alert('이름과 프롬프트는 필수입니다.');
@@ -2706,8 +3176,11 @@
             formData.append('prompt_block', prompt);
             formData.append('locked_attributes', locked);
             formData.append('visual_attributes', visual);
-            if (imageFile) {
-                formData.append('reference_images', imageFile);
+
+            if (imageInput.files.length > 0) {
+                for (let i = 0; i < imageInput.files.length; i++) {
+                    formData.append('reference_images', imageInput.files[i]);
+                }
             }
 
             try {
@@ -2732,26 +3205,106 @@
             }
         }
 
-
-
         // --- Preview & Generation ---
 
         async function generatePreview() {
-            const btn = document.getElementById('btn-generate-preview');
-            const previewContainer = document.getElementById('preview-image-container');
+            const btnManual = document.getElementById('btn-manual-apply');
+            const manualResultContainer = document.getElementById('manual-preview-result');
 
-            btn.innerText = 'Creating Preview...';
-            btn.disabled = true;
-            previewContainer.innerHTML = '<div style="font-size:2rem;">⏳</div>';
+            // Progress Timer Logic
+            let seconds = 0;
+            if (btnManual) { btnManual.disabled = true; btnManual.innerText = '생성 중...'; }
 
-            // Build overrides
-            const overrides = {
-                character_style_prompt: document.getElementById('manual-char-prompt').value,
-                background_style_prompt: document.getElementById('manual-bg-prompt').value,
-                additional_instructions: document.getElementById('manual-additional').value
+            if (manualResultContainer) {
+                manualResultContainer.style.display = 'flex';
+                manualResultContainer.style.minHeight = '300px'; // Ensure enough space
+            }
+
+            // Initial loading state in preview container
+            const updateLoadingState = (sec) => {
+                const html = `
+                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); padding: 1rem;">
+                        <div style="font-size: 2.5rem; margin-bottom: 1rem; animation: pulse 1.5s infinite;">🎨</div>
+                        <div style="font-weight: 600; margin-bottom: 0.5rem;">AI가 그림을 그리고 있어요</div>
+                        <div style="font-family: monospace; font-size: 1.4rem; color: var(--primary);">${sec.toFixed(1)}s</div>
+                    </div>
+                `;
+                if (manualResultContainer) manualResultContainer.innerHTML = html;
             };
 
+            updateLoadingState(0);
+
+            const timerInterval = setInterval(() => {
+                seconds += 0.1;
+                updateLoadingState(seconds);
+            }, 100);
+
+            // 60초 넘어가면 안내 문구
+            let longWaitShown = false;
+            const longWaitInterval = setInterval(() => {
+                if (seconds >= 60 && !longWaitShown && manualResultContainer) {
+                    longWaitShown = true;
+                    const wrap = manualResultContainer.querySelector('div');
+                    if (wrap) {
+                        const hint = document.createElement('div');
+                        hint.style.cssText = 'margin-top:0.75rem; font-size:0.85rem; color:var(--warning);';
+                        hint.textContent = '요청이 오래 걸리고 있습니다. API/네트워크 상태를 확인해보세요. 120초 초과 시 자동으로 중단됩니다.';
+                        wrap.appendChild(hint);
+                    }
+                }
+            }, 1000);
+
+            // Cleanup helper
+            const stopTimer = () => {
+                clearInterval(timerInterval);
+                clearInterval(longWaitInterval);
+                if (btnManual) { btnManual.disabled = false; btnManual.innerText = '적용하여 다시 미리보기'; }
+            };
+
+            // Build overrides (Style System 2.0)
+            const stylePromptEl = document.getElementById('style-prompt-textarea');
+            const stylePrompt = stylePromptEl ? stylePromptEl.value : '';
+
+            const additionalEl = document.getElementById('manual-additional');
+            const additionalPrompt = additionalEl ? additionalEl.value : '';
+
+            const overrides = {
+                character_style_prompt: "",
+                background_style_prompt: "",
+                style_prompt: stylePrompt,
+                additional_instructions: additionalPrompt
+            };
+
+            // Auto-create session if missing (for Preview-only usage)
+            if (!sessionId) {
+                try {
+                    console.log("No session found, creating temporary session for preview...");
+                    const startRes = await fetch('/api/workflow/start', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ mode: 'manual', keyword: 'Preview Session' })
+                    });
+                    const startData = await startRes.json();
+                    if (startData.session_id) {
+                        sessionId = startData.session_id;
+                        localStorage.setItem('lastSessionId', sessionId); // Save for persistency
+                        console.log("Temporary session created:", sessionId);
+                    } else {
+                        throw new Error("Failed to create temporary session");
+                    }
+                } catch (e) {
+                    alert('세션 생성 실패: 자동 미리보기를 위해 세션을 시작할 수 없습니다. ' + e.message);
+                    btn.innerText = '샘플 미리보기 생성';
+                    btn.disabled = false;
+                    previewContainer.innerHTML = '<div style="color:red; padding:1rem;">Session Error</div>';
+                    return;
+                }
+            }
+
             try {
+                // 130초 타임아웃 (백엔드 120초보다 약간 길게)
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 130000);
                 const res = await fetch('/api/workflow/generate-preview', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -2759,38 +3312,76 @@
                         session_id: sessionId,
                         character_style_id: selectedStyles.character ? selectedStyles.character.id : null,
                         background_style_id: selectedStyles.background ? selectedStyles.background.id : null,
-                        sub_style: document.getElementById('selected-sub-style').value, // Add sub_style
+                        sub_style: "",
                         manual_overrides: overrides,
                         model: document.getElementById('image-model').value
-                    })
+                    }),
+                    signal: controller.signal
                 });
+                clearTimeout(timeoutId);
+
+                if (res.status === 404) {
+                    console.warn("Session expired or not found (404). Creating new session and retrying...");
+                    sessionId = null;
+                    localStorage.removeItem('lastSessionId');
+                    // Retry once
+                    if (!window.isRetryingPreview) {
+                        window.isRetryingPreview = true;
+                        await generatePreview();
+                        window.isRetryingPreview = false;
+                        return;
+                    } else {
+                        throw new Error("Session creation failed even after retry.");
+                    }
+                }
 
                 if (res.status === 200) {
                     const data = await res.json();
+                    stopTimer();
+
                     if (data.success) {
                         let imgSrc = '';
                         if (data.image_b64) {
-                            imgSrc = `data:image/png;base64,${data.image_b64}`;
+                            // MIME 자동 감지 (WebP/JPEG/PNG)
+                            let mime = 'image/png';
+                            if (data.image_b64.startsWith('UklGR')) mime = 'image/webp';
+                            else if (data.image_b64.startsWith('/9j/')) mime = 'image/jpeg';
+                            imgSrc = `data:${mime};base64,${data.image_b64}`;
                         } else if (data.image_url) {
                             imgSrc = data.image_url;
                         }
-                        previewContainer.innerHTML = `<img src="${imgSrc}" style="width:100%; height:100%; object-fit:contain; border-radius:8px;">`;
+                        const imgHtml = `<img src="${imgSrc}" style="width:100%; height:100%; object-fit:contain; border-radius:8px;">`;
+                        if (manualResultContainer) manualResultContainer.innerHTML = imgHtml;
                         console.log("Preview generated with prompt:", data.prompt_used);
                     } else {
+                        const errHtml = '<div style="color:red; padding:1rem;">에러가 발생했습니다.</div>';
                         alert('Preview generation failed: ' + (data.error || 'Unknown error'));
-                        previewContainer.innerHTML = '<div style="color:red; padding:1rem;">Error</div>';
+                        if (manualResultContainer) manualResultContainer.innerHTML = errHtml;
                     }
+                } else if (res.status === 504) {
+                    stopTimer();
+                    const err = await res.json().catch(() => ({}));
+                    const errMsg = err.detail || '요청 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.';
+                    alert('미리보기 시간 초과: ' + errMsg);
+                    if (manualResultContainer) manualResultContainer.innerHTML = `<div style="color:var(--warning); padding:1rem; font-size:0.85rem;">${errMsg}</div>`;
                 } else {
-                    const err = await res.json();
-                    alert('Preview error: ' + err.detail);
-                    previewContainer.innerHTML = '<div style="color:red; padding:1rem;">Error</div>';
+                    stopTimer();
+                    const err = await res.json().catch(() => ({}));
+                    const errMsg = (typeof err.detail === 'object' ? JSON.stringify(err.detail) : (err.detail || 'Unknown error'));
+                    alert('Preview error: ' + errMsg);
+                    if (manualResultContainer) manualResultContainer.innerHTML = `<div style="color:red; padding:1rem; font-size:0.8rem;">${errMsg}</div>`;
                 }
             } catch (e) {
-                alert('Preview failed: ' + e.message);
-                previewContainer.innerHTML = '<span style="color:red">Error</span>';
-            } finally {
-                btn.innerText = '샘플 미리보기 생성';
-                btn.disabled = false;
+                stopTimer();
+                console.error(e);
+                let msg = e.message || String(e);
+                if (e.name === 'AbortError' || msg.includes('abort')) {
+                    msg = "요청이 130초 안에 완료되지 않아 중단되었습니다. API가 느리거나 불안정할 수 있습니다. 잠시 후 다시 시도해주세요.";
+                } else if (msg.includes('Failed to fetch')) {
+                    msg = "서버와 연결할 수 없습니다. 서버가 켜져 있는지 확인하거나 잠시 후 다시 시도해주세요.";
+                }
+                alert('미리보기 실패: ' + msg);
+                if (manualResultContainer) manualResultContainer.innerHTML = '<div style="color:red; padding:1rem;">' + msg + '</div>';
             }
         }
 
@@ -2866,8 +3457,10 @@
                             <textarea id="style-form-prompt" rows="5" placeholder="스타일을 묘사하는 프롬프트..."></textarea>
                         </div>
                         <div class="form-group">
-                            <label>대표 이미지 등록 (선택)</label>
-                            <input type="file" id="style-form-image" accept="image/*">
+                            <label>대표 이미지 등록 (선택, 다중 선택 가능)</label>
+                            <input type="file" id="style-form-image" accept="image/*" multiple>
+                            <div id="style-form-image-help"
+                                style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;"></div>
                         </div>
 
                         <!-- Hidden Fields for JSON data -->

@@ -3,6 +3,7 @@
 세무 웹툰 생성 전체 흐름 관리
 """
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional, List
 import uuid
@@ -18,9 +19,9 @@ from app.services.openai_service import get_openai_service
 from app.services.image_generator import get_generator
 from app.services.prompt_builder import build_styled_prompt
 from app.api.styles import get_character_style, get_background_style
+import asyncio
 import os
 import json
-import glob
 import glob
 from datetime import datetime
 import logging
@@ -83,6 +84,7 @@ class GeneratePreviewRequest(BaseModel):
     session_id: str
     character_style_id: Optional[str] = None
     background_style_id: Optional[str] = None
+    sub_style: Optional[str] = None # Added for compatibility
     manual_overrides: Optional[dict] = None # ManualPromptOverrides
     model: str = "gpt-image-1-mini"
 
@@ -259,52 +261,79 @@ async def approve_all_scenes(session_id: str):
 async def generate_preview(request: GeneratePreviewRequest):
     """스타일 미리보기 생성 (1장)"""
     session = sessions.get(request.session_id)
-    if not session or not session.story:
-        raise HTTPException(status_code=404, detail="Session or story not found")
+    if not session:
+        # If session is invalid, we might want to return 404, 
+        # but since we fixed auto-creation, this should be rare.
+        # But if session exists and story is None, we should proceed.
+        raise HTTPException(status_code=404, detail="Session not found")
 
-    # Load styles
-    char_style = get_character_style(request.character_style_id) if request.character_style_id else None
-    bg_style = get_background_style(request.background_style_id) if request.background_style_id else None
-    
-    # Manual overrides
-    overrides = None
-    if request.manual_overrides:
-        overrides = ManualPromptOverrides(**request.manual_overrides)
-
-    # Use first scene or placeholder
-    target_scene = session.story.scenes[0] if session.story.scenes else Scene(scene_number=1, scene_description="A placeholder scene", dialogues=[])
-    
-    # Build Prompt
-    prompt = build_styled_prompt(
-        scene=target_scene,
-        characters=session.story.characters,
-        character_style=char_style,
-        background_style=bg_style,
-        manual_overrides=overrides,
-        sub_style_name=request.sub_style
-    )
-    
-    # Select generator
-    api_key = os.getenv("OPENAI_API_KEY") if "gpt" in request.model or "dall-e" in request.model else os.getenv("GOOGLE_API_KEY")
-    generator = get_generator(request.model, api_key)
-    
     try:
+        # Load styles
+        char_style = get_character_style(request.character_style_id) if request.character_style_id else None
+        bg_style = get_background_style(request.background_style_id) if request.background_style_id else None
+        
+        # Manual overrides
+        overrides = None
+        if request.manual_overrides:
+            overrides = ManualPromptOverrides(**request.manual_overrides)
+
+        # Use first scene or placeholder
+        # Modified: Handle case where session.story is None (e.g. preview before story generation)
+        if session.story and session.story.scenes:
+            target_scene = session.story.scenes[0]
+            characters = session.story.characters
+        else:
+            target_scene = Scene(
+                scene_number=1, 
+                scene_description="A generic scene for style preview. A character standing in a simple background.", 
+                dialogues=[],
+                image_prompt="A character standing in a simple background."
+            )
+            characters = []
+        
+        # Build Prompt
+        prompt = build_styled_prompt(
+            scene=target_scene,
+            characters=characters,
+            character_style=char_style,
+            background_style=bg_style,
+            manual_overrides=overrides,
+            sub_style_name=request.sub_style
+        )
+        
+        # Select generator — .env 의 키 이름에 맞춤
+        if "gpt" in request.model or "dall-e" in request.model:
+            api_key = os.getenv("OPENAI_API_KEY")
+        else:
+            api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        generator = get_generator(request.model, api_key)
+
         # Generate single image
-        logger.info(f"Generating preview with model {request.model}")
-        
-        image_data = await generator.generate(prompt, size="1024x1024", quality="standard") # Standard/Low for preview
-        
-        # Save to temp
+        print(f"[PREVIEW] model={request.model}, prompt_len={len(prompt)}자, api_key={'SET' if api_key else 'MISSING'}")
+        logger.info(f"미리보기 생성 시작 (model={request.model}, prompt_len={len(prompt)}자)")
+        image_data = await asyncio.wait_for(
+            generator.generate(prompt, size="1024x1024", quality="standard"),
+            timeout=95.0  # IMAGE_GENERATION_TIMEOUT(90) + 여유
+        )
+
         import base64
         if isinstance(image_data, bytes):
             b64_img = base64.b64encode(image_data).decode('utf-8')
             return {"success": True, "image_b64": b64_img, "prompt_used": prompt}
         else:
-             return {"success": True, "image_url": image_data, "prompt_used": prompt}
-            
+            return {"success": True, "image_url": image_data, "prompt_used": prompt}
+
+    except asyncio.TimeoutError:
+        logger.error("Preview generation timed out (95s)")
+        return JSONResponse(
+            status_code=504,
+            content={
+                "detail": "이미지 생성이 시간 초과되었습니다(90초). API가 지연 중이거나 네트워크 문제일 수 있습니다. 잠시 후 다시 시도해주세요."
+            }
+        )
     except Exception as e:
         logger.error(f"Preview generation failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse(status_code=500, content={"detail": f"Preview generation failed: {str(e)}"})
 
 
 @router.post("/generate-images")
@@ -330,8 +359,11 @@ async def generate_images(request: GenerateImagesRequest):
     overrides = session.settings.image.manual_overrides
     sub_style = request.sub_style
 
-    # Select generator
-    api_key = os.getenv("OPENAI_API_KEY") if "gpt" in request.model or "dall-e" in request.model else os.getenv("GOOGLE_API_KEY")
+    # Select generator — .env 키 이름에 맞춤
+    if "gpt" in request.model or "dall-e" in request.model:
+        api_key = os.getenv("OPENAI_API_KEY")
+    else:
+        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     generator = get_generator(request.model, api_key)
     
     generated_images = []

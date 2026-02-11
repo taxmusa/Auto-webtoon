@@ -1,7 +1,14 @@
 from abc import ABC, abstractmethod
+import asyncio
 import os
+import time
 from typing import Optional, List, Union
 import logging
+
+import httpx  # requirements.txt 에 이미 포함
+
+# 이미지 생성 API 최대 대기 시간 (초)
+IMAGE_GENERATION_TIMEOUT = 90  # 90초로 단축 (URL 방식은 더 빠름)
 
 try:
     from openai import OpenAI
@@ -16,23 +23,20 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+
 class ImageGeneratorBase(ABC):
     """모든 이미지 생성 모델의 공통 인터페이스"""
-    
+
     @abstractmethod
     async def generate(
-        self, 
-        prompt: str, 
+        self,
+        prompt: str,
         reference_images: Optional[List[bytes]] = None,
         size: str = "1024x1536",
         quality: str = "medium"
     ) -> Union[bytes, str]:
-        """
-        이미지를 생성하고 결과 이미지(bytes) 또는 URL(str)을 반환합니다.
-        Base64인 경우 bytes로 디코딩하여 반환하는 것을 권장합니다.
-        """
         pass
-    
+
     @abstractmethod
     async def edit_with_reference(
         self,
@@ -43,80 +47,125 @@ class ImageGeneratorBase(ABC):
         pass
 
 
+# ────────────────────────────────────────────
+# OpenAI (DALL-E 2/3, GPT Image 1 계열)
+# ────────────────────────────────────────────
 class OpenAIGenerator(ImageGeneratorBase):
-    """GPT Image 1 Mini / 1 / 1.5 (via OpenAI API)"""
-    
-    def __init__(self, api_key: str, model: str = "dall-e-3"): # Default to dall-e-3 for now as GPT Image models are hypothetical/renamed DALL-E
+    """GPT Image 1 Mini / 1 / 1.5 / DALL-E 3 / DALL-E 2"""
+
+    # 실제 API 에 보낼 모델 이름. 존재하지 않는 모델이면 OpenAI 가 에러를 내므로
+    # 여기서 매핑하지 않고 그대로 전달한다. (2026-02 기준 gpt-image-1 등 신규 모델 지원)
+    def __init__(self, api_key: str, model: str = "gpt-image-1-mini"):
         if not OpenAI:
             raise ImportError("OpenAI library is not installed")
+        if not api_key:
+            raise ValueError("OpenAI API 키가 설정되지 않았습니다. .env 파일의 OPENAI_API_KEY를 확인해주세요.")
         self.client = OpenAI(api_key=api_key)
         self.model = model
-        
-        # 모델명 매핑 (사용자 친화적 이름 -> API 모델명)
-        # 실제 OpenAI API에는 'dall-e-3', 'dall-e-2'가 있음.
-        # 문서상의 'gpt-image-1' 등은 DALL-E 3의 변형이거나 향후 모델일 수 있음.
-        # 여기서는 문서의 의도를 따르되, 실행 가능하도록 매핑 처리.
-        if model.startswith("gpt-image"):
-            # Fallback to dall-e-3 if gpt-image models are not real yet
-            # But adhering to spec, we keep the model name if the API supports it.
-            # For now, we assume these map to 'dall-e-3' with different quality settings or are aliases.
-            # To be safe for THIS project context effectively being a wrapper around actual APIs:
-            if model == "gpt-image-1-mini": self.model = "dall-e-3" # Hypothetical mapping
-            elif model == "gpt-image-1": self.model = "dall-e-3"
-            elif model == "gpt-image-1.5": self.model = "dall-e-3"
-            else: self.model = model
-    
-    async def generate(self, prompt, reference_images=None, size="1024x1792", quality="standard"): # DALL-E 3 supports 1024x1792 (vertical)
+
+    # dall-e 계열("standard"/"hd") → gpt-image 계열("low"/"medium"/"high") 매핑
+    _GPT_IMG_QUALITY = {"standard": "medium", "hd": "high", "low": "low", "medium": "medium", "high": "high"}
+    # gpt-image 허용 사이즈
+    _GPT_IMG_SIZES = {"1024x1024", "1024x1536", "1536x1024"}
+    # dall-e-2 허용 사이즈
+    _DALLE2_SIZES = {"256x256", "512x512", "1024x1024"}
+
+    async def generate(self, prompt, reference_images=None, size="1024x1024", quality="standard"):
+        """
+        모델에 따라 적절한 파라미터로 이미지 생성.
+        ─ gpt-image-1 계열: size, quality, output_format 지원 / response_format 미지원
+        ─ dall-e-3         : size, quality, response_format 지원
+        ─ dall-e-2         : size, response_format 지원 / quality 미지원
+        """
         import base64
-        
-        # DALL-E 3 does not support reference images in the standard generation API directly widely yet (in this lib version).
-        # We will ignore reference_images for DALL-E 3 generation for now unless using specific edit endpoints.
-        # But per spec, we should try.
-        
-        try:
-            response = self.client.images.generate(
+        t0 = time.time()
+
+        is_gpt_image = self.model.startswith("gpt-image")
+        is_dalle2 = (self.model == "dall-e-2")
+
+        def _sync_generate():
+            params = dict(
                 model=self.model,
                 prompt=prompt,
-                size=size,
-                quality=quality,
                 n=1,
-                response_format="b64_json"
             )
-            
-            image_data = base64.b64decode(response.data[0].b64_json)
-            return image_data
-            
+            if is_gpt_image:
+                # gpt-image 계열: size, quality, output_format 지원
+                # response_format 은 미지원 (항상 b64_json 반환)
+                params["size"] = size if size in self._GPT_IMG_SIZES else "1024x1024"
+                params["quality"] = self._GPT_IMG_QUALITY.get(quality, "medium")
+                params["output_format"] = "webp"  # PNG 대비 5~10배 작아 전송 빠름
+            elif is_dalle2:
+                # DALL-E 2: quality 파라미터 미지원
+                params["size"] = size if size in self._DALLE2_SIZES else "1024x1024"
+                params["response_format"] = "url"
+            else:
+                # dall-e-3: size, quality, response_format 모두 지원
+                params["size"] = size
+                params["quality"] = quality
+                params["response_format"] = "url"
+
+            logger.info("OpenAI API 호출 파라미터: %s", {k: v for k, v in params.items() if k != "prompt"})
+            return self.client.images.generate(**params)
+
+        try:
+            response = await asyncio.wait_for(
+                asyncio.to_thread(_sync_generate),
+                timeout=IMAGE_GENERATION_TIMEOUT
+            )
+            t_api = time.time() - t0
+            logger.info("OpenAI API 응답 %.1f초 (model=%s)", t_api, self.model)
+
+            result_data = response.data[0]
+
+            # gpt-image 계열은 b64_json 으로 반환
+            if hasattr(result_data, "b64_json") and result_data.b64_json:
+                image_bytes = base64.b64decode(result_data.b64_json)
+                logger.info("b64 디코딩 완료 (총 %.1f초, %dKB)", time.time() - t0, len(image_bytes) // 1024)
+                return image_bytes
+
+            # dall-e 계열은 URL 반환 → 다운로드
+            if hasattr(result_data, "url") and result_data.url:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    dl = await client.get(result_data.url)
+                    dl.raise_for_status()
+                logger.info("이미지 다운로드 완료 (총 %.1f초, %dKB)", time.time() - t0, len(dl.content) // 1024)
+                return dl.content
+
+            raise ValueError("OpenAI 응답에서 이미지를 찾을 수 없습니다.")
+
+        except asyncio.TimeoutError:
+            elapsed = time.time() - t0
+            logger.error("OpenAI 이미지 생성 타임아웃 (%.0f초, 제한 %ss)", elapsed, IMAGE_GENERATION_TIMEOUT)
+            raise TimeoutError(
+                f"이미지 생성이 {IMAGE_GENERATION_TIMEOUT}초 안에 완료되지 않았습니다. "
+                "네트워크나 API 상태를 확인한 뒤 다시 시도해주세요."
+            )
         except Exception as e:
-            logger.error(f"OpenAI Image Generation Failed: {e}")
+            logger.error("OpenAI Image Generation Failed (%.1f초): %s", time.time() - t0, e)
             raise
 
-    async def edit_with_reference(self, prompt, reference_image, size="1024x1792"):
-        # DALL-E 2 edit endpoint implementation if needed
+    async def edit_with_reference(self, prompt, reference_image, size="1024x1024"):
         pass
 
 
+# ────────────────────────────────────────────
+# Google Gemini (Nano Banana 계열)
+# ────────────────────────────────────────────
 class GeminiGenerator(ImageGeneratorBase):
     """Nano Banana / Nano Banana Pro (via Google GenAI)"""
-    
-    def __init__(self, api_key: str, model: str = "gemini-2.5-flash-preview-image-generation"): # Spec says gemini-2.5-flash...
+
+    def __init__(self, api_key: str, model: str = "gemini-2.0-flash-exp"):
         if not genai:
             raise ImportError("Google GenAI library is not installed")
+        if not api_key:
+            raise ValueError("Gemini API 키가 설정되지 않았습니다. .env 파일의 GEMINI_API_KEY를 확인해주세요.")
         self.client = genai.Client(api_key=api_key)
         self.model = model
-        
-        # 매핑
-        if model == "nano-banana": self.model = "gemini-2.0-flash-exp" # Actual model likely available
-        elif model == "nano-banana-pro": self.model = "gemini-2.0-pro-exp-02-05" # Updated preview
-        
+
     async def generate(self, prompt, reference_images=None, size="1024x1024", quality="medium"):
-        # Gemini Image Generation
-        # Note: The python SDK for Gemini Image Gen might differ slightly. 
-        # Referencing typical GenAI usage for images.
-        
+        t0 = time.time()
         try:
-            # Assuming prompt is text.
-            # If reference images provided, Gemini can take them as inputs (Imgen 3 might not support image-to-image easily via this SDK yet, but multimodal prompt yes)
-            
             contents = [prompt]
             if reference_images:
                 from PIL import Image
@@ -125,43 +174,58 @@ class GeminiGenerator(ImageGeneratorBase):
                     img = Image.open(io.BytesIO(ref_bytes))
                     contents.append(img)
 
-            # Generate
-            # Note: client.models.generate_image is the method for Imagen usually, or generate_content for Gemini.
-            # IMAGE_GENERATION.md uses client.models.generate_content with response_modalities=["IMAGE"]
-            
-            # Using the code from spec:
-            response = self.client.models.generate_content(
-                model=self.model,
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    response_modalities=["IMAGE"] # Spec says TEXT, IMAGE but for pure image gen likely just IMAGE? Spec says ["TEXT", "IMAGE"]
+            def _sync_generate():
+                return self.client.models.generate_content(
+                    model=self.model,
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        response_modalities=["IMAGE"]
+                    )
                 )
+
+            response = await asyncio.wait_for(
+                asyncio.to_thread(_sync_generate),
+                timeout=IMAGE_GENERATION_TIMEOUT
             )
-            
-            # Extract image
-            # Response handling depends on SDK version. Assuming standard.
+            logger.info("Gemini API 응답 %.1f초 (model=%s)", time.time() - t0, self.model)
+
             if response.candidates and response.candidates[0].content.parts:
                 for part in response.candidates[0].content.parts:
                     if part.inline_data:
-                        return part.inline_data.data # bytes
-            
+                        return part.inline_data.data
             raise ValueError("No image found in Gemini response")
-            
+
+        except asyncio.TimeoutError:
+            logger.error("Gemini 이미지 생성 타임아웃 (%.0f초)", time.time() - t0)
+            raise TimeoutError(
+                f"이미지 생성이 {IMAGE_GENERATION_TIMEOUT}초 안에 완료되지 않았습니다. "
+                "네트워크나 API 상태를 확인한 뒤 다시 시도해주세요."
+            )
         except Exception as e:
-            logger.error(f"Gemini Image Generation Failed: {e}")
+            logger.error("Gemini Image Generation Failed (%.1f초): %s", time.time() - t0, e)
             raise
 
     async def edit_with_reference(self, prompt, reference_image, size="1024x1024"):
         return await self.generate(prompt, reference_images=[reference_image], size=size)
 
 
+# ────────────────────────────────────────────
 # 팩토리
+# ────────────────────────────────────────────
+# UI 에서 선택하는 모델 이름 → 실제 API 모델 이름 매핑
+# 2026-02-11 ListModels 실제 테스트로 검증 완료
+_GEMINI_MODEL_MAP = {
+    "nano-banana": "gemini-2.5-flash-image",        # 빠름, 이미지 생성 확인됨
+    "nano-banana-pro": "nano-banana-pro-preview",    # 고품질, 이미지 생성 확인됨
+}
+
+
 def get_generator(model_name: str, api_key: str) -> ImageGeneratorBase:
-    # Model alias mapping
+    """model_name 을 기반으로 적절한 Generator 인스턴스를 반환"""
     if "gpt" in model_name or "dall-e" in model_name:
         return OpenAIGenerator(api_key, model_name)
     elif "nano" in model_name or "gemini" in model_name:
-        return GeminiGenerator(api_key, model_name)
+        real_model = _GEMINI_MODEL_MAP.get(model_name, model_name)
+        return GeminiGenerator(api_key, real_model)
     else:
-        # Default to OpenAI for unknowns
         return OpenAIGenerator(api_key, model_name)

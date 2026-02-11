@@ -140,7 +140,8 @@ async def save_style(
         # 현재 UI 로직상 '대표 이미지' 개념이 강하므로, 새 이미지가 오면 기존 리스트를 초기화하고 덮어쓰는 게 깔끔함 (또는 UI에서 제어)
         # 여기선 '덮어쓰기' 전략 사용 (사용자가 새 이미지를 올렸다는 건 교체 의도)
         if id: 
-            saved_images = [] 
+            # 기존 이미지 유지 (append 모드)
+            pass 
             
         for file in reference_images:
             file_ext = os.path.splitext(file.filename)[1]
