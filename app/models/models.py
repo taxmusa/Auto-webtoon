@@ -26,6 +26,7 @@ class WorkflowState(str, Enum):
     EDITING_IMAGES = "editing_images"       # ★ 이미지 편집 단계 (NEW)
     REVIEWING_IMAGES = "reviewing_images"
     OVERLAYING_TEXT = "overlaying_text"
+    EDITING_THUMBNAIL = "editing_thumbnail"   # ★ 썸네일 편집 단계
     GENERATING_CAPTION = "generating_caption"
     REVIEWING_CAPTION = "reviewing_caption"
     READY_TO_PUBLISH = "ready_to_publish"
@@ -85,6 +86,21 @@ class Scene(BaseModel):
     layout_meta: Optional[dict] = Field(default_factory=dict) # 씬별 개별 레이아웃 설정
 
 
+class SeriesInfo(BaseModel):
+    """시리즈 분할 정보"""
+    current: int = 1              # 현재 편 (1-based)
+    total: int = 1                # 전체 편 수
+    prev_episode_url: Optional[str] = None   # 이전편 URL (발행 후 채워짐)
+    prev_summary: Optional[str] = None       # 이전편 한줄 요약
+
+
+class ToBeContinuedStyle(str, Enum):
+    """'다음편에 계속' 디자인 옵션"""
+    FADE_OVERLAY = "fade_overlay"   # 하단 그라데이션 + 텍스트 (기본)
+    BADGE = "badge"                 # 우측 하단 작은 배지
+    FULL_OVERLAY = "full_overlay"   # 전체 어둡게 + 중앙 텍스트
+
+
 class Story(BaseModel):
     """전체 스토리"""
     title: str
@@ -92,6 +108,9 @@ class Story(BaseModel):
     characters: List[CharacterProfile] = Field(default_factory=list) # 3.1 추가
     total_series: int = 1       # 시리즈 개수
     scenes_per_series: List[int] = Field(default_factory=list)
+    series_info: Optional[SeriesInfo] = None  # ★ 시리즈 분할 정보
+    to_be_continued_enabled: bool = True      # ★ "다음편에 계속" ON/OFF (기본 ON)
+    to_be_continued_style: ToBeContinuedStyle = ToBeContinuedStyle.FADE_OVERLAY
 
 
 # ============================================
@@ -164,6 +183,40 @@ class GeneratedImage(BaseModel):
     image_history: List[str] = Field(default_factory=list)  # ★ 이전 이미지 경로 이력
     prompt_history: List[str] = Field(default_factory=list)  # ★ 이전 프롬프트 이력
     tone_adjusted: bool = False  # ★ 톤 조절 적용 여부
+
+
+# ============================================
+# 4.5 썸네일 관련 모델
+# ============================================
+
+class ThumbnailPosition(str, Enum):
+    """제목 텍스트 위치"""
+    TOP = "top"
+    CENTER = "center"
+    BOTTOM = "bottom"
+
+
+class ThumbnailSource(str, Enum):
+    """썸네일 생성 방식"""
+    AI_GENERATE = "ai_generate"       # AI 자동 생성
+    SELECT_SCENE = "select_scene"     # 본편 이미지에서 선택
+    UPLOAD = "upload"                 # 직접 업로드
+
+
+class ThumbnailData(BaseModel):
+    """썸네일(커버 이미지) 데이터"""
+    enabled: bool = True                           # 썸네일 ON/OFF (기본 ON)
+    source: ThumbnailSource = ThumbnailSource.AI_GENERATE
+    image_path: Optional[str] = None               # 생성/선택/업로드된 이미지 경로
+    selected_scene_number: Optional[int] = None     # SELECT_SCENE일 때 선택한 씬 번호
+    # 제목 텍스트 오버레이
+    title_text: Optional[str] = None               # 제목 (자동 생성 또는 사용자 입력)
+    subtitle_text: Optional[str] = None            # 부제목 (선택)
+    series_number: Optional[str] = None            # 시리즈 번호 표시 (예: "2편")
+    title_position: ThumbnailPosition = ThumbnailPosition.CENTER
+    title_color: str = "#FFFFFF"
+    title_size: int = 48
+    title_font: str = "NanumGothicBold"            # 굵은 폰트 기본
 
 
 # ============================================
@@ -295,6 +348,7 @@ class WorkflowSession(BaseModel):
     story: Optional[Story] = None
     images: List[GeneratedImage] = Field(default_factory=list)
     final_images: List[str] = Field(default_factory=list)
+    thumbnail: Optional[ThumbnailData] = None  # ★ 썸네일(커버) 데이터
     caption: Optional[InstagramCaption] = None
     publish_data: Optional[PublishData] = None
     settings: ProjectSettings = Field(default_factory=ProjectSettings)

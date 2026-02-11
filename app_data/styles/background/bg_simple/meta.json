@@ -7,5 +7,5 @@
   "reference_images": [],
   "description": "인물에 집중할 수 있도록 단순화된 배경이나 단색 패턴입니다.",
   "preview_image": "/app_data/styles/background/bg_simple/preview.png",
-  "is_default": false
+  "is_default": true
 }

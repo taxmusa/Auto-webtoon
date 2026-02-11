@@ -1,7 +1,7 @@
 # STYLE_CONSISTENCY_POLICY.md - 스타일 일관성 정책
 
 > **프로젝트**: Tax Webtoon Auto-Generator  
-> **버전**: 1.0.0  
+> **버전**: 1.1.0  
 > **목적**: 이미지 생성 프롬프트의 섹션 순서·고정 규칙을 정의하고, `prompt_builder.py` 및 관련 코드가 이를 준수하도록 함.
 
 ---
@@ -83,8 +83,36 @@
 
 ---
 
+## 8. GUARD 블록 정책
+
+GUARD 블록은 AI 모델이 씬 변동(섹션 5) 때문에 고정 섹션(1~4)을 무시하는 것을 방지하기 위한 **능동적 재강조 마커**이다.
+
+### 8.1 GUARD vs LOCKED 차이
+
+| 구분 | LOCKED | GUARD |
+|------|--------|-------|
+| 위치 | 섹션 6 (후방) | 각 고정 섹션 직후 |
+| 역할 | "이 속성은 변경 금지" 목록 | "위 섹션을 반드시 유지하라" 재강조 |
+| 대상 | 개별 속성 (line-weight, palette 등) | 섹션 전체 (아트스타일, 캐릭터 등) |
+
+### 8.2 GUARD 블록 삽입 위치
+
+| 삽입 위치 | GUARD 문구 |
+|-----------|-----------|
+| 섹션 1 직후 | `[GUARD] Maintain this exact art style consistently. Any deviation breaks visual coherence.` |
+| 섹션 4 직후 | `[GUARD] These character appearances are FROZEN. Do not alter hair, eyes, clothes, or proportions.` |
+
+### 8.3 GUARD 적용 조건
+
+- GUARD는 **항상 삽입**한다 (ON/OFF 없음).
+- GUARD 문구는 짧고 명령형으로 유지한다 (모델 토큰 절약).
+- 사용자 오버라이드(섹션 0)가 스타일/캐릭터를 직접 변경하는 경우에도 GUARD는 유지하되, 오버라이드가 우선한다는 점은 섹션 0·8에서 이미 명시되어 있으므로 충돌하지 않는다.
+
+---
+
 ## 변경 이력
 
 | 날짜 | 버전 | 변경 내용 |
 |------|------|----------|
 | 2026-02-11 | 1.0.0 | 초기 정책 작성, prompt_builder 반영 기준 정의 |
+| 2026-02-11 | 1.1.0 | §8 GUARD 블록 정책 추가 (능동적 일관성 재강조) |

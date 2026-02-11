@@ -1,0 +1,18 @@
+{
+  "id": "character_style_fc8d3b2a",
+  "name": "실사얼굴 박지광",
+  "prompt_block": "A humorous mixed-media collage style character featuring a hyper-realistic photographic cut-out head of an Asian male superimposed onto a crude, hand-drawn black ink sketch body. The head is disproportionately large, creating a bobblehead effect with a 1:1 head-to-body ratio. The face exhibits high-fidelity, photorealistic expressions ranging from laughter to anger, with studio lighting and natural skin textures. In sharp contrast, the body is rendered with loose, thick, rough charcoal or ink brush strokes, lacking color or shading, appearing as a simplified stick figure or primitive cartoon. The visual language relies entirely on the juxtaposition of the realistic face and the abstract, gestural body.",
+  "locked_attributes": [
+    "Photographic cut-out head",
+    "Rough ink sketch body",
+    "Mixed media collage aesthetic",
+    "Bobblehead proportions"
+  ],
+  "reference_images": [
+    "/app_data/styles/character/character_style_fc8d3b2a/ref_5b1168.png",
+    "/app_data/styles/character/character_style_fc8d3b2a/ref_063c72.png"
+  ],
+  "preview_image": null,
+  "description": null,
+  "is_default": false
+}

@@ -3,6 +3,7 @@ Cloudinary 서비스 - 이미지 호스팅
 인스타그램 발행을 위해 공개 URL 필요
 Imgur 대비 API 발급이 훨씬 간단함
 """
+import os
 import httpx
 from typing import Optional
 import base64
@@ -116,6 +117,20 @@ class CloudinaryService:
             if url:
                 urls.append(url)
         return urls
+
+    async def upload_from_path(self, file_path: str) -> Optional[str]:
+        """로컬 파일 경로에서 이미지를 읽어 업로드 후 URL 반환"""
+        if not self.cloud_name or not self.api_key or not self.api_secret:
+            return None
+        path = file_path if os.path.isabs(file_path) else os.path.join(os.getcwd(), file_path.lstrip("/"))
+        if not os.path.isfile(path):
+            return None
+        try:
+            with Image.open(path) as img:
+                img = img.convert("RGB") if img.mode not in ("RGB", "RGBA") else img
+                return await self.upload_image(img)
+        except Exception:
+            return None
 
 
 # 싱글톤

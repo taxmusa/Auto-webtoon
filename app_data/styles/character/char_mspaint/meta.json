@@ -1,0 +1,11 @@
+{
+  "id": "char_mspaint",
+  "name": "MS그림판",
+  "prompt_block": "intentionally crude MS Paint style digital drawing, slightly pixelated edges, basic geometric shapes for characters, flat primary colors with paint bucket fill, no anti-aliasing feel, simple mouse-drawn lines, retro computer art aesthetic, white or solid background, humorous low-fi quality, 90s internet art vibe",
+  "locked_attributes": [],
+  "visual_attributes": {},
+  "reference_images": [],
+  "description": "옛날 그림판으로 그린 듯한 픽셀 느낌",
+  "preview_image": "/app_data/styles/character/char_mspaint/preview.png",
+  "is_default": true
+}

@@ -12,7 +12,8 @@ from app.models.models import (
     WorkflowSession, WorkflowState, WorkflowMode,
     Story, Scene, InstagramCaption, ProjectSettings,
     CharacterSettings, ImageStyle, SubStyle, SpecializedField,
-    ManualPromptOverrides
+    ManualPromptOverrides, ThumbnailData, ThumbnailSource, ThumbnailPosition,
+    SeriesInfo, ToBeContinuedStyle
 )
 from app.services.gemini_service import get_gemini_service
 from app.services.openai_service import get_openai_service
@@ -759,35 +760,111 @@ class PublishRequest(BaseModel):
     images: List[str]
 
 
+class InstagramTestRequest(BaseModel):
+    images: List[str] = []
+    caption: str = "테스트 발행"
+
+
+@router.post("/instagram-test")
+async def instagram_test(req: InstagramTestRequest = InstagramTestRequest()):
+    """세션 없이 인스타 발행만 테스트. body: {"images": ["url1"], "caption": "..."} 없으면 샘플 이미지 1장."""
+    from app.services.instagram_service import get_instagram_service
+    from app.models.models import PublishData
+    urls = (req.images or [])[:10]
+    if not urls:
+        urls = ["https://res.cloudinary.com/demo/image/upload/sample.jpg"]
+    instagram = get_instagram_service()
+    result = await instagram.publish_workflow(PublishData(images=urls, caption=req.caption or "테스트 발행"))
+    return result
+
+
+@router.get("/instagram-check")
+async def instagram_check():
+    """인스타 토큰·USER_ID 설정 여부 및 토큰 유효성 확인."""
+    import httpx
+    from app.core.config import get_settings
+    settings = get_settings()
+    token = (settings.instagram_access_token or "").strip()
+    user_id = (settings.instagram_user_id or "").strip()
+    if not token or not user_id:
+        return {
+            "ok": False,
+            "configured": False,
+            "message": "INSTAGRAM_ACCESS_TOKEN 또는 INSTAGRAM_USER_ID가 .env에 없습니다."
+        }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get(
+                "https://graph.facebook.com/v18.0/me",
+                params={"fields": "id", "access_token": token}
+            )
+        data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+        if r.status_code != 200:
+            err = data.get("error", {})
+            return {
+                "ok": False,
+                "configured": True,
+                "message": err.get("message", r.text or f"HTTP {r.status_code}")
+            }
+        return {"ok": True, "configured": True, "message": "인스타 설정 정상."}
+    except Exception as e:
+        return {"ok": False, "configured": True, "message": str(e)}
+
+
 @router.post("/publish")
 async def publish(request: PublishRequest):
-    """Instagram 발행"""
+    """Instagram 발행. 로컬 이미지는 Cloudinary 있으면 자동 업로드 후 발행."""
     session = sessions.get(request.session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     
-    # 실제 Instagram 발행 로직은 instagram_service 사용
-    # 여기서는 시뮬레이션
     try:
         from app.services.instagram_service import get_instagram_service
+        from app.services.cloudinary_service import get_cloudinary_service
+        from app.models.models import PublishData
+        
+        image_urls = []
+        cloudinary = get_cloudinary_service()
+        
+        # 1) 세션 이미지가 있으면 우선 사용 (로컬이면 Cloudinary 업로드)
+        if session.images:
+            for img in session.images:
+                if getattr(img, "image_url", None) and str(img.image_url).startswith("http"):
+                    image_urls.append(img.image_url)
+                elif getattr(img, "local_path", None):
+                    path = img.local_path
+                    if cloudinary.cloud_name and path:
+                        url = await cloudinary.upload_from_path(path)
+                        if url:
+                            image_urls.append(url)
+                    else:
+                        return {"success": False, "error": "로컬 이미지는 Cloudinary 설정이 필요합니다. .env에 CLOUDINARY_* 를 넣어주세요."}
+                else:
+                    return {"success": False, "error": "이미지에 공개 URL 또는 로컬 경로가 없습니다."}
+        # 2) request.images 가 있으면 사용 (http 아니면 업로드 시도)
+        if not image_urls and request.images:
+            for raw in request.images:
+                if raw.startswith("http"):
+                    image_urls.append(raw)
+                elif cloudinary.cloud_name:
+                    url = await cloudinary.upload_from_path(raw)
+                    if url:
+                        image_urls.append(url)
+                else:
+                    return {"success": False, "error": "이미지는 공개 URL이어야 하거나, Cloudinary를 설정해주세요."}
+        
+        if not image_urls:
+            return {"success": False, "error": "발행할 이미지가 없습니다."}
+        
         instagram = get_instagram_service()
-        
-        result = await instagram.publish_carousel(
-            image_urls=request.images,
-            caption=request.caption
-        )
-        
+        publish_data = PublishData(images=image_urls, caption=request.caption)
+        result = await instagram.publish_workflow(publish_data)
+        if not result.get("success"):
+            return {"success": False, "error": result.get("error", "Unknown error")}
         session.state = WorkflowState.PUBLISHED
-        
-        return {
-            "success": True,
-            "post_id": result.get("id", "simulated_" + session.session_id[:8])
-        }
+        return {"success": True, "post_id": result.get("media_id", "")}
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}
 
 
 # ============================================
@@ -898,3 +975,224 @@ def save_story_to_history(session: WorkflowSession):
         json.dump(data, f, ensure_ascii=False, indent=2)
     
     print(f"Story saved to {filepath}")
+
+
+# ============================================
+# 썸네일(커버) 생성/편집 API
+# ============================================
+
+class ThumbnailGenerateRequest(BaseModel):
+    session_id: str
+    source: str = "ai_generate"         # ai_generate | select_scene | upload
+    selected_scene_number: Optional[int] = None  # select_scene일 때
+    title_text: Optional[str] = None
+    subtitle_text: Optional[str] = None
+    title_position: str = "center"       # top | center | bottom
+    title_color: str = "#FFFFFF"
+    title_size: int = 48
+
+
+@router.post("/thumbnail/generate")
+async def generate_thumbnail(request: ThumbnailGenerateRequest):
+    """썸네일(커버 이미지) 생성"""
+    session = sessions.get(request.session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다")
+    if not session.story:
+        raise HTTPException(status_code=400, detail="스토리가 없습니다")
+
+    from app.services.pillow_service import get_pillow_service
+    from PIL import Image
+    from io import BytesIO
+
+    pillow = get_pillow_service()
+    output_dir = f"output/{request.session_id}"
+    os.makedirs(output_dir, exist_ok=True)
+    thumbnail_path = os.path.join(output_dir, "thumbnail.png")
+
+    # 제목 기본값: 스토리 제목
+    title = request.title_text or session.story.title
+
+    if request.source == "select_scene" and request.selected_scene_number is not None:
+        # 본편 이미지에서 선택
+        scene_idx = request.selected_scene_number - 1
+        if scene_idx < 0 or scene_idx >= len(session.images):
+            raise HTTPException(status_code=400, detail="유효하지 않은 씬 번호")
+        img_info = session.images[scene_idx]
+        img_path = img_info.local_path or img_info.image_url
+        if not img_path or not os.path.exists(img_path):
+            raise HTTPException(status_code=400, detail="해당 씬 이미지를 찾을 수 없습니다")
+        base_image = Image.open(img_path)
+
+    elif request.source == "ai_generate":
+        # AI로 커버 이미지 생성
+        char_style = None
+        if session.settings.image.character_style_id:
+            char_style = get_character_style(session.settings.image.character_style_id)
+        style_prompt = char_style.prompt_block if char_style else "Korean webtoon style"
+
+        cover_prompt = (
+            f"Cover art for a webtoon titled \"{title}\". "
+            f"{style_prompt}. "
+            f"Eye-catching composition, character close-up or impactful scene, "
+            f"leave empty space at {'top' if request.title_position == 'top' else 'center' if request.title_position == 'center' else 'bottom'} for title text. "
+            f"No text, no speech bubbles, no letters, no typography."
+        )
+
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise HTTPException(status_code=500, detail="OPENAI_API_KEY가 설정되지 않았습니다")
+
+        model_name = session.settings.image.model or "gpt-image-1"
+        generator = get_generator(model_name, api_key)
+        image_bytes = await generator.generate(cover_prompt, size="1024x1024", quality="medium")
+
+        if not isinstance(image_bytes, bytes):
+            raise HTTPException(status_code=500, detail="이미지 생성 실패")
+
+        base_image = Image.open(BytesIO(image_bytes))
+
+    else:
+        raise HTTPException(status_code=400, detail=f"지원하지 않는 source: {request.source}")
+
+    # 제목 텍스트 오버레이
+    if title:
+        base_image = pillow.render_thumbnail_title(
+            image=base_image,
+            title=title,
+            subtitle=request.subtitle_text,
+            position=request.title_position,
+            title_color=request.title_color,
+            title_size=request.title_size
+        )
+
+    # 저장
+    base_image.save(thumbnail_path, "PNG")
+
+    # 세션에 저장
+    session.thumbnail = ThumbnailData(
+        enabled=True,
+        source=ThumbnailSource(request.source),
+        image_path=thumbnail_path,
+        selected_scene_number=request.selected_scene_number,
+        title_text=title,
+        subtitle_text=request.subtitle_text,
+        title_position=ThumbnailPosition(request.title_position),
+        title_color=request.title_color,
+        title_size=request.title_size
+    )
+
+    return {
+        "success": True,
+        "thumbnail_path": thumbnail_path,
+        "title": title,
+        "source": request.source
+    }
+
+
+class ThumbnailToggleRequest(BaseModel):
+    session_id: str
+    enabled: bool
+
+
+@router.post("/thumbnail/toggle")
+async def toggle_thumbnail(request: ThumbnailToggleRequest):
+    """썸네일 ON/OFF 토글"""
+    session = sessions.get(request.session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다")
+
+    if session.thumbnail:
+        session.thumbnail.enabled = request.enabled
+    else:
+        session.thumbnail = ThumbnailData(enabled=request.enabled)
+
+    return {"success": True, "enabled": request.enabled}
+
+
+@router.get("/thumbnail/{session_id}")
+async def get_thumbnail(session_id: str):
+    """현재 썸네일 정보 조회"""
+    session = sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다")
+
+    if not session.thumbnail:
+        return {"enabled": True, "has_thumbnail": False}
+
+    return {
+        "enabled": session.thumbnail.enabled,
+        "has_thumbnail": session.thumbnail.image_path is not None,
+        "thumbnail_path": session.thumbnail.image_path,
+        "title": session.thumbnail.title_text,
+        "subtitle": session.thumbnail.subtitle_text,
+        "source": session.thumbnail.source.value if session.thumbnail.source else None,
+        "title_position": session.thumbnail.title_position.value if session.thumbnail.title_position else "center",
+        "title_color": session.thumbnail.title_color,
+        "title_size": session.thumbnail.title_size
+    }
+
+
+# ============================================
+# "다음편에 계속" API
+# ============================================
+
+class ToBeContinuedRequest(BaseModel):
+    session_id: str
+    enabled: bool = True
+    style: str = "fade_overlay"     # fade_overlay | badge | full_overlay
+    text: str = "다음편에 계속 →"
+
+
+@router.post("/to-be-continued/apply")
+async def apply_to_be_continued(request: ToBeContinuedRequest):
+    """시리즈 마지막 씬에 '다음편에 계속' 오버레이 적용"""
+    session = sessions.get(request.session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다")
+    if not session.story:
+        raise HTTPException(status_code=400, detail="스토리가 없습니다")
+
+    story = session.story
+
+    # 시리즈 분할 안 됐거나 마지막 편이면 적용 불필요
+    if not story.series_info:
+        return {"success": False, "reason": "시리즈가 아닙니다"}
+    if story.series_info.current >= story.series_info.total:
+        return {"success": False, "reason": "마지막 편이므로 '다음편에 계속'이 불필요합니다"}
+    if not request.enabled:
+        story.to_be_continued_enabled = False
+        return {"success": True, "enabled": False}
+
+    # 마지막 씬 이미지에 오버레이 적용
+    if not session.images:
+        return {"success": False, "reason": "생성된 이미지가 없습니다"}
+
+    last_img = session.images[-1]
+    img_path = last_img.local_path
+    if not img_path or not os.path.exists(img_path):
+        return {"success": False, "reason": "마지막 씬 이미지를 찾을 수 없습니다"}
+
+    from app.services.pillow_service import get_pillow_service
+    from PIL import Image
+
+    pillow = get_pillow_service()
+    base_image = Image.open(img_path)
+    result_image = pillow.add_to_be_continued(
+        image=base_image,
+        text=request.text,
+        style=request.style
+    )
+
+    # 덮어쓰기 저장
+    result_image.save(img_path, "PNG")
+
+    story.to_be_continued_enabled = True
+    story.to_be_continued_style = ToBeContinuedStyle(request.style)
+
+    return {
+        "success": True,
+        "enabled": True,
+        "style": request.style,
+        "applied_to_scene": last_img.scene_number
+    }

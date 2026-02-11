@@ -1,0 +1,11 @@
+{
+  "id": "char_big_eyes",
+  "name": "찐한 눈깔",
+  "prompt_block": "character with disproportionately large detailed expressive eyes, eyes take up 40 percent of face, small simple body, rest of face is minimal with tiny dot nose and simple line mouth, solid color background, black ink outlines, eyes have detailed pupils and reflections while everything else stays extremely simple, emotional storytelling through eyes only",
+  "locked_attributes": [],
+  "visual_attributes": {},
+  "reference_images": [],
+  "description": "크고 표현력 있는 눈이 메인, 나머지는 단순",
+  "preview_image": "/app_data/styles/character/char_big_eyes/preview.png",
+  "is_default": true
+}

@@ -264,6 +264,150 @@ class PillowService:
         
         return image
     
+    # ==========================================
+    # "다음편에 계속" 오버레이
+    # ==========================================
+
+    def add_to_be_continued(
+        self,
+        image: Image.Image,
+        text: str = "다음편에 계속 →",
+        style: str = "fade_overlay",
+        font_name: str = "NanumGothicBold",
+        font_size: int = 36
+    ) -> Image.Image:
+        """
+        마지막 씬에 "다음편에 계속" 오버레이.
+        style: fade_overlay | badge | full_overlay
+        """
+        img = image.copy().convert("RGBA")
+        w, h = img.size
+        overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+        font = self._get_font(font_name, font_size)
+
+        if style == "fade_overlay":
+            # 하단 40%에 검정 그라데이션 + 흰색 텍스트
+            fade_start = int(h * 0.6)
+            for y in range(fade_start, h):
+                ratio = (y - fade_start) / (h - fade_start)
+                alpha = int(180 * ratio)
+                draw.line([(0, y), (w, y)], fill=(0, 0, 0, alpha))
+            # 텍스트
+            bbox = draw.textbbox((0, 0), text, font=font)
+            tw = bbox[2] - bbox[0]
+            tx = (w - tw) // 2
+            ty = int(h * 0.85)
+            draw.text((tx + 2, ty + 2), text, fill=(0, 0, 0, 200), font=font)
+            draw.text((tx, ty), text, fill=(255, 255, 255, 255), font=font)
+
+        elif style == "badge":
+            # 우측 하단에 작은 배지
+            bbox = draw.textbbox((0, 0), text, font=font)
+            tw, th_text = bbox[2] - bbox[0], bbox[3] - bbox[1]
+            pad = 12
+            bx = w - tw - pad * 2 - 20
+            by = h - th_text - pad * 2 - 20
+            draw.rounded_rectangle(
+                [bx, by, bx + tw + pad * 2, by + th_text + pad * 2],
+                radius=10,
+                fill=(0, 0, 0, 180)
+            )
+            draw.text((bx + pad, by + pad), text, fill=(255, 255, 255, 255), font=font)
+
+        elif style == "full_overlay":
+            # 전체 이미지 어둡게 + 중앙 텍스트
+            draw.rectangle([(0, 0), (w, h)], fill=(0, 0, 0, 120))
+            bbox = draw.textbbox((0, 0), text, font=font)
+            tw = bbox[2] - bbox[0]
+            th_text = bbox[3] - bbox[1]
+            tx = (w - tw) // 2
+            ty = (h - th_text) // 2
+            draw.text((tx, ty), text, fill=(255, 255, 255, 255), font=font)
+
+        result = Image.alpha_composite(img, overlay)
+        return result.convert("RGB")
+
+    # ==========================================
+    # 썸네일 제목 오버레이
+    # ==========================================
+
+    def render_thumbnail_title(
+        self,
+        image: Image.Image,
+        title: str,
+        subtitle: Optional[str] = None,
+        series_number: Optional[str] = None,
+        position: str = "center",       # top | center | bottom
+        title_color: str = "#FFFFFF",
+        title_size: int = 48,
+        font_name: str = "NanumGothicBold"
+    ) -> Image.Image:
+        """썸네일 이미지에 제목 텍스트를 큰 글씨로 오버레이"""
+        img = image.copy().convert("RGBA")
+        overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+        w, h = img.size
+
+        # 반투명 그라데이션 배경 (텍스트 가독성)
+        if position == "top":
+            grad_y0, grad_y1 = 0, int(h * 0.4)
+        elif position == "bottom":
+            grad_y0, grad_y1 = int(h * 0.6), h
+        else:  # center
+            grad_y0, grad_y1 = int(h * 0.3), int(h * 0.7)
+
+        for y in range(grad_y0, grad_y1):
+            ratio = 1.0 - abs(y - (grad_y0 + grad_y1) / 2) / ((grad_y1 - grad_y0) / 2)
+            alpha = int(160 * ratio)
+            draw.line([(0, y), (w, y)], fill=(0, 0, 0, alpha))
+
+        img = Image.alpha_composite(img, overlay)
+        draw = ImageDraw.Draw(img)
+
+        # 폰트
+        title_font = self._get_font(font_name, title_size)
+        subtitle_font = self._get_font(font_name, max(title_size // 2, 20))
+
+        # 색상 파싱
+        tc = title_color.lstrip("#")
+        color_rgb = tuple(int(tc[i:i+2], 16) for i in (0, 2, 4))
+
+        # Y 위치 계산
+        if position == "top":
+            text_y = int(h * 0.08)
+        elif position == "bottom":
+            text_y = int(h * 0.65)
+        else:
+            text_y = int(h * 0.38)
+
+        # 제목
+        bbox = draw.textbbox((0, 0), title, font=title_font)
+        tw = bbox[2] - bbox[0]
+        tx = (w - tw) // 2
+        # 그림자
+        draw.text((tx + 2, text_y + 2), title, fill=(0, 0, 0, 200), font=title_font)
+        draw.text((tx, text_y), title, fill=color_rgb, font=title_font)
+        text_y += (bbox[3] - bbox[1]) + 10
+
+        # 시리즈 번호
+        if series_number:
+            bbox_s = draw.textbbox((0, 0), series_number, font=subtitle_font)
+            sw = bbox_s[2] - bbox_s[0]
+            sx = (w - sw) // 2
+            draw.text((sx, text_y), series_number, fill=color_rgb, font=subtitle_font)
+            text_y += (bbox_s[3] - bbox_s[1]) + 8
+
+        # 부제목
+        if subtitle:
+            bbox_sub = draw.textbbox((0, 0), subtitle, font=subtitle_font)
+            sub_w = bbox_sub[2] - bbox_sub[0]
+            sub_x = (w - sub_w) // 2
+            draw.text((sub_x + 1, text_y + 1), subtitle, fill=(0, 0, 0, 180), font=subtitle_font)
+            draw.text((sub_x, text_y), subtitle, fill=color_rgb, font=subtitle_font)
+
+        return img.convert("RGB")
+
     def save_image(self, image: Image.Image, path: str, format: str = "PNG", quality: int = 90):
         """이미지 저장"""
         if format.upper() == "PNG":

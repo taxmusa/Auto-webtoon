@@ -2,7 +2,7 @@
 설정 관리 - 환경변수 및 기본 설정
 """
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, field_validator
 from typing import Optional
 from functools import lru_cache
 
@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     # Instagram Graph API
     instagram_access_token: Optional[str] = Field(default=None, alias="INSTAGRAM_ACCESS_TOKEN")
     instagram_user_id: Optional[str] = Field(default=None, alias="INSTAGRAM_USER_ID")
+
+    @field_validator("instagram_access_token", "instagram_user_id", mode="before")
+    @classmethod
+    def strip_instagram(cls, v):
+        return v.strip() if v and isinstance(v, str) else v
     
     # 기본 설정
     default_ai_model: str = "gemini-2.5-flash"

@@ -1,0 +1,11 @@
+{
+  "id": "char_chunky_marker",
+  "name": "뭉툭 마커",
+  "prompt_block": "thick marker pen drawing style, chunky bold strokes, slightly uneven ink edges, simple round character shapes, big dot eyes, small body, solid flat color background with no detail, felt-tip marker texture, limited palette 3-4 colors, casual and fun, no gradients no shadows",
+  "locked_attributes": [],
+  "visual_attributes": {},
+  "reference_images": [],
+  "description": "굵은 마커펜으로 빠르게 그린 느낌",
+  "preview_image": "/app_data/styles/character/char_chunky_marker/preview.png",
+  "is_default": true
+}

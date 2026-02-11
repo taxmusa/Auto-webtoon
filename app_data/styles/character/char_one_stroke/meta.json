@@ -1,0 +1,11 @@
+{
+  "id": "char_one_stroke",
+  "name": "한 줄 캐릭터",
+  "prompt_block": "continuous single line drawing style character, one unbroken flowing line creates the entire character, extremely minimalist, no fill colors, thin consistent black line on white or solid color background, abstract but recognizable human or creature form, artistic and elegant simplicity, contour drawing technique, no shading no detail, modern art inspired",
+  "locked_attributes": [],
+  "visual_attributes": {},
+  "reference_images": [],
+  "description": "선 하나로 쭉 이어 그린 느낌, 미니멀의 극치",
+  "preview_image": "/app_data/styles/character/char_one_stroke/preview.png",
+  "is_default": true
+}

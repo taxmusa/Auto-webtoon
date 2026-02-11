@@ -1,0 +1,11 @@
+{
+  "id": "char_wobbly_doodle",
+  "name": "떨림선 낙서",
+  "prompt_block": "wobbly shaky hand-drawn lines, intentionally imperfect drawing, simple blob-like character shapes, minimal facial features with big expressive eyes, solid single color background, no background details, childlike naive art style, pen on paper feel, no shading, 2-3 colors only",
+  "locked_attributes": [],
+  "visual_attributes": {},
+  "reference_images": [],
+  "description": "삐뚤삐뚤 떨리는 선, 일부러 못 그린 듯한 매력",
+  "preview_image": "/app_data/styles/character/char_wobbly_doodle/preview.png",
+  "is_default": true
+}

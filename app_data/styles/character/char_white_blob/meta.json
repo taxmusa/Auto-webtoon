@@ -1,0 +1,11 @@
+{
+  "id": "char_white_blob",
+  "name": "하얀 덩어리",
+  "prompt_block": "simple white round blob character on solid muted blue or pastel background, character is white circle or oval shape with thick black outlines, large round eyes with black pupils, tiny dot nose, simple expressions, minimal body just small stubby arms, no legs or tiny feet, no background objects at all, clean and minimal Korean webtoon style, emoticon-like simplicity",
+  "locked_attributes": [],
+  "visual_attributes": {},
+  "reference_images": [],
+  "description": "하얀 둥근 캐릭터, 단색 배경, 눈코입만",
+  "preview_image": "/app_data/styles/character/char_white_blob/preview.png",
+  "is_default": true
+}

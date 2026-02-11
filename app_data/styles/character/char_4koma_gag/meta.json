@@ -1,0 +1,11 @@
+{
+  "id": "char_4koma_gag",
+  "name": "네컷 개그",
+  "prompt_block": "simple Japanese 4-koma comedy manga style, extremely exaggerated facial expressions, sweat drops and emotion marks, simple oval head characters, minimal body detail, plain white or single color background, black ink outlines, comedic timing focused, SD chibi proportions 1:2 head to body ratio, no detailed background",
+  "locked_attributes": [],
+  "visual_attributes": {},
+  "reference_images": [],
+  "description": "과장된 표정, 개그만화풍 단순 캐릭터",
+  "preview_image": "/app_data/styles/character/char_4koma_gag/preview.png",
+  "is_default": true
+}

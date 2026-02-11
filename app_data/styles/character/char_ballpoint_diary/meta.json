@@ -1,0 +1,11 @@
+{
+  "id": "char_ballpoint_diary",
+  "name": "볼펜 일기",
+  "prompt_block": "blue ballpoint pen drawing on white lined notebook paper, casual diary doodle style, simple character with round head, minimal features, slightly messy but charming lines, single blue ink color, notebook paper grid or lines visible in background, personal and intimate feel, no digital effects, raw sketch quality",
+  "locked_attributes": [],
+  "visual_attributes": {},
+  "reference_images": [],
+  "description": "볼펜으로 노트에 끄적인 일기 느낌",
+  "preview_image": "/app_data/styles/character/char_ballpoint_diary/preview.png",
+  "is_default": true
+}

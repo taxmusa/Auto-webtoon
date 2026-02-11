@@ -1,0 +1,11 @@
+{
+  "id": "char_flat_face",
+  "name": "납작 얼굴",
+  "prompt_block": "large flat round face filling most of the frame, extremely close-up character face, oversized head with tiny or no body visible, simple dot eyes and small line mouth, exaggerated emotional expressions, solid pastel color background, thick clean black outlines, no background objects, face-focused composition, minimal detail maximum expression",
+  "locked_attributes": [],
+  "visual_attributes": {},
+  "reference_images": [],
+  "description": "넓적한 얼굴이 화면 가득, 표정이 전부",
+  "preview_image": "/app_data/styles/character/char_flat_face/preview.png",
+  "is_default": true
+}

@@ -919,9 +919,14 @@
                                 <h3 style="margin-bottom: 0.5rem; font-size: 1.1rem;">── 스타일 선택 ──</h3>
                                 <p style="color: var(--text-muted); font-size: 0.9rem;">이미지에 적용될 렌더링 스타일을 선택하세요.</p>
                             </div>
-                            <!-- 업로드 버튼은 그리드 마지막에 카드로 배치되거나 별도로 배치될 수 있음. 요청대로 카드 그리드와 함께 페이징 처리 위함이 아니라 항상 보이게 하려면 여기 둠 -->
                             <button class="btn btn-sm btn-secondary" onclick="openCustomStyleUploadModal()">＋ 커스텀 스타일
                                 관리</button>
+                        </div>
+
+                        <!-- 인물/배경 탭 -->
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                            <button id="style-tab-character" class="btn btn-sm btn-primary" onclick="switchStyleTab('character')">🧑 인물 스타일</button>
+                            <button id="style-tab-background" class="btn btn-sm btn-outline" onclick="switchStyleTab('background')">🏙️ 배경 스타일</button>
                         </div>
 
                         <!-- Style Grid -->
@@ -1031,145 +1036,169 @@
                             "name": "없음", "emoji": "🚫",
                             "desc": "기본 스타일만 사용",
                             "prompt": "",
-                            "is_preset": true
+                            "is_preset": true,
+                            "type": "all"
                         },
                         "ghibli": {
                             "name": "지브리", "emoji": "🌿",
                             "desc": "지브리풍 부드러운 색감",
                             "prompt": "studio ghibli inspired, soft colors, dreamy atmosphere, watercolor-like backgrounds, gentle lighting, whimsical characters",
-                            "is_preset": true
+                            "is_preset": true,
+                            "type": "character"
                         },
                         "romance": {
                             "name": "로맨스", "emoji": "💕",
                             "desc": "파스텔 톤, 따뜻한 감성",
                             "prompt": "soft pastel colors, warm lighting, emotional atmosphere, delicate character expressions, romantic webtoon style, pink and peach tones",
-                            "is_preset": true
+                            "is_preset": true,
+                            "type": "character"
                         },
                         "business": {
                             "name": "비즈니스", "emoji": "💼",
                             "desc": "깔끔한 전문가 느낌",
                             "prompt": "professional, corporate style, clean lines, modern office setting, neutral color palette, business casual characters",
-                            "is_preset": true
+                            "is_preset": true,
+                            "type": "character"
                         },
                         "round_lineart": {
                             "name": "동글 라인", "emoji": "✏️",
                             "desc": "둥글둥글 귀여운 선화, 인스타툰 대표 스타일",
                             "prompt": "simple round line drawing style, thick black outlines, minimal detail, cute rounded shapes, white or solid pastel background, no shading, flat colors only, chibi-like proportions with big head, hand-drawn feel, doodle aesthetic",
-                            "is_preset": true
+                            "is_preset": true,
+                            "type": "character"
                         },
                         "pastel_flat": {
                             "name": "파스텔 플랫", "emoji": "🎨",
                             "desc": "부드러운 파스텔 평면 일러스트",
                             "prompt": "flat illustration style, soft pastel color palette, no gradients, no shadows, clean vector-like shapes, simple facial features with dot eyes, minimal background, modern Korean illustration style, muted warm tones",
-                            "is_preset": true
+                            "is_preset": true,
+                            "type": "character"
                         },
                         "bold_cartoon": {
                             "name": "볼드 카툰", "emoji": "💥",
                             "desc": "굵은 선 + 강렬한 색, 눈에 띄는 피드",
                             "prompt": "bold cartoon style, very thick black outlines 4-5px, bright saturated flat colors, exaggerated expressions, simple geometric shapes, pop art influence, no gradient, solid color fills, high contrast",
-                            "is_preset": true
+                            "is_preset": true,
+                            "type": "character"
                         },
                         "pencil_sketch": {
                             "name": "연필 스케치", "emoji": "📝",
                             "desc": "손그림 느낌, 캐주얼 낙서풍",
                             "prompt": "pencil sketch style, hand-drawn rough lines, grayscale with occasional single accent color, notebook paper texture, casual doodle feel, imperfect lines, crosshatch shading, minimal detail",
-                            "is_preset": true
+                            "is_preset": true,
+                            "type": "character"
                         },
                         "monoline": {
                             "name": "모노라인", "emoji": "〰️",
                             "desc": "일정한 선 하나로 그린 미니멀",
                             "prompt": "monoline illustration style, single consistent line weight, no fill colors, outline only, clean and minimal, white background, modern simple aesthetic, thin continuous lines, no shading",
-                            "is_preset": true
+                            "is_preset": true,
+                            "type": "character"
                         },
                         "watercolor_soft": {
                             "name": "수채화", "emoji": "💧",
                             "desc": "물감 번짐 느낌, 부드러운 감성",
                             "prompt": "soft watercolor illustration style, light color bleeding edges, pastel tones, gentle brush strokes, slightly transparent colors, white paper background showing through, dreamy and warm, simple character design with minimal facial features",
-                            "is_preset": true
+                            "is_preset": true,
+                            "type": "character"
                         },
                         "neon_pop": {
                             "name": "네온 팝", "emoji": "🌙",
                             "desc": "어두운 배경 + 네온 색, 강렬한 임팩트",
                             "prompt": "neon pop style illustration, dark navy or black background, bright neon accent colors pink cyan yellow, simple flat character design, glowing edges, bold minimal shapes, high visual contrast, modern and trendy",
-                            "is_preset": true
+                            "is_preset": true,
+                            "type": "character"
                         },
                         "emoji_icon": {
                             "name": "이모지", "emoji": "😊",
                             "desc": "극단적으로 단순화, 아이콘 느낌",
                             "prompt": "emoji-like simple icon style illustration, extremely simplified characters, circle heads, dot eyes, line mouth, no nose, stick-figure inspired but cute, solid bright background, 2-3 colors maximum per scene, Google emoji aesthetic, flat design",
-                            "is_preset": true
+                            "is_preset": true,
+                            "type": "character"
                         },
                         "retro_90s": {
                             "name": "90s 레트로", "emoji": "📼",
                             "desc": "복고풍 빈티지 색감",
                             "prompt": "1990s retro cartoon style, slightly grainy texture, warm vintage color palette with orange brown teal, rounded character shapes, simple dot eyes, nostalgic feel, VHS-era cartoon aesthetic, thick outlines, limited color palette 4-5 colors",
-                            "is_preset": true
+                            "is_preset": true,
+                            "type": "character"
                         },
                         "cutout_collage": {
                             "name": "컷아웃", "emoji": "✂️",
                             "desc": "오려붙인 종이 콜라주, 트렌디",
                             "prompt": "paper cutout collage style illustration, torn paper edges, layered flat shapes, craft paper texture, handmade feel, simple character shapes from geometric cuts, warm earth tones with one bright accent color, scrapbook aesthetic, tactile and trendy",
-                            "is_preset": true
+                            "is_preset": true,
+                            "type": "character"
                         },
                         "char_webtoon": {
                             "name": "기본 웹툰", "emoji": "📖",
                             "desc": "깔끔하고 선명한 라인, 표준 웹툰 스타일",
                             "prompt": "Korean webtoon style, digital art, manhwa style, clean heavy outlines, vibrant colors, detailed shading, expressive faces, standard rectangular panels format",
-                            "is_preset": true
+                            "is_preset": true,
+                            "type": "character"
                         },
                         "char_bw_pen": {
                             "name": "흑백 펜화", "emoji": "✒️",
                             "desc": "흑백 펜화 스타일, 출판 만화/누아르",
                             "prompt": "Black and white ink drawing, pen and ink style, crosshatching, manga inking, monochrome, high contrast, detailed line work, no color, traditional comic art",
-                            "is_preset": true
+                            "is_preset": true,
+                            "type": "character"
                         },
                         "char_shonen": {
                             "name": "소년만화/액션", "emoji": "⚔️",
                             "desc": "역동적인 선과 강렬한 명암 대비",
                             "prompt": "Japanese Shonen manga style, highly dynamic action pose, sharp ink lines, dramatic shading, intense expression, speed lines, high contrast, vibrant colors, detailed muscles and clothes",
-                            "is_preset": true
+                            "is_preset": true,
+                            "type": "character"
                         },
                         "char_flat_vector": {
                             "name": "플랫 벡터", "emoji": "📐",
                             "desc": "단순한 면과 색상 중심의 디자인",
                             "prompt": "Flat vector art style, clean minimalistic design, no gradients, solid colors, bold geometric shapes, corporate art style, icon style, modern illustration, simple shading",
-                            "is_preset": true
+                            "is_preset": true,
+                            "type": "character"
                         },
                         "char_chibi": {
                             "name": "SD/치비", "emoji": "👶",
                             "desc": "귀여운 SD 캐릭터 스타일",
                             "prompt": "Chibi style, super deformed, big head small body, cute exaggerate expressions, simple coloring, kawaii aesthetic, soft outlines",
-                            "is_preset": true
+                            "is_preset": true,
+                            "type": "character"
                         },
                         "char_retro_anime": {
                             "name": "레트로 애니", "emoji": "📺",
                             "desc": "90년대 셀 애니메이션 감성",
                             "prompt": "90s anime style, cel shading, retro aesthetic, slightly grainy, vibrant but vintage colors, detailed eyes, classic anime character design",
-                            "is_preset": true
+                            "is_preset": true,
+                            "type": "character"
                         },
                         "char_pixel_art": {
                             "name": "픽셀 아트", "emoji": "👾",
                             "desc": "레트로 게임 도트 감성",
                             "prompt": "Pixel art style, 8-bit or 16-bit game graphic, limitations of color palette, blocky shapes, retro game aesthetic, detailed sprite work",
-                            "is_preset": true
+                            "is_preset": true,
+                            "type": "character"
                         },
                         "bg_anime": {
                             "name": "애니메이션 배경 (Anime)", "emoji": "🏙️",
                             "desc": "청량하고 디테일한 하늘과 풍경",
                             "prompt": "Anime background art, Makoto Shinkai style, high detailed clouds, vibrant blue sky, pictorial lighting, emotional atmosphere, lens flare, intricate details, vast scale",
-                            "is_preset": true
+                            "is_preset": true,
+                            "type": "background"
                         },
                         "bg_realistic": {
                             "name": "실사풍 배경 (Realistic)", "emoji": "📷",
                             "desc": "영화 같은 사실적인 라이팅과 질감",
                             "prompt": "Photorealistic background, 8k resolution, cinematic lighting, unreal engine 5 render style, highly detailed textures, dramatic lighting, depth of field, photography style",
-                            "is_preset": true
+                            "is_preset": true,
+                            "type": "background"
                         },
                         "bg_simple": {
                             "name": "단순 배경 (Simple)", "emoji": "🎨",
                             "desc": "인물에 집중할 수 있는 단순한 배경",
                             "prompt": "Simple minimal background, flat colors, abstract shapes, soft gradient, vector art style, clean, less detail to focus on character, corporate memphis style, illustration",
-                            "is_preset": true
+                            "is_preset": true,
+                            "type": "background"
                         }
                     };
 
@@ -1235,6 +1264,24 @@
                         }
                     }
 
+                    function switchStyleTab(type) {
+                        currentStyleType = type;
+                        stylePage = 1;
+
+                        // 탭 버튼 스타일 전환
+                        const charTab = document.getElementById('style-tab-character');
+                        const bgTab = document.getElementById('style-tab-background');
+                        if (type === 'character') {
+                            charTab.className = 'btn btn-sm btn-primary';
+                            bgTab.className = 'btn btn-sm btn-outline';
+                        } else {
+                            charTab.className = 'btn btn-sm btn-outline';
+                            bgTab.className = 'btn btn-sm btn-primary';
+                        }
+
+                        renderNewStyleGrid();
+                    }
+
                     function getAllStyles() {
                         // 1. Get all unique IDs
                         const presetIds = Object.keys(PRESET_STYLES);
@@ -1251,6 +1298,8 @@
                                 // This covers cases where API might miss the flag, or to respect frontend logic
                                 if (PRESET_STYLES[id]) {
                                     style.is_preset = true;
+                                    // PRESET에서 type 가져오기
+                                    if (!style.type) style.type = PRESET_STYLES[id].type;
                                 }
                                 return style;
                             } else {
@@ -1260,13 +1309,18 @@
                                     preset.thumbnail = `/static/img/presets/${id}.png`;
                                 }
                                 preset.is_preset = true;
-                                preset.type = currentStyleType; // Fallback type if unknown
                                 return preset;
                             }
                         });
 
-                        // 3. Move 'none' to top
-                        combined = combined.filter(s => s.id !== 'none');
+                        // 3. currentStyleType 기준 필터링 (none/all은 양쪽 모두 표시)
+                        combined = combined.filter(s => {
+                            if (s.id === 'none') return false; // none은 아래에서 맨 앞에 추가
+                            if (s.type === 'all') return true;
+                            return s.type === currentStyleType;
+                        });
+
+                        // 4. Move 'none' to top
                         if (PRESET_STYLES['none']) {
                             combined.unshift({ id: 'none', ...PRESET_STYLES['none'], is_preset: true, type: currentStyleType });
                         }
@@ -1296,7 +1350,8 @@
 
                             let contentHtml = '';
                             if (style.thumbnail) {
-                                contentHtml = `<img src="${style.thumbnail}" class="new-style-thumb" onerror="this.replaceWith(document.createElement('div')); this.className='new-style-no-thumb'; this.innerText='${style.emoji || '🖼️'}';">`;
+                                const thumbUrl = (style.thumbnail && style.thumbnail.indexOf('/app_data/') === 0) ? (style.thumbnail + '?t=' + Date.now()) : style.thumbnail;
+                                contentHtml = `<img src="${thumbUrl}" class="new-style-thumb" onerror="this.replaceWith(document.createElement('div')); this.className='new-style-no-thumb'; this.innerText='${style.emoji || '🖼️'}';">`;
                             } else {
                                 contentHtml = `<div class="new-style-no-thumb">${style.emoji || '🖼️'}</div>`;
                             }
@@ -1357,16 +1412,11 @@
                         }
 
                         // Fixed: Update selectedStyles for Preview
-                        // Reset first to match single-selection UI
-                        selectedStyles = { character: null, background: null };
-
-                        if (style.type === 'background') {
+                        // 인물/배경 독립 선택: 현재 탭 기준으로 해당 타입만 업데이트
+                        if (currentStyleType === 'background') {
                             selectedStyles.background = style;
-                            currentStyleType = 'background';
                         } else {
-                            // Default to character for presets without explicit type
                             selectedStyles.character = style;
-                            currentStyleType = 'character';
                         }
                     }
 
@@ -1420,7 +1470,8 @@
                             console.log("Restored session ID:", sessionId);
                         }
 
-                        renderNewStyleGrid();
+                        // 기본 탭: 인물 스타일
+                        switchStyleTab('character');
                         loadCustomStyles(); // Load custom styles from API
                         // Default select 'none'
                         onStyleCardClick('none');
@@ -2562,6 +2613,41 @@
 
             const totalImages = document.querySelectorAll('#images-container img').length;
             document.getElementById('insta-carousel-index').innerText = `1 / ${totalImages}`;
+        }
+
+        async function publishToInstagram() {
+            if (!sessionId) { alert('세션이 없습니다.'); return; }
+            const hook = document.getElementById('final-hook').value || '';
+            const body = document.getElementById('final-body').value || '';
+            const tip = document.getElementById('final-tip').value || '';
+            const hashtags = document.getElementById('final-hashtags').value || '';
+            const caption = `${hook}\n\n${body}\n\n💡 ${tip}`.trim() + (hashtags ? '\n\n' + hashtags.trim() : '');
+            try {
+                const res = await fetch('/api/workflow/publish', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, caption: caption, images: [] })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('인스타그램에 발행되었습니다.');
+                } else {
+                    alert('발행 실패: ' + (data.error || '알 수 없음'));
+                }
+            } catch (e) {
+                alert('발행 오류: ' + e.message);
+            }
+        }
+
+        function downloadImages() {
+            const imgs = document.querySelectorAll('#images-container img');
+            if (!imgs.length) { alert('다운로드할 이미지가 없습니다.'); return; }
+            imgs.forEach((img, i) => {
+                const a = document.createElement('a');
+                a.href = img.src;
+                a.download = `scene_${i + 1}.png`;
+                a.click();
+            });
         }
 
         // --- 유틸리티 ---

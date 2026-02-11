@@ -1,0 +1,11 @@
+{
+  "id": "char_circle_human",
+  "name": "동그라미 인간",
+  "prompt_block": "extremely minimalist circle head characters, body is simple lines or small rectangle, stick figure inspired but rounder and cuter, huge expressive circle eyes with dot pupils, tiny dot mouth, no nose, no ears, no hair detail, plain solid color background, black outlines only, maximum 2 colors, white characters on colored background",
+  "locked_attributes": [],
+  "visual_attributes": {},
+  "reference_images": [],
+  "description": "원+선만으로 된 극단적 단순 캐릭터",
+  "preview_image": "/app_data/styles/character/char_circle_human/preview.png",
+  "is_default": true
+}

@@ -88,6 +88,68 @@ SUB_STYLES = {
         "warm earth tones with one bright accent color, "
         "scrapbook aesthetic, tactile and trendy"
     ),
+
+    # 단순 선화 스타일 10개 (배경 최소화 + 캐릭터 표정 중심)
+    "wobbly_doodle": (
+        "wobbly shaky hand-drawn lines, intentionally imperfect drawing, "
+        "simple blob-like character shapes, minimal facial features with big expressive eyes, "
+        "solid single color background, no background details, childlike naive art style, "
+        "pen on paper feel, no shading, 2-3 colors only"
+    ),
+    "chunky_marker": (
+        "thick marker pen drawing style, chunky bold strokes, slightly uneven ink edges, "
+        "simple round character shapes, big dot eyes, small body, "
+        "solid flat color background with no detail, felt-tip marker texture, "
+        "limited palette 3-4 colors, casual and fun, no gradients no shadows"
+    ),
+    "circle_human": (
+        "extremely minimalist circle head characters, body is simple lines or small rectangle, "
+        "stick figure inspired but rounder and cuter, huge expressive circle eyes with dot pupils, "
+        "tiny dot mouth, no nose, no ears, no hair detail, plain solid color background, "
+        "black outlines only, maximum 2 colors, white characters on colored background"
+    ),
+    "4koma_gag": (
+        "simple Japanese 4-koma comedy manga style, extremely exaggerated facial expressions, "
+        "sweat drops and emotion marks, simple oval head characters, minimal body detail, "
+        "plain white or single color background, black ink outlines, comedic timing focused, "
+        "SD chibi proportions 1:2 head to body ratio, no detailed background"
+    ),
+    "ballpoint_diary": (
+        "blue ballpoint pen drawing on white lined notebook paper, casual diary doodle style, "
+        "simple character with round head, minimal features, slightly messy but charming lines, "
+        "single blue ink color, notebook paper grid or lines visible in background, "
+        "personal and intimate feel, no digital effects, raw sketch quality"
+    ),
+    "flat_face": (
+        "large flat round face filling most of the frame, extremely close-up character face, "
+        "oversized head with tiny or no body visible, simple dot eyes and small line mouth, "
+        "exaggerated emotional expressions, solid pastel color background, "
+        "thick clean black outlines, no background objects, face-focused composition, minimal detail maximum expression"
+    ),
+    "big_eyes": (
+        "character with disproportionately large detailed expressive eyes, eyes take up 40 percent of face, "
+        "small simple body, rest of face is minimal with tiny dot nose and simple line mouth, "
+        "solid color background, black ink outlines, eyes have detailed pupils and reflections while everything else stays extremely simple, "
+        "emotional storytelling through eyes only"
+    ),
+    "white_blob": (
+        "simple white round blob character on solid muted blue or pastel background, "
+        "character is white circle or oval shape with thick black outlines, large round eyes with black pupils, "
+        "tiny dot nose, simple expressions, minimal body just small stubby arms, no legs or tiny feet, "
+        "no background objects at all, clean and minimal Korean webtoon style, emoticon-like simplicity"
+    ),
+    "mspaint": (
+        "intentionally crude MS Paint style digital drawing, slightly pixelated edges, "
+        "basic geometric shapes for characters, flat primary colors with paint bucket fill, "
+        "no anti-aliasing feel, simple mouse-drawn lines, retro computer art aesthetic, "
+        "white or solid background, humorous low-fi quality, 90s internet art vibe"
+    ),
+    "one_stroke": (
+        "continuous single line drawing style character, one unbroken flowing line creates the entire character, "
+        "extremely minimalist, no fill colors, thin consistent black line on white or solid color background, "
+        "abstract but recognizable human or creature form, artistic and elegant simplicity, "
+        "contour drawing technique, no shading no detail, modern art inspired"
+    ),
 }
 
 # ==========================================
@@ -227,6 +289,7 @@ The following instruction takes absolute precedence over every other section bel
     parts.append(f"""
 [GLOBAL ART STYLE - DO NOT DEVIATE]
 {char_prompt}
+[GUARD] Maintain this exact art style consistently. Any deviation breaks visual coherence.
 """)
 
     # 2. Sub Style / Rendering Style
@@ -269,6 +332,10 @@ The following instruction takes absolute precedence over every other section bel
 Position: {position}
 {identity}
 """)
+
+    # 4.5 Character GUARD (정책 §8.2)
+    if active_characters:
+        parts.append("[GUARD] These character appearances are FROZEN. Do not alter hair, eyes, clothes, or proportions.\n")
 
     # 5. This Scene
     emotions = [d.emotion for d in scene.dialogues if d.emotion]
