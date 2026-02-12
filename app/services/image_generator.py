@@ -397,11 +397,11 @@ class FluxKontextGenerator(ImageGeneratorBase):
                 "image_url": data_uri,
                 "num_images": 1,
                 "output_format": "png",
-                # ★ guidance_scale 6.0: 앵커 참조 방식에 최적화
-                #   - 4.5 이하: 참조 이미지의 포즈/구도까지 복사됨 (나쁨)
-                #   - 6.0: 캐릭터 외모 유지 + 포즈/구도/배경을 프롬프트대로 변경
-                #   - 8.0 이상: 참조를 무시하고 프롬프트만 따름 (일관성 깨짐)
-                "guidance_scale": 6.0,
+                # ★ guidance_scale 7.0: 앵커 참조 방식에 최적화
+                #   - 4.5~5.0: 참조 이미지의 포즈/구도까지 복사됨 (나쁨!)
+                #   - 7.0: 씬 설명대로 새 장면 그리되, 캐릭터 외모는 참조에서 유지
+                #   - 9.0+: 참조를 완전 무시 (일관성 깨짐)
+                "guidance_scale": 7.0,
                 "num_inference_steps": 28,
             }
             if seed is not None:

@@ -581,60 +581,84 @@ def optimize_for_flux_kontext(full_prompt: str, scene_description: str = "",
                                characters=None) -> str:
     """Flux에 최적화된 프롬프트 생성
     
-    ★ 핵심 설계 원칙 (2026-02-12 보안 설계 v2):
+    ★ 핵심 설계 원칙 (앵커 참조 방식 v3):
     
-    1. 아트 스타일이 프롬프트의 가장 중요한 부분 → 맨 앞에 전체 길이 배치
-       (Flux는 프롬프트 앞부분을 더 강하게 반영 — 스타일이 무시되던 근본 원인 해결)
-    2. 씬 설명은 스타일 직후에 배치 (씬 다양성 확보)
-    3. 텍스트/로고 금지는 간결하게
-    4. 캐릭터 앵커는 핵심만 유지
-    5. 총 길이 400~800자 (스타일을 충분히 반영하기 위해 범위 확대)
+    [text2img 모드 - 씬 1]:
+      1. 아트 스타일 → 맨 앞 (스타일 확립)
+      2. 씬 설명 (캐릭터+장면 확립)
+      3. 캐릭터 앵커
+    
+    [img2img 모드 - 씬 2+]:
+      1. ★ 씬 설명이 최우선! (참조 이미지가 캐릭터를 유지하니까)
+      2. 아트 스타일
+      3. 캐릭터 외모 유지 지시 (간결하게)
+      → 프롬프트 = "무엇을 그릴 것인가" 에 집중
     """
     parts = []
     
-    # ── 1. 아트 스타일 (★ 가장 중요 → 맨 앞! 전체 길이 사용!) ──
-    #   이전 문제: 120자로 잘려서 스타일이 무시됨
-    #   해결: 스타일 prompt_block 전체를 프롬프트 최상단에 배치
+    # 공통: 아트 스타일 추출
     style_text = _extract_section(full_prompt, "[GLOBAL ART STYLE")
-    if style_text:
-        # 스타일 전체를 사용 (잘리지 않음!)
-        parts.append(f"Art style: {style_text}.")
-    
-    # ── 1.5 서브스타일 (있으면 스타일 바로 뒤에) ──
     sub_text = _extract_section(full_prompt, "[RENDERING STYLE")
-    if sub_text:
-        parts.append(sub_text[:150])
-    
-    # ── 2. 씬 설명 (스타일 다음으로 중요) ──
-    if scene_description:
-        parts.append(f"Scene: {scene_description[:200]}.")
-    
-    # ── 3. 텍스트/로고 금지 (간결하게) ──
-    parts.append("No text, no speech bubbles, no logos, no watermarks. Pure illustration.")
-    
-    # ── 4. 앵커 참조 지시 (씬 2+ img2img, 씬1을 참조) ──
-    if is_reference:
-        parts.append(
-            "REFERENCE IMAGE = character appearance ONLY. "
-            "Keep EXACT same: face shape, hair color/style, skin tone, outfit colors, glasses status. "
-            "MUST CHANGE: pose, body position, camera angle, background, scene composition. "
-            "Create a COMPLETELY NEW scene layout — different from the reference image. "
-            "Characters must be in DIFFERENT poses and positions than the reference."
-        )
-    
-    # ── 5. 캐릭터 핵심 앵커 ──
-    char_anchor = ""
-    if characters:
-        char_anchor = _build_character_anchor(characters)
-    if char_anchor:
-        parts.append(f"Characters: {char_anchor}.")
-    
-    # ── 6. 배경 ──
     bg_text = _extract_section(full_prompt, "[BACKGROUND STYLE")
-    if bg_text:
-        parts.append(f"Background: {bg_text[:80]}.")
+    char_anchor = _build_character_anchor(characters) if characters else ""
     
-    # ── 7. 레이아웃 + 리마인더 ──
+    if is_reference:
+        # ═══════════════════════════════════════════
+        # IMG2IMG 모드 (씬 2+): 씬 설명이 최우선!
+        # 참조 이미지가 캐릭터 외모를 유지하므로,
+        # 프롬프트는 "이번 씬에서 무엇이 일어나는가"에 집중
+        # ═══════════════════════════════════════════
+        
+        # ── 1. 씬 설명 = 프롬프트 최상단 (가장 중요!) ──
+        if scene_description:
+            parts.append(f"NEW SCENE: {scene_description[:300]}.")
+        
+        # ── 2. 장면 변경 강제 지시 ──
+        parts.append(
+            "Draw a COMPLETELY DIFFERENT scene from the reference image. "
+            "Different pose, different action, different camera angle, different background."
+        )
+        
+        # ── 3. 아트 스타일 (간결하게) ──
+        if style_text:
+            parts.append(f"Style: {style_text[:150]}.")
+        
+        # ── 4. 캐릭터 외모 유지 (참조 이미지 기반, 간결하게) ──
+        parts.append(
+            "Keep character appearances from reference: same face, hair, skin, outfit."
+        )
+        
+        # ── 5. 금지사항 ──
+        parts.append("No text, no speech bubbles, no logos.")
+        
+    else:
+        # ═══════════════════════════════════════════
+        # TEXT2IMG 모드 (씬 1): 기준 캐릭터 + 스타일 확립
+        # ═══════════════════════════════════════════
+        
+        # ── 1. 아트 스타일 (맨 앞, 전체 길이) ──
+        if style_text:
+            parts.append(f"Art style: {style_text}.")
+        
+        if sub_text:
+            parts.append(sub_text[:150])
+        
+        # ── 2. 씬 설명 ──
+        if scene_description:
+            parts.append(f"Scene: {scene_description[:250]}.")
+        
+        # ── 3. 텍스트/로고 금지 ──
+        parts.append("No text, no speech bubbles, no logos, no watermarks. Pure illustration.")
+        
+        # ── 4. 캐릭터 앵커 ──
+        if char_anchor:
+            parts.append(f"Characters: {char_anchor}.")
+        
+        # ── 5. 배경 ──
+        if bg_text:
+            parts.append(f"Background: {bg_text[:80]}.")
+    
+    # 공통: 레이아웃
     parts.append(_FLUX_LAYOUT_SUFFIX)
     parts.append("No glasses unless specified.")
     
