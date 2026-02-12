@@ -414,3 +414,110 @@ async def get_scene_prompt(session_id: str, scene_num: int):
         "current_prompt": target.prompt_used,
         "prompt_history": target.prompt_history,
     }
+
+
+# ============================================
+# Playwright 말풍선 오버레이 API
+# ============================================
+
+class BubbleOverlayRequest(BaseModel):
+    """말풍선 오버레이 요청"""
+    scene_numbers: Optional[List[int]] = None  # None이면 전체 적용
+    font_family: str = "Nanum Gothic"
+    bubble_style: str = "round"  # round | square | shout | thought
+
+
+@router.post("/{session_id}/apply-bubbles")
+async def apply_bubble_overlay(session_id: str, req: BubbleOverlayRequest):
+    """모든 씬에 Playwright 말풍선 오버레이 적용
+
+    스토리의 대사(dialogues)와 나레이션(narration)을
+    Playwright HTML/CSS → 투명 PNG → 합성 방식으로 적용합니다.
+    """
+    session = _get_session(session_id)
+
+    if not session.story or not session.story.scenes:
+        raise HTTPException(status_code=400, detail="스토리가 없습니다.")
+
+    from app.services.render_service import composite_bubble_on_image
+
+    target_images = session.images
+    if req.scene_numbers:
+        target_images = [img for img in session.images if img.scene_number in req.scene_numbers]
+
+    if not target_images:
+        raise HTTPException(status_code=400, detail="적용할 이미지가 없습니다.")
+
+    history_mgr = get_history_manager()
+    results = []
+
+    for img in target_images:
+        if not img.local_path or not os.path.exists(img.local_path):
+            results.append({"scene_number": img.scene_number, "status": "skip", "reason": "이미지 없음"})
+            continue
+
+        # 해당 씬 찾기
+        scene = next(
+            (s for s in session.story.scenes if s.scene_number == img.scene_number),
+            None
+        )
+        if not scene or not scene.dialogues:
+            results.append({"scene_number": img.scene_number, "status": "skip", "reason": "대사 없음"})
+            continue
+
+        # 원본 백업 (이력 저장)
+        history_path = history_mgr.save_to_history(img.local_path, session_id, img.scene_number)
+        img.image_history.append(history_path)
+
+        # 대사 데이터 변환 (position 자동 배치)
+        dialogues = []
+        positions = ["top-left", "top-right", "mid-left"]
+        for i, d in enumerate(scene.dialogues[:3]):
+            dialogues.append({
+                "character": d.character,
+                "text": d.text,
+                "position": positions[i] if i < len(positions) else "mid-center",
+            })
+
+        narration = scene.narration or ""
+
+        try:
+            # Playwright 합성
+            result_bytes = await composite_bubble_on_image(
+                base_image_path=img.local_path,
+                dialogues=dialogues,
+                narration=narration,
+                output_path=img.local_path,  # 덮어쓰기
+                font_family=req.font_family,
+                bubble_style=req.bubble_style,
+            )
+
+            results.append({
+                "scene_number": img.scene_number,
+                "status": "success",
+                "dialogue_count": len(dialogues),
+                "has_narration": bool(narration),
+            })
+            logger.info(f"[말풍선] 씬 {img.scene_number}: 대사 {len(dialogues)}개 + 나레이션 적용 완료")
+
+        except Exception as e:
+            logger.error(f"[말풍선] 씬 {img.scene_number} 오버레이 실패: {e}")
+            results.append({
+                "scene_number": img.scene_number,
+                "status": "error",
+                "reason": str(e),
+            })
+
+    return {
+        "success": True,
+        "total": len(target_images),
+        "applied": sum(1 for r in results if r.get("status") == "success"),
+        "results": results,
+    }
+
+
+@router.post("/{session_id}/scene/{scene_num}/apply-bubble")
+async def apply_single_bubble(session_id: str, scene_num: int, req: BubbleOverlayRequest):
+    """단일 씬에 말풍선 오버레이 적용"""
+    req.scene_numbers = [scene_num]
+    return await apply_bubble_overlay(session_id, req)

@@ -1879,6 +1879,39 @@
                     </div>
                 </div>
 
+                <!-- 말풍선 오버레이 패널 (Playwright) -->
+                <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem;">
+                    <h3 style="font-size: 1rem; margin-bottom: 0.75rem;">💬 말풍선 & 나레이션 오버레이</h3>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+                        스토리의 대사와 나레이션을 이미지 위에 한글 말풍선으로 합성합니다. (Playwright 고품질 렌더링)
+                    </p>
+                    <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: 600;">말풍선 스타일</label>
+                            <select id="bubble-style-select" style="padding: 6px 10px; font-size: 0.85rem;">
+                                <option value="round">둥근 말풍선</option>
+                                <option value="square">사각 말풍선</option>
+                                <option value="shout">강조 (외침)</option>
+                                <option value="thought">생각 풍선</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: 600;">폰트</label>
+                            <select id="bubble-font-select" style="padding: 6px 10px; font-size: 0.85rem;">
+                                <option value="Nanum Gothic">나눔고딕</option>
+                                <option value="Do Hyeon">도현</option>
+                                <option value="Jua">주아</option>
+                                <option value="Gaegu">개구</option>
+                                <option value="Black Han Sans">블랙한산스</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary" onclick="applyBubbleOverlay()" style="font-size: 0.85rem; padding: 8px 16px;">
+                            💬 전체 말풍선 적용
+                        </button>
+                    </div>
+                    <div id="bubble-apply-status" style="display: none; margin-top: 0.75rem; font-size: 0.85rem; padding: 8px 12px; background: var(--bg-card); border-radius: 6px;"></div>
+                </div>
+
                 <!-- 진행 상태 바 -->
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                     <span style="font-size: 0.875rem; color: var(--text-muted);">확정된 씬: <b
@@ -2020,6 +2053,171 @@
                 <button class="btn btn-secondary" onclick="goToStep(6)">← 이전 단계</button>
             </div>
         </div>
+
+        <!-- ============================================ -->
+        <!-- 캐러셀 전용 패널 (간소화 워크플로우) -->
+        <!-- ============================================ -->
+        <div class="step-content" id="step-carousel" style="display:none;">
+            <div class="card">
+                <h2 class="card-title">🎠 캐러셀 만들기</h2>
+                <p class="card-desc">인스타그램 캐러셀(슬라이드형) 콘텐츠를 빠르게 제작합니다.</p>
+
+                <!-- 설정 패널 -->
+                <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem;">
+                    <h3 style="font-size: 1rem; margin-bottom: 0.75rem;">⚙️ 캐러셀 설정</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: 600;">슬라이드 수</label>
+                            <select id="carousel-slide-count" style="width:100%; padding: 6px 10px;">
+                                <option value="3">3장</option>
+                                <option value="5" selected>5장</option>
+                                <option value="7">7장</option>
+                                <option value="10">10장</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: 600;">템플릿</label>
+                            <select id="carousel-template" style="width:100%; padding: 6px 10px;">
+                                <option value="centered">중앙 정렬</option>
+                                <option value="left-aligned">왼쪽 정렬</option>
+                                <option value="highlight">강조 스타일</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: 600;">배경색</label>
+                            <input type="color" id="carousel-bg-color" value="#FFFFFF" style="width:100%; height:36px; border:1px solid var(--border); border-radius:6px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: 600;">글자색</label>
+                            <input type="color" id="carousel-text-color" value="#111111" style="width:100%; height:36px; border:1px solid var(--border); border-radius:6px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: 600;">강조색</label>
+                            <input type="color" id="carousel-accent-color" value="#6366f1" style="width:100%; height:36px; border:1px solid var(--border); border-radius:6px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: 600;">폰트</label>
+                            <select id="carousel-font" style="width:100%; padding: 6px 10px;">
+                                <option value="Nanum Gothic">나눔고딕</option>
+                                <option value="Do Hyeon">도현</option>
+                                <option value="Jua">주아</option>
+                                <option value="Black Han Sans">블랙한산스</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="generateCarouselSlides()" style="width: 100%;">
+                        🎠 AI 슬라이드 텍스트 생성
+                    </button>
+                </div>
+
+                <!-- 생성된 슬라이드 텍스트 편집 -->
+                <div id="carousel-slides-editor" style="display:none; margin-bottom: 1.5rem;">
+                    <h3 style="font-size: 1rem; margin-bottom: 0.75rem;">📝 슬라이드 텍스트 편집</h3>
+                    <div id="carousel-slides-list" style="display: flex; flex-direction: column; gap: 0.75rem;"></div>
+                    <button class="btn btn-primary" onclick="renderCarouselImages()" style="width: 100%; margin-top: 1rem;">
+                        🖼️ 이미지 렌더링 (Playwright)
+                    </button>
+                </div>
+
+                <!-- 렌더링된 이미지 미리보기 -->
+                <div id="carousel-preview" style="display:none;">
+                    <h3 style="font-size: 1rem; margin-bottom: 0.75rem;">🖼️ 미리보기</h3>
+                    <div id="carousel-preview-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.75rem;"></div>
+                    <button class="btn btn-primary" onclick="renderCarouselImages()" style="margin-top: 1rem;">
+                        🔄 다시 렌더링
+                    </button>
+                </div>
+
+                <div id="carousel-status" style="display:none; margin-top: 1rem; padding: 10px; background: var(--bg-card); border-radius: 8px; font-size: 0.85rem;"></div>
+            </div>
+
+            <div class="actions" style="margin-top: 2rem;">
+                <button class="btn btn-secondary" onclick="exitCarouselMode()">← 자료 수집으로 돌아가기</button>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- 카드뉴스 전용 패널 (간소화 워크플로우) -->
+        <!-- ============================================ -->
+        <div class="step-content" id="step-cardnews" style="display:none;">
+            <div class="card">
+                <h2 class="card-title">📰 카드뉴스 만들기</h2>
+                <p class="card-desc">인스타그램 카드뉴스를 빠르게 제작합니다. (4:5 세로형)</p>
+
+                <!-- 설정 패널 -->
+                <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem;">
+                    <h3 style="font-size: 1rem; margin-bottom: 0.75rem;">⚙️ 카드뉴스 설정</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: 600;">카드 수</label>
+                            <select id="cardnews-card-count" style="width:100%; padding: 6px 10px;">
+                                <option value="3">3장</option>
+                                <option value="5" selected>5장</option>
+                                <option value="7">7장</option>
+                                <option value="10">10장</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: 600;">템플릿</label>
+                            <select id="cardnews-template" style="width:100%; padding: 6px 10px;">
+                                <option value="centered">중앙 정렬</option>
+                                <option value="left-aligned">왼쪽 정렬</option>
+                                <option value="highlight">강조 스타일</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: 600;">배경색</label>
+                            <input type="color" id="cardnews-bg-color" value="#1a1a2e" style="width:100%; height:36px; border:1px solid var(--border); border-radius:6px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: 600;">글자색</label>
+                            <input type="color" id="cardnews-text-color" value="#FFFFFF" style="width:100%; height:36px; border:1px solid var(--border); border-radius:6px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: 600;">강조색</label>
+                            <input type="color" id="cardnews-accent-color" value="#e94560" style="width:100%; height:36px; border:1px solid var(--border); border-radius:6px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: 600;">폰트</label>
+                            <select id="cardnews-font" style="width:100%; padding: 6px 10px;">
+                                <option value="Nanum Gothic">나눔고딕</option>
+                                <option value="Do Hyeon">도현</option>
+                                <option value="Jua">주아</option>
+                                <option value="Black Han Sans">블랙한산스</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="generateCardNewsCards()" style="width: 100%;">
+                        📰 AI 카드 텍스트 생성
+                    </button>
+                </div>
+
+                <!-- 카드 텍스트 편집 -->
+                <div id="cardnews-cards-editor" style="display:none; margin-bottom: 1.5rem;">
+                    <h3 style="font-size: 1rem; margin-bottom: 0.75rem;">📝 카드 텍스트 편집</h3>
+                    <div id="cardnews-cards-list" style="display: flex; flex-direction: column; gap: 0.75rem;"></div>
+                    <button class="btn btn-primary" onclick="renderCardNewsImages()" style="width: 100%; margin-top: 1rem;">
+                        🖼️ 이미지 렌더링 (Playwright)
+                    </button>
+                </div>
+
+                <!-- 렌더링된 이미지 미리보기 -->
+                <div id="cardnews-preview" style="display:none;">
+                    <h3 style="font-size: 1rem; margin-bottom: 0.75rem;">🖼️ 미리보기</h3>
+                    <div id="cardnews-preview-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.75rem;"></div>
+                    <button class="btn btn-primary" onclick="renderCardNewsImages()" style="margin-top: 1rem;">
+                        🔄 다시 렌더링
+                    </button>
+                </div>
+
+                <div id="cardnews-status" style="display:none; margin-top: 1rem; padding: 10px; background: var(--bg-card); border-radius: 8px; font-size: 0.85rem;"></div>
+            </div>
+
+            <div class="actions" style="margin-top: 2rem;">
+                <button class="btn btn-secondary" onclick="exitCardNewsMode()">← 자료 수집으로 돌아가기</button>
+            </div>
+        </div>
+
     </main>
 
     <script>
@@ -2439,22 +2637,264 @@
             currentContentType = type;
 
             if (type === 'webtoon') {
-                // 기존 워크플로우: 스토리 생성 → 스타일 → 이미지 생성
                 confirmData();
             } else if (type === 'carousel') {
-                // 캐러셀: 간편 워크플로우 (향후 구현, 현재는 안내)
-                alert('캐러셀 제작 기능은 Phase 2에서 구현됩니다.\n\n현재는 웹툰용 스토리 만들기를 이용해주세요.');
-                // TODO: goToCarouselStep();
+                showContentPanel('carousel');
             } else if (type === 'cardnews') {
-                // 카드뉴스: 간편 워크플로우 (향후 구현, 현재는 안내)
-                alert('카드뉴스 제작 기능은 Phase 2에서 구현됩니다.\n\n현재는 웹툰용 스토리 만들기를 이용해주세요.');
-                // TODO: goToCardNewsStep();
+                showContentPanel('cardnews');
             }
+        }
+
+        function showContentPanel(panel) {
+            // 모든 step-content 숨기기
+            document.querySelectorAll('.step-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.step-content').forEach(el => el.style.display = 'none');
+
+            const target = document.getElementById(`step-${panel}`);
+            if (target) {
+                target.style.display = 'block';
+                target.classList.add('active');
+            }
+        }
+
+        function exitCarouselMode() {
+            document.getElementById('step-carousel').style.display = 'none';
+            goToStep(2);
+        }
+
+        function exitCardNewsMode() {
+            document.getElementById('step-cardnews').style.display = 'none';
+            goToStep(2);
         }
 
         async function confirmData() {
             goToStep(3);
             generateStory();
+        }
+
+        // ── 캐러셀 JavaScript ──
+        let carouselSessionId = null;
+        let carouselSlides = [];
+
+        async function generateCarouselSlides() {
+            const statusEl = document.getElementById('carousel-status');
+            if (statusEl) { statusEl.style.display = 'block'; statusEl.innerHTML = '⏳ AI가 슬라이드 텍스트를 생성 중...'; }
+
+            const topic = collectedData.map(d => d.title || d.text || '').join(' ').substring(0, 500) || '세무 정보';
+
+            try {
+                const resp = await fetch('/api/carousel/generate-slides', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        topic: topic,
+                        collected_data: JSON.stringify(collectedData).substring(0, 3000),
+                        slide_count: parseInt(document.getElementById('carousel-slide-count')?.value || '5'),
+                        bg_color: document.getElementById('carousel-bg-color')?.value || '#FFFFFF',
+                        text_color: document.getElementById('carousel-text-color')?.value || '#111111',
+                        accent_color: document.getElementById('carousel-accent-color')?.value || '#6366f1',
+                        font_family: document.getElementById('carousel-font')?.value || 'Nanum Gothic',
+                        template: document.getElementById('carousel-template')?.value || 'centered',
+                    }),
+                });
+                const data = await resp.json();
+                if (data.session_id) {
+                    carouselSessionId = data.session_id;
+                    carouselSlides = data.slides;
+                    renderCarouselEditor(data.slides);
+                    if (statusEl) statusEl.innerHTML = `✅ ${data.total}개 슬라이드 텍스트 생성 완료! 편집 후 렌더링하세요.`;
+                } else {
+                    if (statusEl) statusEl.innerHTML = `❌ 오류: ${data.detail || '알 수 없음'}`;
+                }
+            } catch (err) {
+                if (statusEl) statusEl.innerHTML = `❌ 네트워크 오류: ${err.message}`;
+            }
+        }
+
+        function renderCarouselEditor(slides) {
+            const editor = document.getElementById('carousel-slides-editor');
+            const list = document.getElementById('carousel-slides-list');
+            if (!editor || !list) return;
+            editor.style.display = 'block';
+
+            list.innerHTML = slides.map((s, i) => `
+                <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem;">
+                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">슬라이드 ${i + 1}</div>
+                    <input type="text" id="carousel-title-${i}" value="${(s.title || '').replace(/"/g, '&quot;')}"
+                        placeholder="제목" style="width: 100%; margin-bottom: 6px; font-weight: 700;">
+                    <textarea id="carousel-body-${i}" rows="2" placeholder="본문"
+                        style="width: 100%; resize: vertical;">${s.body || ''}</textarea>
+                </div>
+            `).join('');
+        }
+
+        async function renderCarouselImages() {
+            if (!carouselSessionId) return alert('슬라이드 텍스트를 먼저 생성해주세요.');
+
+            const statusEl = document.getElementById('carousel-status');
+            if (statusEl) { statusEl.style.display = 'block'; statusEl.innerHTML = '⏳ Playwright로 이미지 렌더링 중...'; }
+
+            // 편집된 텍스트 저장
+            for (let i = 0; i < carouselSlides.length; i++) {
+                const titleEl = document.getElementById(`carousel-title-${i}`);
+                const bodyEl = document.getElementById(`carousel-body-${i}`);
+                if (titleEl) {
+                    await fetch(`/api/carousel/${carouselSessionId}/edit-slide`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ slide_index: i, title: titleEl.value, body: bodyEl?.value || '' }),
+                    });
+                }
+            }
+
+            try {
+                const resp = await fetch(`/api/carousel/${carouselSessionId}/render`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        bg_color: document.getElementById('carousel-bg-color')?.value,
+                        text_color: document.getElementById('carousel-text-color')?.value,
+                        accent_color: document.getElementById('carousel-accent-color')?.value,
+                        font_family: document.getElementById('carousel-font')?.value,
+                        template: document.getElementById('carousel-template')?.value,
+                    }),
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    renderCarouselPreview(data.images);
+                    if (statusEl) statusEl.innerHTML = `✅ ${data.total}개 슬라이드 렌더링 완료!`;
+                } else {
+                    if (statusEl) statusEl.innerHTML = `❌ 렌더링 오류: ${data.detail || '알 수 없음'}`;
+                }
+            } catch (err) {
+                if (statusEl) statusEl.innerHTML = `❌ 네트워크 오류: ${err.message}`;
+            }
+        }
+
+        function renderCarouselPreview(images) {
+            const preview = document.getElementById('carousel-preview');
+            const grid = document.getElementById('carousel-preview-grid');
+            if (!preview || !grid) return;
+            preview.style.display = 'block';
+
+            grid.innerHTML = images.map((url, i) => `
+                <div style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
+                    <img src="${url}?t=${Date.now()}" style="width:100%; display:block;" alt="슬라이드 ${i+1}">
+                    <div style="text-align:center; padding:4px; font-size:0.75rem; color:var(--text-muted);">${i+1}/${images.length}</div>
+                </div>
+            `).join('');
+        }
+
+        // ── 카드뉴스 JavaScript ──
+        let cardnewsSessionId = null;
+        let cardnewsCards = [];
+
+        async function generateCardNewsCards() {
+            const statusEl = document.getElementById('cardnews-status');
+            if (statusEl) { statusEl.style.display = 'block'; statusEl.innerHTML = '⏳ AI가 카드 텍스트를 생성 중...'; }
+
+            const topic = collectedData.map(d => d.title || d.text || '').join(' ').substring(0, 500) || '세무 정보';
+
+            try {
+                const resp = await fetch('/api/cardnews/generate-cards', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        topic: topic,
+                        collected_data: JSON.stringify(collectedData).substring(0, 3000),
+                        card_count: parseInt(document.getElementById('cardnews-card-count')?.value || '5'),
+                        bg_color: document.getElementById('cardnews-bg-color')?.value || '#1a1a2e',
+                        text_color: document.getElementById('cardnews-text-color')?.value || '#FFFFFF',
+                        accent_color: document.getElementById('cardnews-accent-color')?.value || '#e94560',
+                        font_family: document.getElementById('cardnews-font')?.value || 'Nanum Gothic',
+                        template: document.getElementById('cardnews-template')?.value || 'centered',
+                    }),
+                });
+                const data = await resp.json();
+                if (data.session_id) {
+                    cardnewsSessionId = data.session_id;
+                    cardnewsCards = data.cards;
+                    renderCardNewsEditor(data.cards);
+                    if (statusEl) statusEl.innerHTML = `✅ ${data.total}장 카드 텍스트 생성 완료!`;
+                } else {
+                    if (statusEl) statusEl.innerHTML = `❌ 오류: ${data.detail || '알 수 없음'}`;
+                }
+            } catch (err) {
+                if (statusEl) statusEl.innerHTML = `❌ 네트워크 오류: ${err.message}`;
+            }
+        }
+
+        function renderCardNewsEditor(cards) {
+            const editor = document.getElementById('cardnews-cards-editor');
+            const list = document.getElementById('cardnews-cards-list');
+            if (!editor || !list) return;
+            editor.style.display = 'block';
+
+            list.innerHTML = cards.map((c, i) => `
+                <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem;">
+                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">카드 ${i + 1}</div>
+                    <input type="text" id="cardnews-title-${i}" value="${(c.title || '').replace(/"/g, '&quot;')}"
+                        placeholder="제목" style="width: 100%; margin-bottom: 6px; font-weight: 700;">
+                    <textarea id="cardnews-body-${i}" rows="3" placeholder="본문"
+                        style="width: 100%; resize: vertical;">${c.body || ''}</textarea>
+                </div>
+            `).join('');
+        }
+
+        async function renderCardNewsImages() {
+            if (!cardnewsSessionId) return alert('카드 텍스트를 먼저 생성해주세요.');
+
+            const statusEl = document.getElementById('cardnews-status');
+            if (statusEl) { statusEl.style.display = 'block'; statusEl.innerHTML = '⏳ Playwright로 이미지 렌더링 중...'; }
+
+            for (let i = 0; i < cardnewsCards.length; i++) {
+                const titleEl = document.getElementById(`cardnews-title-${i}`);
+                const bodyEl = document.getElementById(`cardnews-body-${i}`);
+                if (titleEl) {
+                    await fetch(`/api/cardnews/${cardnewsSessionId}/edit-card`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ card_index: i, title: titleEl.value, body: bodyEl?.value || '' }),
+                    });
+                }
+            }
+
+            try {
+                const resp = await fetch(`/api/cardnews/${cardnewsSessionId}/render`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        bg_color: document.getElementById('cardnews-bg-color')?.value,
+                        text_color: document.getElementById('cardnews-text-color')?.value,
+                        accent_color: document.getElementById('cardnews-accent-color')?.value,
+                        font_family: document.getElementById('cardnews-font')?.value,
+                        template: document.getElementById('cardnews-template')?.value,
+                    }),
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    renderCardNewsPreview(data.images);
+                    if (statusEl) statusEl.innerHTML = `✅ ${data.total}장 카드 렌더링 완료!`;
+                } else {
+                    if (statusEl) statusEl.innerHTML = `❌ 렌더링 오류: ${data.detail || '알 수 없음'}`;
+                }
+            } catch (err) {
+                if (statusEl) statusEl.innerHTML = `❌ 네트워크 오류: ${err.message}`;
+            }
+        }
+
+        function renderCardNewsPreview(images) {
+            const preview = document.getElementById('cardnews-preview');
+            const grid = document.getElementById('cardnews-preview-grid');
+            if (!preview || !grid) return;
+            preview.style.display = 'block';
+
+            grid.innerHTML = images.map((url, i) => `
+                <div style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
+                    <img src="${url}?t=${Date.now()}" style="width:100%; display:block;" alt="카드 ${i+1}">
+                    <div style="text-align:center; padding:4px; font-size:0.75rem; color:var(--text-muted);">${i+1}/${images.length}</div>
+                </div>
+            `).join('');
         }
 
         // --- Step 3: 스토리 생성 ---
@@ -3272,6 +3712,38 @@
             } else {
                 btn.style.opacity = '0.5';
                 btn.title = '모든 씬을 확정해야 다음 단계로 진행할 수 있습니다';
+            }
+        }
+
+        // --- 말풍선 오버레이 (Playwright) ---
+        async function applyBubbleOverlay() {
+            if (!currentSessionId) return alert('세션이 없습니다.');
+
+            const bubbleStyle = document.getElementById('bubble-style-select')?.value || 'round';
+            const fontFamily = document.getElementById('bubble-font-select')?.value || 'Nanum Gothic';
+            const statusEl = document.getElementById('bubble-apply-status');
+            if (statusEl) { statusEl.style.display = 'block'; statusEl.innerHTML = '⏳ 말풍선 적용 중... (Playwright 렌더링)'; }
+
+            try {
+                const resp = await fetch(`/api/edit-stage/${currentSessionId}/apply-bubbles`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        bubble_style: bubbleStyle,
+                        font_family: fontFamily,
+                    }),
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    if (statusEl) statusEl.innerHTML = `✅ 말풍선 적용 완료! (${data.applied}/${data.total}개 씬에 적용됨)`;
+                    // 편집 상태 새로고침
+                    await loadEditStageStatus();
+                } else {
+                    if (statusEl) statusEl.innerHTML = `❌ 오류: ${data.detail || '알 수 없는 오류'}`;
+                }
+            } catch (err) {
+                console.error('말풍선 적용 오류:', err);
+                if (statusEl) statusEl.innerHTML = `❌ 네트워크 오류: ${err.message}`;
             }
         }
 

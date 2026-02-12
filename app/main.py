@@ -13,6 +13,8 @@ from app.api.workflow import router as workflow_router
 from app.api.styles import router as styles_router
 from app.api.edit_stage import router as edit_stage_router
 from app.api.training import router as training_router
+from app.api.carousel import router as carousel_router
+from app.api.cardnews import router as cardnews_router
 
 # 환경 변수 로드
 load_dotenv()
@@ -24,6 +26,8 @@ app.include_router(workflow_router)
 app.include_router(styles_router)
 app.include_router(edit_stage_router)
 app.include_router(training_router)
+app.include_router(carousel_router)
+app.include_router(cardnews_router)
 
 # 정적 파일 및 템플릿 설정
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -43,6 +47,16 @@ async def read_root(request: Request):
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
     return templates.TemplateResponse("settings.html", {"request": request})
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """앱 종료 시 Playwright 브라우저 정리"""
+    try:
+        from app.services.render_service import shutdown_browser
+        await shutdown_browser()
+    except Exception:
+        pass
+
 
 @app.get("/health")
 async def health_check():

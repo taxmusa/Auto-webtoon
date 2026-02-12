@@ -12,6 +12,10 @@ fal-client
 
 # 이미지 처리
 Pillow==10.2.0
+numpy
+
+# 텍스트 렌더링 (한글 말풍선, 캐러셀, 카드뉴스)
+playwright
 
 # HTTP 요청
 httpx==0.26.0
