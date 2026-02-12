@@ -612,13 +612,14 @@ def optimize_for_flux_kontext(full_prompt: str, scene_description: str = "",
     # ── 3. 텍스트/로고 금지 (간결하게) ──
     parts.append("No text, no speech bubbles, no logos, no watermarks. Pure illustration.")
     
-    # ── 4. 체인 참조 지시 (씬 2+ img2img 모드) ──
+    # ── 4. 앵커 참조 지시 (씬 2+ img2img, 씬1을 참조) ──
     if is_reference:
         parts.append(
-            "IMPORTANT: Keep the EXACT same character appearances from the reference image. "
-            "Same face, same hair color and style, same skin tone, same outfit and clothing colors. "
-            "CHANGE ONLY the pose, action, camera angle, and scene setting. "
-            "Do NOT change character identity, do NOT add/remove glasses, do NOT change hair."
+            "REFERENCE IMAGE = character appearance ONLY. "
+            "Keep EXACT same: face shape, hair color/style, skin tone, outfit colors, glasses status. "
+            "MUST CHANGE: pose, body position, camera angle, background, scene composition. "
+            "Create a COMPLETELY NEW scene layout — different from the reference image. "
+            "Characters must be in DIFFERENT poses and positions than the reference."
         )
     
     # ── 5. 캐릭터 핵심 앵커 ──

@@ -551,18 +551,27 @@ async def generate_images(request: GenerateImagesRequest):
                 "error": str(e)
             }
 
-    # ★★★ 체인 생성: 씬 1 → 참조 → 씬 2 → 참조 → 씬 3... ★★★
-    # Flux Kontext 공식 권장 워크플로우:
-    #   1. 씬 1을 text2img로 생성 (기준 캐릭터 확립)
-    #   2. 씬 1의 이미지를 reference로 씬 2를 img2img 생성 (캐릭터 유지)
-    #   3. 씬 2의 이미지를 reference로 씬 3를 img2img 생성
-    #   → 캐릭터 외모가 체인처럼 연결되어 일관성 유지!
+    # ★★★ 앵커 참조 생성 (Star Topology) ★★★
+    # 
+    # [이전: 체인 방식 — 실패]
+    #   씬1 → 씬2 → 씬3 → 씬4 (복사의 복사 → 품질 열화 + 포즈 고정)
+    #
+    # [해결: 앵커 방식]
+    #   씬1 (text2img, 기준 캐릭터 확립)
+    #   씬1 → 씬2 (img2img, 씬1을 참조하여 캐릭터 유지 + 새 장면)
+    #   씬1 → 씬3 (img2img, 씬1을 참조하여 캐릭터 유지 + 새 장면)
+    #   씬1 → 씬4 (img2img, 씬1을 참조하여 캐릭터 유지 + 새 장면)
+    #
+    # 장점:
+    #   - 항상 원본(씬1)을 참조 → 품질 열화 없음
+    #   - 각 씬이 독립적으로 장면 변경 → 포즈/구도 다양성 확보
+    #   - 캐릭터 외모는 씬1에서 일관되게 유지
     from app.models.models import GeneratedImage
     session.images = []
     stop_signals[request.session_id] = False
     
-    prev_image_bytes = None  # ★ 이전 씬의 이미지 데이터 (체인 참조용)
-    use_chain = is_flux_kontext or is_flux  # Flux 계열만 체인 사용
+    anchor_image_bytes = None  # ★ 씬 1의 이미지 (앵커, 모든 씬이 이것을 참조)
+    use_anchor = is_flux_kontext or is_flux  # Flux 계열만 앵커 사용
     
     for scene in session.story.scenes:
         if stop_signals.get(request.session_id, False):
@@ -570,22 +579,24 @@ async def generate_images(request: GenerateImagesRequest):
                         f"({len(session.images)}/{len(session.story.scenes)} 완료)")
             break
         
+        # ★ 씬별 seed: 각 씬마다 다른 seed → 포즈/구도 다양성 확보
         scene_seed = (base_seed + scene.scene_number * 1000) if base_seed else None
         
-        # ★ 체인 결정: 씬 1은 무조건 text2img, 씬 2+는 이전 씬 참조
+        # ★ 앵커 참조: 씬 1은 text2img, 씬 2+는 항상 씬 1(앵커)을 참조
         ref_bytes = None
-        if use_chain and prev_image_bytes and scene.scene_number > 1:
-            ref_bytes = prev_image_bytes
+        if use_anchor and anchor_image_bytes and scene.scene_number > 1:
+            ref_bytes = anchor_image_bytes  # 항상 씬 1을 참조 (체인 아님!)
         
-        mode_str = "img2img 체인" if ref_bytes else "text2img 기준"
+        mode_str = "img2img (씬1 앵커 참조)" if ref_bytes else "text2img (앵커 생성)"
         logger.info(f"[생성] 씬 {scene.scene_number}/{len(session.story.scenes)} — "
                      f"seed={scene_seed}, {mode_str}")
         
         res = await generate_single_scene(scene, scene_seed=scene_seed, ref_image_bytes=ref_bytes)
         
-        # ★ 체인 연결: 성공한 이미지를 다음 씬의 참조로 사용
-        if res.get("image_bytes") and res["status"] == "generated":
-            prev_image_bytes = res["image_bytes"]
+        # ★ 씬 1 성공 시 앵커로 저장 (이후 모든 씬이 이것을 참조)
+        if scene.scene_number == 1 and res.get("image_bytes") and res["status"] == "generated":
+            anchor_image_bytes = res["image_bytes"]
+            logger.info("[앵커] 씬 1 앵커 이미지 저장 완료 — 이후 모든 씬이 이 이미지를 참조합니다")
         
         if res.get("local_path"):
             img = GeneratedImage(
