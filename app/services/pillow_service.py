@@ -408,6 +408,66 @@ class PillowService:
 
         return img.convert("RGB")
 
+    # ==========================================
+    # 상단 여백 강제 확보 (텍스트 오버레이 공간)
+    # ==========================================
+
+    def ensure_top_margin(
+        self,
+        image: Image.Image,
+        margin_ratio: float = 0.25,
+        fill_color: Optional[Tuple[int, ...]] = None,
+    ) -> Image.Image:
+        """이미지 상단에 최소 margin_ratio 비율의 여백을 강제 확보.
+
+        동작 방식:
+        1. 원본 이미지를 아래로 이동 (상단에 빈 공간 생성)
+        2. fill_color 가 None 이면 이미지 상단 1px 행의 평균색으로 채움
+        3. 캐릭터가 잘리지 않도록 비례 축소 후 하단 정렬
+
+        Args:
+            image: 원본 PIL Image
+            margin_ratio: 상단 여백 비율 (0.0 ~ 1.0, 기본 0.25 = 25%)
+            fill_color: 여백 배경색 (R, G, B). None이면 자동 추출.
+
+        Returns:
+            상단 여백이 확보된 새 이미지
+        """
+        import numpy as np
+
+        img = image.convert("RGB")
+        w, h = img.size
+        margin_px = int(h * margin_ratio)
+
+        # 새 캔버스 (원본과 같은 크기)
+        new_h = h
+        # 캐릭터가 잘리지 않도록 원본을 축소하여 아래쪽에 배치
+        content_h = h - margin_px
+        scale = content_h / h
+        new_content_w = int(w * scale)
+        new_content_h = int(h * scale)
+
+        # 축소
+        content = img.resize((new_content_w, new_content_h), Image.LANCZOS)
+
+        # 배경색 결정
+        if fill_color is None:
+            # 상단 5px 행의 평균색
+            arr = np.array(img)
+            top_strip = arr[:5, :, :]
+            avg = top_strip.mean(axis=(0, 1)).astype(int)
+            fill_color = tuple(avg)
+
+        # 새 캔버스 생성
+        canvas = Image.new("RGB", (w, new_h), fill_color)
+
+        # 콘텐츠를 하단 정렬 (좌우 가운데)
+        paste_x = (w - new_content_w) // 2
+        paste_y = new_h - new_content_h  # 하단 정렬
+        canvas.paste(content, (paste_x, paste_y))
+
+        return canvas
+
     def save_image(self, image: Image.Image, path: str, format: str = "PNG", quality: int = 90):
         """이미지 저장"""
         if format.upper() == "PNG":

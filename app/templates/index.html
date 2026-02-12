@@ -718,7 +718,17 @@
 
             <div class="actions" id="data-actions" style="display: none;">
                 <button class="btn btn-secondary" onclick="goToStep(1)">← 이전</button>
-                <button class="btn btn-primary" onclick="confirmData()">스토리 구성 확인 →</button>
+                <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                    <button class="btn btn-primary" onclick="selectContentType('webtoon')" style="display: flex; align-items: center; gap: 6px;">
+                        <span style="font-size: 1.2rem;">📖</span> 웹툰용 스토리 만들기
+                    </button>
+                    <button class="btn btn-secondary" onclick="selectContentType('carousel')" style="display: flex; align-items: center; gap: 6px; border-color: #f59e0b; color: #f59e0b;">
+                        <span style="font-size: 1.2rem;">🎠</span> 캐러셀 바로가기
+                    </button>
+                    <button class="btn btn-secondary" onclick="selectContentType('cardnews')" style="display: flex; align-items: center; gap: 6px; border-color: #10b981; color: #10b981;">
+                        <span style="font-size: 1.2rem;">📰</span> 카드뉴스 바로가기
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -777,6 +787,12 @@
                     <div class="form-group" style="margin-bottom: 2rem;">
                         <label style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.75rem;">이미지 생성 모델</label>
                         <select id="image-model" style="padding: 1rem; width: 100%;">
+                            <!-- Flux Kontext (fal.ai — 캐릭터 일관성 최고) -->
+                            <optgroup label="Flux Kontext (캐릭터 일관성 최고 — fal.ai)">
+                                <option value="flux-kontext-dev" selected>Flux Kontext Dev (일관성 94.7% — 추천)</option>
+                                <option value="flux-kontext-pro">Flux Kontext Pro (최고 품질)</option>
+                            </optgroup>
+
                             <!-- Gemini Models (Powered by Google) -->
                             <optgroup label="Google Gemini (초고속/지능형)">
                                 <option value="nano-banana">Nano Banana (Gemini 2.5 Flash Image - 빠름)
@@ -787,14 +803,19 @@
                             <!-- GPT/DALL-E Models (Powered by OpenAI) -->
                             <optgroup label="OpenAI DALL-E (예술적/다양성)">
                                 <option value="gpt-image-1">GPT Image 1 (DALL-E 3 표준)</option>
-                                <option value="gpt-image-1-mini" selected>GPT Image 1 Mini (가성비 DALL-E - 기본값)</option>
+                                <option value="gpt-image-1-mini">GPT Image 1 Mini (가성비 DALL-E)</option>
                                 <option value="gpt-image-1.5">GPT Image 1.5 (고해상도 최적화)</option>
                                 <option value="dall-e-3">DALL-E 3 (고품질 원본)</option>
                                 <option value="dall-e-2">DALL-E 2 (경제적)</option>
                             </optgroup>
+
+                            <!-- Flux LoRA (학습 캐릭터 전용) -->
+                            <optgroup label="Flux LoRA (학습 캐릭터 전용 — fal.ai)">
+                                <option value="flux-lora">Flux LoRA (학습 캐릭터 사용)</option>
+                            </optgroup>
                         </select>
                         <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem;">
-                            * 기본 모델은 'GPT Image 1 Mini'입니다. 초고속 미리보기를 원하시면 'Nano Banana'를 권장합니다.
+                            * 기본 모델은 'Flux Kontext Dev'입니다. 참조 이미지 기반 캐릭터 일관성 94.7%를 제공합니다.
                         </p>
                     </div>
 
@@ -923,10 +944,14 @@
                                 관리</button>
                         </div>
 
-                        <!-- 인물/배경 탭 -->
+                        <!-- 인물/배경/학습 탭 -->
                         <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
                             <button id="style-tab-character" class="btn btn-sm btn-primary" onclick="switchStyleTab('character')">🧑 인물 스타일</button>
                             <button id="style-tab-background" class="btn btn-sm btn-outline" onclick="switchStyleTab('background')">🏙️ 배경 스타일</button>
+                            <button id="style-tab-training" class="btn btn-sm btn-outline" onclick="switchStyleTab('training')" style="position: relative;">
+                                🎓 학습 스타일
+                                <span style="position: absolute; top: -6px; right: -6px; background: #f59e0b; color: white; font-size: 0.6rem; padding: 1px 4px; border-radius: 8px; font-weight: 700;">NEW</span>
+                            </button>
                         </div>
 
                         <!-- Style Grid -->
@@ -947,6 +972,81 @@
                         <div id="selected-style-label"
                             style="background: var(--bg-input); padding: 12px; border-radius: 8px; margin-bottom: 1rem; border: 1px solid var(--primary); color: var(--text);">
                             선택: 🚫 없음 - 기본 스타일만 사용
+                        </div>
+
+                        <!-- 학습 스타일 패널 (기본 숨김) -->
+                        <div id="training-style-panel" style="display: none;">
+                            <style>
+                                .trained-char-card {
+                                    background: var(--bg-card);
+                                    border: 2px solid var(--border);
+                                    border-radius: 12px;
+                                    padding: 1rem;
+                                    cursor: pointer;
+                                    transition: all 0.2s;
+                                    position: relative;
+                                }
+                                .trained-char-card:hover {
+                                    border-color: var(--primary);
+                                    transform: translateY(-2px);
+                                }
+                                .trained-char-card.selected {
+                                    border-color: #f59e0b;
+                                    background: rgba(245, 158, 11, 0.1);
+                                    box-shadow: 0 0 0 2px #f59e0b;
+                                }
+                                .trained-badge {
+                                    display: inline-block;
+                                    background: linear-gradient(135deg, #f59e0b, #d97706);
+                                    color: white;
+                                    font-size: 0.65rem;
+                                    padding: 2px 6px;
+                                    border-radius: 4px;
+                                    font-weight: 700;
+                                    margin-left: 4px;
+                                }
+                                .training-status-badge {
+                                    display: inline-block;
+                                    font-size: 0.7rem;
+                                    padding: 2px 6px;
+                                    border-radius: 4px;
+                                    font-weight: 600;
+                                }
+                                .training-status-badge.completed { background: #10b981; color: white; }
+                                .training-status-badge.training { background: #3b82f6; color: white; }
+                                .training-status-badge.pending { background: #6b7280; color: white; }
+                                .training-status-badge.failed { background: #ef4444; color: white; }
+                                .training-progress-bar {
+                                    width: 100%;
+                                    height: 4px;
+                                    background: var(--bg-input);
+                                    border-radius: 2px;
+                                    margin-top: 8px;
+                                    overflow: hidden;
+                                }
+                                .training-progress-bar-fill {
+                                    height: 100%;
+                                    background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+                                    border-radius: 2px;
+                                    transition: width 0.5s ease;
+                                }
+                            </style>
+
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <div>
+                                    <h4 style="font-weight: 700; font-size: 1rem; margin-bottom: 0.25rem;">🎓 학습 캐릭터 관리</h4>
+                                    <p style="color: var(--text-muted); font-size: 0.8rem;">LoRA 파인튜닝으로 캐릭터를 학습하면 95%+ 일관성을 달성합니다.</p>
+                                </div>
+                                <button class="btn btn-sm btn-primary" onclick="openCreateTrainedCharModal()">＋ 새 캐릭터 학습</button>
+                            </div>
+
+                            <!-- 학습 캐릭터 목록 -->
+                            <div id="trained-char-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 1rem;">
+                                <div style="text-align: center; color: var(--text-muted); padding: 2rem; grid-column: 1/-1;">
+                                    학습된 캐릭터가 없습니다.<br>
+                                    <span style="font-size: 0.85rem;">위 버튼으로 캐릭터를 학습해보세요.</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -1301,12 +1401,42 @@
                         // 탭 버튼 스타일 전환
                         const charTab = document.getElementById('style-tab-character');
                         const bgTab = document.getElementById('style-tab-background');
+                        const trainTab = document.getElementById('style-tab-training');
                         const label = document.getElementById('selected-style-label');
                         const colorPicker = document.getElementById('bg-color-picker-area');
+                        const styleGrid = document.getElementById('new-style-grid');
+                        const pagination = document.getElementById('style-pagination');
+                        const trainingPanel = document.getElementById('training-style-panel');
+
+                        // 기본: 모든 탭 비활성
+                        charTab.className = 'btn btn-sm btn-outline';
+                        bgTab.className = 'btn btn-sm btn-outline';
+                        if (trainTab) trainTab.className = 'btn btn-sm btn-outline';
+                        if (trainTab) trainTab.style.position = 'relative';
+
+                        if (type === 'training') {
+                            // 학습 스타일 탭
+                            if (trainTab) {
+                                trainTab.className = 'btn btn-sm btn-primary';
+                                trainTab.style.position = 'relative';
+                            }
+                            if (styleGrid) styleGrid.style.display = 'none';
+                            if (pagination) pagination.style.display = 'none';
+                            if (colorPicker) colorPicker.style.display = 'none';
+                            if (label) label.style.display = 'none';
+                            if (trainingPanel) trainingPanel.style.display = 'block';
+                            loadTrainedCharacters();
+                            return;
+                        }
+
+                        // 인물/배경 탭 — 학습 패널 숨기기
+                        if (trainingPanel) trainingPanel.style.display = 'none';
+                        if (styleGrid) styleGrid.style.display = 'grid';
+                        if (pagination) pagination.style.display = 'flex';
+                        if (label) label.style.display = 'block';
 
                         if (type === 'character') {
                             charTab.className = 'btn btn-sm btn-primary';
-                            bgTab.className = 'btn btn-sm btn-outline';
                             if (colorPicker) colorPicker.style.display = 'none';
 
                             // 인물 탭 선택 라벨 복원
@@ -1319,7 +1449,6 @@
                                 if (label) label.innerText = '선택: 🚫 없음 - 기본 스타일만 사용';
                             }
                         } else {
-                            charTab.className = 'btn btn-sm btn-outline';
                             bgTab.className = 'btn btn-sm btn-primary';
 
                             // 배경 탭 진입 시 기본 선택: bg_default
@@ -2301,6 +2430,26 @@
             renderDataItems();
             saveDataToStorage();
             console.log('[Drag] 순서 변경 완료');
+        }
+
+        // 콘텐츠 타입 (webtoon | carousel | cardnews)
+        let currentContentType = 'webtoon';
+
+        function selectContentType(type) {
+            currentContentType = type;
+
+            if (type === 'webtoon') {
+                // 기존 워크플로우: 스토리 생성 → 스타일 → 이미지 생성
+                confirmData();
+            } else if (type === 'carousel') {
+                // 캐러셀: 간편 워크플로우 (향후 구현, 현재는 안내)
+                alert('캐러셀 제작 기능은 Phase 2에서 구현됩니다.\n\n현재는 웹툰용 스토리 만들기를 이용해주세요.');
+                // TODO: goToCarouselStep();
+            } else if (type === 'cardnews') {
+                // 카드뉴스: 간편 워크플로우 (향후 구현, 현재는 안내)
+                alert('카드뉴스 제작 기능은 Phase 2에서 구현됩니다.\n\n현재는 웹툰용 스토리 만들기를 이용해주세요.');
+                // TODO: goToCardNewsStep();
+            }
         }
 
         async function confirmData() {
@@ -3827,6 +3976,334 @@
         function applyManualOverrides() {
             generatePreview();
         }
+
+        // ============================================
+        // 학습 캐릭터 (LoRA Training) 관련 함수
+        // ============================================
+        let trainedCharacters = [];
+        let selectedTrainedChar = null;
+
+        async function loadTrainedCharacters() {
+            try {
+                const resp = await fetch('/api/training/characters');
+                const data = await resp.json();
+                trainedCharacters = data.characters || [];
+                renderTrainedCharGrid();
+            } catch (e) {
+                console.error('학습 캐릭터 로드 실패:', e);
+            }
+        }
+
+        function renderTrainedCharGrid() {
+            const grid = document.getElementById('trained-char-grid');
+            if (!grid) return;
+
+            if (trainedCharacters.length === 0) {
+                grid.innerHTML = `
+                    <div style="text-align: center; color: var(--text-muted); padding: 2rem; grid-column: 1/-1;">
+                        학습된 캐릭터가 없습니다.<br>
+                        <span style="font-size: 0.85rem;">위 버튼으로 캐릭터를 학습해보세요.</span>
+                    </div>`;
+                return;
+            }
+
+            grid.innerHTML = trainedCharacters.map(c => {
+                const isSelected = selectedTrainedChar === c.id;
+                const statusClass = c.status || 'pending';
+                const imgCount = c.training_count || 0;
+                const statusText = {
+                    'completed': '학습완료',
+                    'training': '학습중...',
+                    'pending': '대기중',
+                    'uploading': '업로드중',
+                    'failed': '실패'
+                }[statusClass] || statusClass;
+
+                const previewImg = c.preview_image
+                    ? `<img src="/${c.preview_image}" style="width:100%; height:80px; object-fit:cover; border-radius:6px; margin-bottom:8px;" onerror="this.parentElement.querySelector('.no-thumb-fallback').style.display='flex'; this.style.display='none'">
+                       <div class="no-thumb-fallback" style="display:none; width:100%;height:80px;align-items:center;justify-content:center;background:var(--bg-input);border-radius:6px;margin-bottom:8px;font-size:2rem;">🎓</div>`
+                    : `<div style="width:100%;height:80px;display:flex;align-items:center;justify-content:center;background:var(--bg-input);border-radius:6px;margin-bottom:8px;font-size:2rem;">🎓</div>`;
+
+                // ── 상태별 버튼 구성 ──
+                let actionButtons = '';
+
+                if (statusClass === 'pending' || statusClass === 'failed') {
+                    // 대기/실패: 이미지 업로드 + 이미지 보기 + 학습 시작
+                    actionButtons = `
+                        <button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); uploadTrainingImages('${c.id}')" style="flex:1; font-size:0.7rem;">📁 이미지 업로드</button>
+                        ${imgCount > 0 ? `<button class="btn btn-sm btn-outline" onclick="event.stopPropagation(); viewTrainingImages('${c.id}')" style="font-size:0.7rem;">👁 보기</button>` : ''}
+                    `;
+                    // 5장 이상이면 학습 시작 버튼 표시
+                    if (imgCount >= 5) {
+                        actionButtons += `
+                        <button class="btn btn-sm btn-outline" onclick="event.stopPropagation(); startTraining('${c.id}')" style="flex:1; font-size:0.7rem; border-color:#10b981; color:#10b981;">🚀 학습 시작</button>`;
+                    }
+                } else if (statusClass === 'training' || statusClass === 'uploading') {
+                    // 학습중: 상태만 표시
+                    actionButtons = `
+                        <button class="btn btn-sm btn-outline" disabled style="flex:1; font-size:0.7rem; opacity:0.6;">⏳ 학습 진행 중...</button>`;
+                } else if (statusClass === 'completed') {
+                    // 완료: 추가학습 + 이미지 보기
+                    actionButtons = `
+                        <button class="btn btn-sm btn-outline" onclick="event.stopPropagation(); addMoreTrainingImages('${c.id}')" style="flex:1; font-size:0.7rem;">+ 추가학습</button>
+                        <button class="btn btn-sm btn-outline" onclick="event.stopPropagation(); viewTrainingImages('${c.id}')" style="font-size:0.7rem;">👁 보기</button>`;
+                }
+
+                return `
+                    <div class="trained-char-card ${isSelected ? 'selected' : ''}" onclick="selectTrainedChar('${c.id}')">
+                        ${previewImg}
+                        <div style="font-weight:700; font-size:0.9rem; margin-bottom:4px;">
+                            ${c.name}
+                            <span class="trained-badge">학습캐릭터</span>
+                        </div>
+                        <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;">
+                            트리거: <code>${c.trigger_word || '-'}</code>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                            <span class="training-status-badge ${statusClass}">${statusText}</span>
+                            <span style="font-size:0.7rem; color:var(--text-muted);">${imgCount}장 ${imgCount < 5 ? '<span style="color:#ef4444;">(최소 5장)</span>' : ''}</span>
+                        </div>
+                        ${statusClass === 'training' ? `
+                            <div class="training-progress-bar">
+                                <div class="training-progress-bar-fill" style="width: 50%;"></div>
+                            </div>` : ''}
+                        <div style="display:flex; gap:4px; margin-top:8px; width:100%; flex-wrap:wrap;">
+                            ${actionButtons}
+                            <button class="btn btn-sm btn-outline" onclick="event.stopPropagation(); deleteTrainedChar('${c.id}')" style="font-size:0.7rem; color:var(--danger); border-color:var(--danger);">삭제</button>
+                        </div>
+                    </div>`;
+            }).join('');
+        }
+
+        function selectTrainedChar(charId) {
+            const char = trainedCharacters.find(c => c.id === charId);
+            if (!char || char.status !== 'completed') {
+                alert('학습이 완료된 캐릭터만 선택할 수 있습니다.');
+                return;
+            }
+            selectedTrainedChar = charId;
+
+            // Flux LoRA 모델 자동 선택
+            const modelSelect = document.getElementById('image-model');
+            if (modelSelect) modelSelect.value = 'flux-lora';
+
+            renderTrainedCharGrid();
+
+            // 선택 라벨 업데이트
+            const label = document.getElementById('selected-style-label');
+            if (label) {
+                label.style.display = 'block';
+                label.innerHTML = `선택: 🎓 <b>${char.name}</b> <span class="trained-badge">학습캐릭터</span> — 트리거: <code>${char.trigger_word}</code>`;
+            }
+        }
+
+        function openCreateTrainedCharModal() {
+            const name = prompt('학습할 캐릭터 이름을 입력하세요:');
+            if (!name) return;
+
+            const trigger = prompt('트리거 워드 (빈칸이면 자동 생성):', '');
+            const description = prompt('캐릭터 설명 (선택):', '');
+
+            createTrainedCharacter(name, trigger || '', description || '');
+        }
+
+        async function createTrainedCharacter(name, triggerWord, description) {
+            try {
+                const resp = await fetch('/api/training/characters/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name,
+                        trigger_word: triggerWord,
+                        description,
+                        style_tags: []
+                    })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    alert(`캐릭터 "${name}" 생성 완료! 이제 학습 이미지를 업로드하세요.`);
+                    // 이미지 업로드 프롬프트
+                    uploadTrainingImages(data.character.id);
+                }
+            } catch (e) {
+                alert('캐릭터 생성 실패: ' + e.message);
+            }
+        }
+
+        function uploadTrainingImages(charId) {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.multiple = true;
+            input.accept = 'image/*';
+            input.onchange = async (e) => {
+                const files = e.target.files;
+                if (!files.length) return;
+
+                const formData = new FormData();
+                for (const f of files) {
+                    formData.append('files', f);
+                }
+
+                try {
+                    const resp = await fetch(`/api/training/characters/${charId}/upload-images`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await resp.json();
+                    if (data.success) {
+                        alert(`${data.uploaded_count}장 업로드 완료! (총 ${data.total_images}장)\n\n최소 5장 이상 업로드 후 학습을 시작할 수 있습니다.`);
+
+                        // 5장 이상이면 학습 시작 여부 확인
+                        if (data.total_images >= 5) {
+                            if (confirm(`이미지 ${data.total_images}장이 준비되었습니다. 학습을 시작할까요?\n(약 15~30분 소요)`)) {
+                                startTraining(charId);
+                            }
+                        }
+                        loadTrainedCharacters();
+                    }
+                } catch (e) {
+                    alert('이미지 업로드 실패: ' + e.message);
+                }
+            };
+            input.click();
+        }
+
+        async function startTraining(charId) {
+            try {
+                const resp = await fetch('/api/training/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        character_id: charId,
+                        steps: 1000
+                    })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    alert(`학습 시작! (트리거: ${data.trigger_word}, 이미지: ${data.image_count}장)\n\n학습은 약 15~30분 소요됩니다. 상태를 자동으로 확인합니다.`);
+                    pollTrainingStatus(charId);
+                    loadTrainedCharacters();
+                } else {
+                    alert('학습 시작 실패: ' + (data.detail || ''));
+                }
+            } catch (e) {
+                alert('학습 시작 실패: ' + e.message);
+            }
+        }
+
+        async function pollTrainingStatus(charId) {
+            const poll = async () => {
+                try {
+                    const resp = await fetch('/api/training/status', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ character_id: charId })
+                    });
+                    const data = await resp.json();
+
+                    if (data.status === 'completed') {
+                        alert(`학습 완료! 🎉\n이제 이 캐릭터를 선택하고 이미지를 생성할 수 있습니다.`);
+                        loadTrainedCharacters();
+                        return;
+                    } else if (data.status === 'failed') {
+                        alert(`학습 실패: ${data.error || '알 수 없는 오류'}`);
+                        loadTrainedCharacters();
+                        return;
+                    }
+
+                    // 아직 진행 중 — 30초 후 다시 확인
+                    loadTrainedCharacters();
+                    setTimeout(poll, 30000);
+                } catch (e) {
+                    console.error('학습 상태 확인 실패:', e);
+                    setTimeout(poll, 30000);
+                }
+            };
+            setTimeout(poll, 10000); // 10초 후 첫 확인
+        }
+
+        function addMoreTrainingImages(charId) {
+            uploadTrainingImages(charId);
+        }
+
+        async function viewTrainingImages(charId) {
+            // 캐릭터 상세 정보에서 이미지 목록 가져오기
+            try {
+                const resp = await fetch(`/api/training/characters/${charId}`);
+                const char = await resp.json();
+                const images = char.training_images || [];
+
+                if (images.length === 0) {
+                    alert('업로드된 이미지가 없습니다.');
+                    return;
+                }
+
+                // 간단한 모달로 이미지 표시
+                const overlay = document.createElement('div');
+                overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
+                overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+                const modal = document.createElement('div');
+                modal.style.cssText = 'background:var(--bg-card,#1e1e2e);border-radius:12px;padding:1.5rem;max-width:700px;width:90%;max-height:80vh;overflow-y:auto;';
+
+                let html = `
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+                        <h3 style="margin:0;color:var(--text,#fff);">📷 학습 이미지 (${images.length}장) — ${char.name}</h3>
+                        <button onclick="this.closest('div[style*=fixed]').remove()" style="background:none;border:none;color:var(--text-muted,#888);font-size:1.5rem;cursor:pointer;">&times;</button>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;">
+                `;
+
+                images.forEach((imgPath, i) => {
+                    html += `
+                        <div style="position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--border,#333);">
+                            <img src="/${imgPath}" style="width:100%;height:120px;object-fit:cover;display:block;" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%2250%25%22 x=%2250%25%22 text-anchor=%22middle%22 dominant-baseline=%22middle%22 font-size=%2240%22>🖼</text></svg>'">
+                            <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.6);color:#fff;font-size:0.65rem;padding:2px 6px;text-align:center;">${i + 1}번</div>
+                        </div>`;
+                });
+
+                html += `</div>
+                    <div style="display:flex;gap:0.5rem;margin-top:1rem;justify-content:flex-end;">
+                        <button class="btn btn-sm btn-primary" onclick="this.closest('div[style*=fixed]').remove(); uploadTrainingImages('${charId}')">+ 이미지 추가</button>
+                        <button class="btn btn-sm btn-outline" onclick="this.closest('div[style*=fixed]').remove(); clearTrainingImages('${charId}')">🗑 전체 삭제</button>
+                        <button class="btn btn-sm btn-secondary" onclick="this.closest('div[style*=fixed]').remove()">닫기</button>
+                    </div>`;
+
+                modal.innerHTML = html;
+                overlay.appendChild(modal);
+                document.body.appendChild(overlay);
+
+            } catch (e) {
+                alert('이미지 목록 로드 실패: ' + e.message);
+            }
+        }
+
+        async function clearTrainingImages(charId) {
+            if (!confirm('이 캐릭터의 학습 이미지를 모두 삭제할까요?')) return;
+            try {
+                await fetch(`/api/training/characters/${charId}/images`, { method: 'DELETE' });
+                alert('이미지가 모두 삭제되었습니다.');
+                loadTrainedCharacters();
+            } catch (e) {
+                alert('삭제 실패: ' + e.message);
+            }
+        }
+
+        async function deleteTrainedChar(charId) {
+            if (!confirm('이 학습 캐릭터를 삭제할까요? 학습 데이터도 모두 삭제됩니다.')) return;
+            try {
+                await fetch(`/api/training/characters/${charId}`, { method: 'DELETE' });
+                if (selectedTrainedChar === charId) selectedTrainedChar = null;
+                loadTrainedCharacters();
+            } catch (e) {
+                alert('삭제 실패: ' + e.message);
+            }
+        }
+
+        // 이미지 생성 시 학습 캐릭터 정보를 전달하도록 기존 startImageGeneration 확장
+        // (workflow.py의 generate-images 엔드포인트에 lora 정보 전달)
+        const _origGetImageModel = () => document.getElementById('image-model')?.value || 'flux-kontext-dev';
+
     </script>
 
     <!-- Style Manager Modal -->

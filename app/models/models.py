@@ -374,3 +374,46 @@ class WorkflowSession(BaseModel):
     global_tone_adjustments: List[dict] = Field(default_factory=list)  # 전체 톤 조절 이력
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
+
+
+# ============================================
+# 9. LoRA 학습 관련 모델
+# ============================================
+
+class TrainingStatus(str, Enum):
+    """LoRA 학습 상태"""
+    PENDING = "pending"           # 대기 중
+    UPLOADING = "uploading"       # 이미지 업로드 중
+    TRAINING = "training"         # 학습 진행 중
+    COMPLETED = "completed"       # 완료
+    FAILED = "failed"             # 실패
+
+
+class TrainedCharacter(BaseModel):
+    """학습된 캐릭터 (LoRA)"""
+    id: str                                     # 고유 ID (uuid)
+    name: str                                   # 캐릭터 이름
+    trigger_word: str                           # 트리거 워드 (예: "sks_taxman")
+    lora_url: str = ""                          # 학습된 LoRA 가중치 URL (fal.ai)
+    training_images: List[str] = Field(default_factory=list)   # 학습에 사용된 이미지 경로
+    training_count: int = 0                     # 총 학습 이미지 수
+    training_rounds: int = 0                    # 학습 횟수 (추가 학습 가능)
+    status: TrainingStatus = TrainingStatus.PENDING
+    preview_image: Optional[str] = None         # 대표 미리보기 이미지 경로
+    description: Optional[str] = None           # 캐릭터 설명
+    style_tags: List[str] = Field(default_factory=list)  # 스타일 태그 (예: ["세무사", "안경"])
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+    error_message: Optional[str] = None         # 학습 실패 시 오류 메시지
+
+
+class TrainingJob(BaseModel):
+    """LoRA 학습 작업"""
+    job_id: str                                 # fal.ai 작업 ID
+    character_id: str                           # TrainedCharacter.id
+    status: TrainingStatus = TrainingStatus.PENDING
+    progress: float = 0.0                       # 0.0 ~ 1.0
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    result_url: Optional[str] = None            # 완료 시 LoRA 가중치 URL
+    error_message: Optional[str] = None

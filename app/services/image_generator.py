@@ -210,6 +210,217 @@ class GeminiGenerator(ImageGeneratorBase):
 
 
 # ────────────────────────────────────────────
+# fal.ai — Flux Kontext (참조 이미지 기반 편집)
+# ────────────────────────────────────────────
+try:
+    import fal_client
+except ImportError:
+    fal_client = None
+
+
+class FluxKontextGenerator(ImageGeneratorBase):
+    """Flux Kontext Dev/Pro — 참조 이미지 기반 캐릭터 일관성 (fal.ai)
+
+    사용 흐름:
+      씬 1: generate(prompt)                         → 텍스트→이미지 (첫 씬)
+      씬 2+: generate(prompt, reference_images=[씬1]) → 이미지→이미지 (일관성 유지)
+    """
+
+    # fal.ai 모델 엔드포인트
+    _MODEL_MAP = {
+        "flux-kontext-dev": "fal-ai/flux-kontext/dev",
+        "flux-kontext-pro": "fal-ai/flux-kontext/pro",
+    }
+    # 참조 이미지 없을 때 (첫 씬) 사용할 텍스트→이미지 모델
+    _TEXT2IMG_MODEL = "fal-ai/flux/dev"
+
+    def __init__(self, api_key: str, model: str = "flux-kontext-dev"):
+        if not fal_client:
+            raise ImportError("fal-client 라이브러리가 설치되지 않았습니다. pip install fal-client")
+        if not api_key:
+            raise ValueError("fal.ai API 키가 설정되지 않았습니다. .env 파일의 FAL_KEY를 확인해주세요.")
+        # fal_client 는 환경변수 FAL_KEY 를 자동 참조하지만, 명시적으로도 설정
+        os.environ["FAL_KEY"] = api_key
+        self.model = model
+        self.endpoint = self._MODEL_MAP.get(model, "fal-ai/flux-kontext/dev")
+
+    async def generate(self, prompt, reference_images=None, size="1024x1536", quality="medium"):
+        """
+        reference_images 가 있으면 → Kontext (이미지→이미지, 캐릭터 유지)
+        reference_images 가 없으면 → Flux Dev (텍스트→이미지, 첫 씬)
+        """
+        t0 = time.time()
+        try:
+            if reference_images and len(reference_images) > 0:
+                # ── 이미지→이미지 (Kontext) ──
+                image_data = await self._generate_with_reference(prompt, reference_images[0], size)
+            else:
+                # ── 텍스트→이미지 (첫 씬) ──
+                image_data = await self._generate_text2img(prompt, size)
+
+            logger.info("Flux 이미지 생성 완료 %.1f초 (model=%s, ref=%s)",
+                        time.time() - t0, self.model,
+                        "있음" if reference_images else "없음")
+            return image_data
+
+        except asyncio.TimeoutError:
+            logger.error("Flux 이미지 생성 타임아웃 (%.0f초)", time.time() - t0)
+            raise TimeoutError(
+                f"이미지 생성이 {IMAGE_GENERATION_TIMEOUT}초 안에 완료되지 않았습니다. "
+                "네트워크나 fal.ai 상태를 확인한 뒤 다시 시도해주세요."
+            )
+        except Exception as e:
+            logger.error("Flux Image Generation Failed (%.1f초): %s", time.time() - t0, e)
+            raise
+
+    async def _generate_text2img(self, prompt: str, size: str) -> bytes:
+        """첫 씬: 텍스트→이미지 (Flux Dev)"""
+        w, h = self._parse_size(size)
+
+        def _sync():
+            handler = fal_client.submit(
+                self._TEXT2IMG_MODEL,
+                arguments={
+                    "prompt": prompt,
+                    "image_size": {"width": w, "height": h},
+                    "num_images": 1,
+                    "output_format": "png",
+                }
+            )
+            return handler.get()
+
+        result = await asyncio.wait_for(
+            asyncio.to_thread(_sync),
+            timeout=IMAGE_GENERATION_TIMEOUT
+        )
+        image_url = result["images"][0]["url"]
+        return await self._download_image(image_url)
+
+    async def _generate_with_reference(self, prompt: str, ref_bytes: bytes, size: str) -> bytes:
+        """후속 씬: 이미지→이미지 (Kontext, 캐릭터 유지)"""
+        import base64
+
+        # 참조 이미지를 data URI 로 변환
+        b64 = base64.b64encode(ref_bytes).decode("utf-8")
+        data_uri = f"data:image/png;base64,{b64}"
+
+        def _sync():
+            handler = fal_client.submit(
+                self.endpoint,
+                arguments={
+                    "prompt": prompt,
+                    "image_url": data_uri,
+                    "num_images": 1,
+                    "output_format": "png",
+                    "guidance_scale": 2.5,
+                    "num_inference_steps": 28,
+                }
+            )
+            return handler.get()
+
+        result = await asyncio.wait_for(
+            asyncio.to_thread(_sync),
+            timeout=IMAGE_GENERATION_TIMEOUT
+        )
+        image_url = result["images"][0]["url"]
+        return await self._download_image(image_url)
+
+    async def edit_with_reference(self, prompt, reference_image, size="1024x1536"):
+        """참조 이미지로 편집 (Kontext 핵심 기능)"""
+        return await self.generate(prompt, reference_images=[reference_image], size=size)
+
+    @staticmethod
+    def _parse_size(size: str) -> tuple:
+        """'1024x1536' → (1024, 1536)"""
+        try:
+            parts = size.split("x")
+            return int(parts[0]), int(parts[1])
+        except (ValueError, IndexError):
+            return 1024, 1536
+
+    @staticmethod
+    async def _download_image(url: str) -> bytes:
+        """URL 에서 이미지 다운로드"""
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            return resp.content
+
+
+# ────────────────────────────────────────────
+# fal.ai — Flux LoRA (학습된 캐릭터로 생성)
+# ────────────────────────────────────────────
+class FluxLoraGenerator(ImageGeneratorBase):
+    """학습된 LoRA 모델로 이미지 생성 (fal.ai)
+
+    사용 흐름:
+      1. fal_service.py 에서 LoRA 학습 → lora_url 획득
+      2. FluxLoraGenerator(api_key, lora_url=...) 생성
+      3. generate("sks_character in a cafe") → 학습된 캐릭터로 이미지 생성
+    """
+
+    _ENDPOINT = "fal-ai/flux-lora"
+
+    def __init__(self, api_key: str, model: str = "flux-lora",
+                 lora_url: str = "", trigger_word: str = ""):
+        if not fal_client:
+            raise ImportError("fal-client 라이브러리가 설치되지 않았습니다. pip install fal-client")
+        if not api_key:
+            raise ValueError("fal.ai API 키가 설정되지 않았습니다. .env 파일의 FAL_KEY를 확인해주세요.")
+        os.environ["FAL_KEY"] = api_key
+        self.model = model
+        self.lora_url = lora_url
+        self.trigger_word = trigger_word
+
+    async def generate(self, prompt, reference_images=None, size="1024x1536", quality="medium"):
+        """LoRA 학습 모델로 이미지 생성"""
+        t0 = time.time()
+        w, h = FluxKontextGenerator._parse_size(size)
+
+        # 트리거 워드가 프롬프트에 없으면 앞에 추가
+        if self.trigger_word and self.trigger_word not in prompt:
+            prompt = f"{self.trigger_word}, {prompt}"
+
+        try:
+            def _sync():
+                arguments = {
+                    "prompt": prompt,
+                    "image_size": {"width": w, "height": h},
+                    "num_images": 1,
+                    "output_format": "png",
+                }
+                # LoRA 가중치가 있으면 적용
+                if self.lora_url:
+                    arguments["loras"] = [{"path": self.lora_url, "scale": 1.0}]
+
+                handler = fal_client.submit(self._ENDPOINT, arguments=arguments)
+                return handler.get()
+
+            result = await asyncio.wait_for(
+                asyncio.to_thread(_sync),
+                timeout=IMAGE_GENERATION_TIMEOUT
+            )
+            logger.info("Flux LoRA 이미지 생성 완료 %.1f초 (trigger=%s)",
+                        time.time() - t0, self.trigger_word)
+
+            image_url = result["images"][0]["url"]
+            return await FluxKontextGenerator._download_image(image_url)
+
+        except asyncio.TimeoutError:
+            logger.error("Flux LoRA 이미지 생성 타임아웃 (%.0f초)", time.time() - t0)
+            raise TimeoutError(
+                f"이미지 생성이 {IMAGE_GENERATION_TIMEOUT}초 안에 완료되지 않았습니다."
+            )
+        except Exception as e:
+            logger.error("Flux LoRA Image Generation Failed (%.1f초): %s", time.time() - t0, e)
+            raise
+
+    async def edit_with_reference(self, prompt, reference_image, size="1024x1536"):
+        """LoRA 모델은 참조 이미지 편집 미지원 → 일반 생성으로 대체"""
+        return await self.generate(prompt, size=size)
+
+
+# ────────────────────────────────────────────
 # 팩토리
 # ────────────────────────────────────────────
 # UI 에서 선택하는 모델 이름 → 실제 API 모델 이름 매핑
@@ -220,12 +431,32 @@ _GEMINI_MODEL_MAP = {
 }
 
 
-def get_generator(model_name: str, api_key: str) -> ImageGeneratorBase:
-    """model_name 을 기반으로 적절한 Generator 인스턴스를 반환"""
-    if "gpt" in model_name or "dall-e" in model_name:
+def get_generator(model_name: str, api_key: str,
+                  lora_url: str = "", trigger_word: str = "") -> ImageGeneratorBase:
+    """model_name 을 기반으로 적절한 Generator 인스턴스를 반환
+
+    Args:
+        model_name: UI 에서 선택한 모델명
+        api_key: 해당 모델의 API 키
+        lora_url: (LoRA 전용) 학습된 LoRA 가중치 URL
+        trigger_word: (LoRA 전용) 학습된 트리거 워드
+    """
+    # ── fal.ai Flux 계열 ──
+    if "flux-kontext" in model_name:
+        return FluxKontextGenerator(api_key, model_name)
+    elif "flux-lora" in model_name:
+        return FluxLoraGenerator(api_key, model_name,
+                                 lora_url=lora_url, trigger_word=trigger_word)
+
+    # ── OpenAI 계열 ──
+    elif "gpt" in model_name or "dall-e" in model_name:
         return OpenAIGenerator(api_key, model_name)
+
+    # ── Gemini 계열 ──
     elif "nano" in model_name or "gemini" in model_name:
         real_model = _GEMINI_MODEL_MAP.get(model_name, model_name)
         return GeminiGenerator(api_key, real_model)
+
+    # ── 기본값: OpenAI ──
     else:
         return OpenAIGenerator(api_key, model_name)

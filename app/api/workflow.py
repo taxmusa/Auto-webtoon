@@ -39,6 +39,16 @@ sessions: dict[str, WorkflowSession] = {}
 stop_signals: dict[str, bool] = {}
 
 
+def _resolve_api_key(model_name: str) -> str:
+    """모델명에 따라 적절한 API 키를 반환하는 헬퍼"""
+    if "flux" in model_name:
+        return os.getenv("FAL_KEY", "")
+    elif "gpt" in model_name or "dall-e" in model_name:
+        return os.getenv("OPENAI_API_KEY", "")
+    else:
+        return os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY", "")
+
+
 # ============================================
 # Request/Response 모델
 # ============================================
@@ -307,11 +317,8 @@ async def generate_preview(request: GeneratePreviewRequest):
             sub_style_name=request.sub_style
         )
         
-        # Select generator — .env 의 키 이름에 맞춤
-        if "gpt" in request.model or "dall-e" in request.model:
-            api_key = os.getenv("OPENAI_API_KEY")
-        else:
-            api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        # Select generator — 모델별 API 키 자동 선택
+        api_key = _resolve_api_key(request.model)
         generator = get_generator(request.model, api_key)
 
         # Generate single image
@@ -365,21 +372,20 @@ async def generate_images(request: GenerateImagesRequest):
     overrides = session.settings.image.manual_overrides
     sub_style = request.sub_style
 
-    # Select generator — .env 키 이름에 맞춤
-    if "gpt" in request.model or "dall-e" in request.model:
-        api_key = os.getenv("OPENAI_API_KEY")
-    else:
-        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    # Select generator — 모델별 API 키 자동 선택
+    api_key = _resolve_api_key(request.model)
     generator = get_generator(request.model, api_key)
+    
+    # Flux Kontext 여부 판별 (참조 이미지 기반 일관성)
+    is_flux_kontext = "flux-kontext" in request.model
     
     generated_images = []
     import asyncio
     
-    # Async batch generation (simplified loop for now, ideally parallel)
-    # Using semaphore to limit concurrency if needed, but let's do sequential or chunks for stability first
-    # or simple asyncio.gather
+    # 첫 씬 이미지 바이트 (Flux Kontext: 씬 2+ 에서 참조용)
+    first_scene_bytes: bytes = b""
     
-    async def generate_single_scene(scene):
+    async def generate_single_scene(scene, ref_bytes: bytes = b""):
         try:
             prompt = build_styled_prompt(
                 scene=scene,
@@ -390,33 +396,47 @@ async def generate_images(request: GenerateImagesRequest):
                 sub_style_name=sub_style
             )
             
-            # Using 1024x1792 for Webtoon (Vertical) if supported
-            size = "1024x1792" if request.aspect_ratio == "4:5" or request.aspect_ratio == "9:16" else "1024x1024"
-            # OpenAI supports 1024x1792. Gemini might vary.
+            # Using 1024x1536 for Webtoon (Vertical)
+            size = "1024x1536" if request.aspect_ratio in ("4:5", "9:16") else "1024x1024"
             
-            image_data = await generator.generate(prompt, size=size)
+            # Flux Kontext: 참조 이미지가 있으면 전달 (캐릭터 일관성 유지)
+            ref_images = [ref_bytes] if ref_bytes and is_flux_kontext else None
+            image_data = await generator.generate(prompt, reference_images=ref_images, size=size)
             
             # Save file
             filename = f"scene_{scene.scene_number}_{uuid.uuid4().hex[:6]}.png"
             filepath = os.path.join("output", filename)
             os.makedirs("output", exist_ok=True)
             
-            import base64
-            with open(filepath, "wb") as f:
-                if isinstance(image_data, bytes):
+            if isinstance(image_data, bytes):
+                with open(filepath, "wb") as f:
                     f.write(image_data)
-                else:
-                    # If URL, need to download. For now assume bytes or b64
-                    pass
+                
+                # Pillow 후처리: 상단 25% 여백 강제 확보 (텍스트 오버레이 공간)
+                try:
+                    from app.services.pillow_service import get_pillow_service
+                    from PIL import Image
+                    from io import BytesIO
+                    pillow = get_pillow_service()
+                    img = Image.open(filepath)
+                    img = pillow.ensure_top_margin(img, margin_ratio=0.25)
+                    img.save(filepath, "PNG")
+                    # image_data 도 갱신 (참조용)
+                    buf = BytesIO()
+                    img.save(buf, format="PNG")
+                    image_data = buf.getvalue()
+                except Exception as margin_err:
+                    logger.warning(f"여백 후처리 실패 (씬 {scene.scene_number}): {margin_err}")
             
             return {
                 "scene_number": scene.scene_number,
                 "prompt_used": prompt,
                 "local_path": filepath,
-                "status": "generated"
+                "status": "generated",
+                "image_bytes": image_data if isinstance(image_data, bytes) else b""
             }
         except Exception as e:
-            print(f"Error generating scene {scene.scene_number}: {e}")
+            logger.error(f"Error generating scene {scene.scene_number}: {e}")
             return {
                 "scene_number": scene.scene_number,
                 "prompt_used": "Error",
@@ -432,10 +452,17 @@ async def generate_images(request: GenerateImagesRequest):
     for scene in session.story.scenes:
         # 중단 신호 체크
         if stop_signals.get(request.session_id, False):
-            print(f"[STOP] 세션 {request.session_id} 이미지 생성 중단됨 ({len(session.images)}/{len(session.story.scenes)} 완료)")
+            logger.info(f"[STOP] 세션 {request.session_id} 이미지 생성 중단됨 ({len(session.images)}/{len(session.story.scenes)} 완료)")
             break
         
-        res = await generate_single_scene(scene)
+        # Flux Kontext: 씬 2+ 는 첫 씬 이미지를 참조로 전달
+        ref = first_scene_bytes if (is_flux_kontext and first_scene_bytes) else b""
+        res = await generate_single_scene(scene, ref_bytes=ref)
+        
+        # 첫 씬 결과를 참조 이미지로 저장
+        if not first_scene_bytes and res.get("image_bytes"):
+            first_scene_bytes = res["image_bytes"]
+        
         if res.get("local_path"):
             img = GeneratedImage(
                 scene_number=res["scene_number"],
@@ -783,29 +810,43 @@ async def regenerate_image(request: RegenerateImageRequest):
         sub_style_name=sub_style
     )
     
-    # API 키 결정
+    # API 키 결정 — 모델별 자동 선택
     model_name = request.model or "gpt-image-1"
-    if model_name.startswith("gpt-image") or model_name.startswith("dall-e"):
-        api_key = os.getenv("OPENAI_API_KEY")
-    else:
-        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-    
+    api_key = _resolve_api_key(model_name)
     generator = get_generator(model_name, api_key)
     
     try:
-        size = "1024x1792"  # 웹툰 기본 세로
-        image_data = await generator.generate(prompt, size=size)
+        size = "1024x1536"  # 웹툰 기본 세로
+        
+        # Flux Kontext: 첫 씬 이미지를 참조로 전달 (일관성)
+        ref_images = None
+        if "flux-kontext" in model_name and session.images:
+            first_img = session.images[0]
+            if first_img.local_path and os.path.exists(first_img.local_path):
+                with open(first_img.local_path, "rb") as rf:
+                    ref_images = [rf.read()]
+        
+        image_data = await generator.generate(prompt, reference_images=ref_images, size=size)
         
         # 파일 저장
         filename = f"scene_{scene.scene_number}_{uuid.uuid4().hex[:6]}.png"
         filepath = os.path.join("output", filename)
         os.makedirs("output", exist_ok=True)
         
-        with open(filepath, "wb") as f:
-            if isinstance(image_data, bytes):
+        if isinstance(image_data, bytes):
+            with open(filepath, "wb") as f:
                 f.write(image_data)
-            else:
-                pass  # URL 반환인 경우 별도 처리 필요
+            
+            # Pillow 후처리: 상단 25% 여백 강제 확보
+            try:
+                from app.services.pillow_service import get_pillow_service
+                from PIL import Image as PILImage
+                pillow = get_pillow_service()
+                regen_img = PILImage.open(filepath)
+                regen_img = pillow.ensure_top_margin(regen_img, margin_ratio=0.25)
+                regen_img.save(filepath, "PNG")
+            except Exception as margin_err:
+                logger.warning(f"여백 후처리 실패 (재생성 씬 {scene.scene_number}): {margin_err}")
         
         new_img = GeneratedImage(
             scene_number=scene.scene_number,
