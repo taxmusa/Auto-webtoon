@@ -2,7 +2,7 @@
 이미지 생성용 스타일 프롬프트 조립.
 섹션 순서·FROZEN/LOCKED 규칙은 STYLE_CONSISTENCY_POLICY.md 를 준수한다.
 """
-from app.models.models import Scene, CharacterProfile, CharacterStyle, BackgroundStyle, ManualPromptOverrides
+from app.models.models import Scene, CharacterProfile, CharacterStyle, BackgroundStyle, ManualPromptOverrides, VisualIdentity
 from typing import List, Optional
 
 # ==========================================
@@ -270,11 +270,64 @@ def build_styled_prompt(
         additional = manual_overrides.additional_instructions.strip()
         additional_en = _translate_to_english(additional)
 
-    # 0. 사용자 오버라이드가 있으면 **가장 앞**에 최우선 지시로 삽입
+    # =====================================================
+    # 0. ABSOLUTE CHARACTER CONSISTENCY — 프롬프트 최상단
+    # 모든 씬의 캐릭터 외모를 완벽하게 동일하게 유지하는 대원칙
+    # =====================================================
+    # visual_identity 데이터 수집
+    vi_blocks = []
+    scene_char_names = [d.character for d in scene.dialogues]
+    active_chars = [c for c in characters if c.name in scene_char_names]
+    if not active_chars:
+        active_chars = characters[:2]
+
+    for char in active_chars:
+        vi = char.visual_identity
+        if vi:
+            vi_blocks.append(f"""  [{char.name}]
+  - Gender: {vi.gender or 'not specified'}
+  - Age: {vi.age_range or 'not specified'}
+  - Hair style: {vi.hair_style or 'not specified'}
+  - Hair color: {vi.hair_color or 'not specified'}
+  - Skin tone: {vi.skin_tone or 'not specified'}
+  - Eye shape: {vi.eye_shape or 'not specified'}
+  - Glasses: {vi.glasses or 'none'}
+  - Outfit: {vi.outfit or 'not specified'}
+  - Outfit colors: {vi.outfit_color or 'not specified'}
+  - Accessories: {vi.accessories or 'none'}
+  - Body type: {vi.body_type or 'average'}
+  - Distinguishing features: {vi.distinguishing_features or 'none'}""")
+        else:
+            # visual_identity가 없으면 appearance에서 추출
+            vi_blocks.append(f"""  [{char.name}]
+  - Role: {char.role}
+  - Appearance: {char.appearance or 'Professional look'}""")
+
+    vi_section = "\n".join(vi_blocks)
+
+    parts.append(f"""
+[ABSOLUTE CHARACTER CONSISTENCY — HIGHEST PRIORITY]
+This is a MULTI-PANEL comic. Every character MUST look EXACTLY IDENTICAL across ALL scenes.
+The following character details are FROZEN and MUST NOT change between scenes:
+
+{vi_section}
+
+CRITICAL RULES:
+1. If a character wears glasses → they MUST wear glasses in EVERY scene. If no glasses → NEVER add glasses.
+2. Hair style, hair color, and hair length MUST be PIXEL-IDENTICAL across all scenes.
+3. Skin tone MUST remain the EXACT SAME shade. Do not darken or lighten between scenes.
+4. Outfit and outfit colors MUST be IDENTICAL. Same jacket, same shirt, same tie, same colors.
+5. Accessories (watch, belt, bag strap, earrings) MUST be consistent. If present → always present. If absent → always absent.
+6. Body proportions and height relationship between characters MUST stay constant.
+7. Facial features (eye shape, nose, mouth, jawline) MUST NOT change between scenes.
+[GUARD] Character consistency is MORE IMPORTANT than scene-specific details. When in doubt, prioritize consistency.
+""")
+
+    # 0.5 사용자 오버라이드가 있으면 상단에 삽입
     if additional_en:
         parts.append(f"""
-[HIGHEST PRIORITY — USER OVERRIDE INSTRUCTION]
-The following instruction takes absolute precedence over every other section below.
+[USER OVERRIDE INSTRUCTION]
+The following instruction takes precedence over style sections below.
 {additional_en}
 """)
 
@@ -324,24 +377,42 @@ The following instruction takes absolute precedence over every other section bel
 {bg_prompt}
 """)
 
-    # 4. Character Identity
-    scene_char_names = [d.character for d in scene.dialogues]
-    active_characters = [c for c in characters if c.name in scene_char_names]
-    if not active_characters:
-        active_characters = characters[:2]
-
-    for i, char in enumerate(active_characters):
+    # 4. Character Identity (visual_identity 기반 강화)
+    for i, char in enumerate(active_chars):
         position = "LEFT" if i == 0 else "RIGHT"
-        identity = f"Name: {char.name}, Role: {char.role}, Appearance: {char.appearance or 'Professional look'}, Personality: {char.personality or 'Neutral'}"
+        vi = char.visual_identity
+        
+        if vi:
+            identity_lines = f"""Name: {char.name}
+  Role: {char.role}
+  Position: {position}
+  Gender: {vi.gender or 'not specified'} | Age: {vi.age_range or 'not specified'}
+  Hair: {vi.hair_style or 'not specified'} ({vi.hair_color or 'not specified'})
+  Skin tone: {vi.skin_tone or 'not specified'}
+  Eyes: {vi.eye_shape or 'not specified'}
+  Glasses: {vi.glasses or 'none'}
+  Outfit: {vi.outfit or 'not specified'} — Colors: {vi.outfit_color or 'not specified'}
+  Accessories: {vi.accessories or 'none'}
+  Build: {vi.body_type or 'average'}
+  Features: {vi.distinguishing_features or 'none'}"""
+        else:
+            identity_lines = f"""Name: {char.name}
+  Role: {char.role}
+  Position: {position}
+  Appearance: {char.appearance or 'Professional look'}
+  Personality: {char.personality or 'Neutral'}"""
+
         parts.append(f"""
-[CHARACTER {i+1} IDENTITY - DO NOT MODIFY]
-Position: {position}
-{identity}
+[CHARACTER {i+1} IDENTITY — FROZEN, DO NOT MODIFY]
+{identity_lines}
 """)
 
     # 4.5 Character GUARD (정책 §8.2)
-    if active_characters:
-        parts.append("[GUARD] These character appearances are FROZEN. Do not alter hair, eyes, clothes, or proportions.\n")
+    if active_chars:
+        parts.append("""[GUARD] These character appearances are ABSOLUTELY FROZEN across all scenes.
+Do NOT alter: hair style, hair color, skin tone, glasses (presence/absence), outfit, outfit colors, accessories, body proportions.
+If you are uncertain about any detail, refer back to the [ABSOLUTE CHARACTER CONSISTENCY] section above.
+""")
 
     # 5. This Scene
     emotions = [d.emotion for d in scene.dialogues if d.emotion]
@@ -352,6 +423,21 @@ Position: {position}
 Scene: {scene.scene_description}
 Expression: {dominant_emotion}
 Narration: {scene.narration or 'None'}
+""")
+
+    # 5.5 Composition & Layout (인스타툰 말풍선/나레이션 공간 확보)
+    parts.append("""
+[COMPOSITION & LAYOUT — MANDATORY]
+This image is for an Instagram webtoon (insta-toon) where speech bubbles and narration text will be overlaid AFTER generation.
+CRITICAL SPACING RULES:
+- Leave EMPTY SPACE at the TOP: at least 25-30% of image height. This area MUST be blank or very simple background only.
+- Leave EMPTY SPACE at the BOTTOM: at least 15-20% of image height for narration text.
+- Characters should occupy only 40-55% of the VERTICAL space, positioned in the LOWER-CENTER of the frame.
+- Use a MEDIUM SHOT or MEDIUM-WIDE SHOT. Show characters from waist-up or full body. NEVER use close-up shots that fill the frame.
+- Do NOT let any character's head touch the top 25% of the image. Keep heads in the middle zone.
+- Maintain generous BREATHING ROOM on LEFT and RIGHT sides (at least 10% each) for side text.
+- Background areas must be CLEAN and UNCLUTTERED so text overlay remains readable.
+[GUARD] Composition spacing is NON-NEGOTIABLE. Top 25% must be empty. Do NOT fill the frame with characters.
 """)
 
     # 6. Locked Attributes (정책 §4: STYLE / BACKGROUND 접두어)
@@ -377,6 +463,22 @@ completely free of any written content.
         parts.append(f"""
 [REMINDER — APPLY USER OVERRIDE ABOVE ALL ELSE]
 {additional_en}
+""")
+
+    # 9. FINAL CONSISTENCY REMINDER — 프롬프트 맨 끝
+    # AI 모델은 프롬프트의 처음과 끝을 가장 강하게 따르므로, 일관성 규칙을 마지막에 다시 반복
+    char_names = [c.name for c in active_chars]
+    parts.append(f"""
+[FINAL REMINDER — CHARACTER CONSISTENCY CHECK]
+Before generating this image, verify:
+✓ Each character ({', '.join(char_names)}) matches their FROZEN appearance exactly
+✓ Glasses: present/absent matches the character spec (do NOT randomly add or remove)
+✓ Hair style and color: IDENTICAL to spec
+✓ Skin tone: IDENTICAL to spec
+✓ Outfit and colors: IDENTICAL to spec
+✓ Accessories: IDENTICAL to spec
+✓ Top 25% of image is EMPTY for text overlay
+✓ Characters positioned in lower-center, not filling the entire frame
 """)
 
     return "\n".join(parts)

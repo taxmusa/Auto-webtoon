@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     # AI API 키
     openai_api_key: Optional[str] = Field(default=None, alias="OPENAI_API_KEY")
     gemini_api_key: Optional[str] = Field(default=None, alias="GEMINI_API_KEY")
+    fal_key: Optional[str] = Field(default=None, alias="FAL_KEY")
     
     # 이미지 호스팅 - Cloudinary
     cloudinary_cloud_name: Optional[str] = Field(default=None, alias="CLOUDINARY_CLOUD_NAME")

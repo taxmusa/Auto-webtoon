@@ -170,7 +170,8 @@ class GeminiService:
         collected_data: list,
         scene_count: int = 8,
         character_settings: Optional[CharacterSettings] = None,
-        rule_settings: Optional[RuleSettings] = None
+        rule_settings: Optional[RuleSettings] = None,
+        model: str = "gemini-2.0-flash"
     ) -> Story:
         """규칙 기반 스토리 생성 - 모델 fallback 지원"""
         import logging
@@ -181,8 +182,15 @@ class GeminiService:
         if not rule_settings:
             rule_settings = RuleSettings()
         
-        # Fallback 모델 순서 정의
-        models_to_try = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-3-flash-preview"]
+        # Fallback 모델 순서 정의 (사용자 선택 모델 우선)
+        FALLBACK_MODELS = {
+            "gemini-2.0-flash": ["gemini-2.5-flash", "gemini-3-flash-preview"],
+            "gemini-2.5-pro": ["gemini-2.5-flash", "gemini-3-pro-preview"],
+            "gemini-2.5-flash": ["gemini-3-flash-preview"],
+            "gemini-3-pro-preview": ["gemini-3-flash-preview"],
+            "gemini-3-flash-preview": ["gemini-2.5-flash"]
+        }
+        models_to_try = [model] + FALLBACK_MODELS.get(model, ["gemini-2.5-flash", "gemini-3-flash-preview"])
             
         data_str = "\n".join([f"- {d['title']}: {d['content']}" for d in collected_data])
         
@@ -223,11 +231,47 @@ class GeminiService:
 - 각 씬마다 캐릭터의 기분(neutral/happy/sad/surprised/serious/angry)을 지정하세요.
 - 전문적인 내용도 이해하기 쉽게 풀어서 설명하세요.
 
+[캐릭터 외모 — 매우 중요]
+각 캐릭터에 대해 visual_identity를 반드시 포함하세요.
+이 정보는 이미지 생성 시 모든 씬에서 동일한 외모를 유지하는 데 사용됩니다.
+구체적이고 정확하게, 아래 12가지 속성을 모두 채워주세요.
+- gender: "male" 또는 "female"
+- age_range: 예) "early 30s", "mid 40s"
+- hair_style: 예) "short straight hair, side-parted to the left" (길이, 스타일, 가르마 방향)
+- hair_color: 예) "jet black #1A1A1A" (색상 + 헥스코드)
+- skin_tone: 예) "warm beige, light tan" (밝기와 톤 포함)
+- eye_shape: 예) "almond-shaped, medium size, double eyelid"
+- glasses: 반드시 명시 — 예) "black rectangular thin-frame glasses" 또는 "none (no glasses)"
+- outfit: 예) "navy blue suit jacket, white dress shirt, blue striped tie" (상의, 하의, 넥타이 등 구체적)
+- outfit_color: 예) "navy #1B2A4A jacket, white #FFFFFF shirt, blue #3B5998 tie" (각 부위별 헥스코드)
+- accessories: 예) "silver watch on left wrist, black leather belt" 또는 "none"
+- body_type: 예) "slim build, average height"
+- distinguishing_features: 예) "small mole on right cheek" 또는 "none"
+
 [출력 형식 (JSON)]
 {{
     "title": "제목",
     "characters": [
-        {{"name": "이름", "role": "역할(전문가/질문자/조력자)", "appearance": "외모 묘사", "personality": "성격"}}
+        {{
+            "name": "이름",
+            "role": "역할(전문가/질문자/조력자)",
+            "appearance": "외모 묘사 (1~2문장 요약)",
+            "personality": "성격",
+            "visual_identity": {{
+                "gender": "male/female",
+                "age_range": "나이대",
+                "hair_style": "구체적 헤어스타일",
+                "hair_color": "색상 + 헥스코드",
+                "skin_tone": "피부톤",
+                "eye_shape": "눈 형태",
+                "glasses": "안경 유무 및 상세 또는 none",
+                "outfit": "복장 상세",
+                "outfit_color": "부위별 색상 + 헥스코드",
+                "accessories": "액세서리 또는 none",
+                "body_type": "체형",
+                "distinguishing_features": "특이사항 또는 none"
+            }}
+        }}
     ],
     "scenes": [
         {{
@@ -261,11 +305,21 @@ class GeminiService:
                     scene.warnings = self._validate_scene_density(scene, rule_settings)
                     scenes.append(scene)
                 
-                logger.info(f"[generate_story] 성공: {try_model}, 씬 수: {len(scenes)}")
+                # 캐릭터 파싱 (visual_identity 포함)
+                from app.models.models import VisualIdentity
+                parsed_characters = []
+                for c in data.get("characters", []):
+                    vi_data = c.pop("visual_identity", None)
+                    char = CharacterProfile(**c)
+                    if vi_data and isinstance(vi_data, dict):
+                        char.visual_identity = VisualIdentity(**vi_data)
+                    parsed_characters.append(char)
+                
+                logger.info(f"[generate_story] 성공: {try_model}, 씬 수: {len(scenes)}, 캐릭터: {len(parsed_characters)}")
                 return Story(
                     title=data.get("title", keyword),
                     scenes=scenes,
-                    characters=[CharacterProfile(**c) for c in data.get("characters", [])]
+                    characters=parsed_characters
                 )
             except Exception as e:
                 last_error = e

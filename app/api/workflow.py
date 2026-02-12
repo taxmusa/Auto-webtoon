@@ -13,7 +13,7 @@ from app.models.models import (
     Story, Scene, InstagramCaption, ProjectSettings,
     CharacterSettings, ImageStyle, SubStyle, SpecializedField,
     ManualPromptOverrides, ThumbnailData, ThumbnailSource, ThumbnailPosition,
-    SeriesInfo, ToBeContinuedStyle
+    SeriesInfo, ToBeContinuedStyle, GeneratedImage
 )
 from app.services.gemini_service import get_gemini_service
 from app.services.openai_service import get_openai_service
@@ -34,6 +34,9 @@ logger = logging.getLogger(__name__)
 
 # 메모리 기반 세션 저장 (실제 서비스에서는 DB 사용)
 sessions: dict[str, WorkflowSession] = {}
+
+# 이미지 생성 중단 신호: session_id → True 이면 즉시 루프 중단
+stop_signals: dict[str, bool] = {}
 
 
 # ============================================
@@ -58,6 +61,7 @@ class GenerateStoryRequest(BaseModel):
     questioner_type: str = "curious_beginner"
     expert_type: str = "friendly_expert"
     scene_count: int = 8
+    model: str = "gemini-2.0-flash"
 
 
 class UpdateSceneRequest(BaseModel):
@@ -168,7 +172,7 @@ async def generate_story(request: GenerateStoryRequest):
     try:
         import logging
         logger = logging.getLogger(__name__)
-        logger.info(f"[generate_story] 스토리 생성 시작 - keyword: {session.keyword}, scene_count: {request.scene_count}")
+        logger.info(f"[generate_story] 스토리 생성 시작 - keyword: {session.keyword}, scene_count: {request.scene_count}, model: {request.model}")
         
         story = await gemini.generate_story(
             keyword=session.keyword,
@@ -176,7 +180,8 @@ async def generate_story(request: GenerateStoryRequest):
             collected_data=collected_data,
             scene_count=request.scene_count,
             character_settings=character_settings,
-            rule_settings=rule_settings
+            rule_settings=rule_settings,
+            model=request.model
         )
         
         if not story:
@@ -419,14 +424,18 @@ async def generate_images(request: GenerateImagesRequest):
                 "error": str(e)
             }
 
-    # Parallel execution
-    tasks = [generate_single_scene(scene) for scene in session.story.scenes]
-    results = await asyncio.gather(*tasks)
-    
-    # Map to GeneratedImage objects
+    # 순차 생성: 한 씬 완료마다 session.images에 즉시 추가 → 프론트 폴링으로 실시간 진행률 확인 가능
     from app.models.models import GeneratedImage
     session.images = []
-    for res in results:
+    stop_signals[request.session_id] = False  # 중단 신호 초기화
+    
+    for scene in session.story.scenes:
+        # 중단 신호 체크
+        if stop_signals.get(request.session_id, False):
+            print(f"[STOP] 세션 {request.session_id} 이미지 생성 중단됨 ({len(session.images)}/{len(session.story.scenes)} 완료)")
+            break
+        
+        res = await generate_single_scene(scene)
         if res.get("local_path"):
             img = GeneratedImage(
                 scene_number=res["scene_number"],
@@ -434,8 +443,17 @@ async def generate_images(request: GenerateImagesRequest):
                 local_path=res["local_path"],
                 status="generated"
             )
-            session.images.append(img)
-            
+        else:
+            img = GeneratedImage(
+                scene_number=res["scene_number"],
+                prompt_used=res.get("prompt_used", "Error"),
+                local_path="",
+                status="error"
+            )
+        session.images.append(img)
+    
+    # 중단 신호 정리
+    stop_signals.pop(request.session_id, None)
     session.state = WorkflowState.REVIEWING_IMAGES
     
     return {
@@ -443,6 +461,16 @@ async def generate_images(request: GenerateImagesRequest):
         "state": session.state.value,
         "images": [img.model_dump() for img in session.images]
     }
+
+
+class StopGenerationRequest(BaseModel):
+    session_id: str
+
+@router.post("/stop-generation")
+async def stop_generation(request: StopGenerationRequest):
+    """이미지 생성 중단 신호 전송"""
+    stop_signals[request.session_id] = True
+    return {"status": "stop_signal_sent", "session_id": request.session_id}
 
 
 @router.post("/generate-caption")
@@ -721,7 +749,7 @@ class RegenerateImageRequest(BaseModel):
 
 @router.post("/regenerate-image")
 async def regenerate_image(request: RegenerateImageRequest):
-    """이미지 재생성"""
+    """이미지 재생성 — 메인 생성과 동일한 generator + prompt_builder 방식"""
     session = sessions.get(request.session_id)
     if not session or not session.story or not session.images:
         raise HTTPException(status_code=404, detail="Session, story, or images not found")
@@ -729,25 +757,67 @@ async def regenerate_image(request: RegenerateImageRequest):
     if request.scene_index >= len(session.story.scenes):
         raise HTTPException(status_code=400, detail="Invalid scene index")
     
-    openai_service = get_openai_service()
     scene = session.story.scenes[request.scene_index]
     
-    # 세션 설정 사용
-    style = session.settings.image_style or ImageStyle.WEBTOON
-    sub_style = session.settings.sub_style or SubStyle.NORMAL
+    # 세션에 저장된 설정 가져오기
+    char_style = None
+    bg_style = None
+    overrides = None
+    sub_style = None
     
-    # 단일 이미지 재생성
-    images = await openai_service.generate_images_batch(
-        scenes=[scene],
-        style=style,
-        sub_style=sub_style
+    if session.settings and session.settings.image:
+        if session.settings.image.character_style_id:
+            char_style = get_character_style(session.settings.image.character_style_id)
+        if session.settings.image.background_style_id:
+            bg_style = get_background_style(session.settings.image.background_style_id)
+        overrides = session.settings.image.manual_overrides
+        sub_style = session.settings.image.sub_style
+    
+    # 프롬프트 빌드
+    prompt = build_styled_prompt(
+        scene=scene,
+        characters=session.story.characters,
+        character_style=char_style,
+        background_style=bg_style,
+        manual_overrides=overrides,
+        sub_style_name=sub_style
     )
     
-    if images:
-        session.images[request.scene_index] = images[0]
-        return {"image": images[0].model_dump()}
+    # API 키 결정
+    model_name = request.model or "gpt-image-1"
+    if model_name.startswith("gpt-image") or model_name.startswith("dall-e"):
+        api_key = os.getenv("OPENAI_API_KEY")
+    else:
+        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     
-    raise HTTPException(status_code=500, detail="Failed to regenerate image")
+    generator = get_generator(model_name, api_key)
+    
+    try:
+        size = "1024x1792"  # 웹툰 기본 세로
+        image_data = await generator.generate(prompt, size=size)
+        
+        # 파일 저장
+        filename = f"scene_{scene.scene_number}_{uuid.uuid4().hex[:6]}.png"
+        filepath = os.path.join("output", filename)
+        os.makedirs("output", exist_ok=True)
+        
+        with open(filepath, "wb") as f:
+            if isinstance(image_data, bytes):
+                f.write(image_data)
+            else:
+                pass  # URL 반환인 경우 별도 처리 필요
+        
+        new_img = GeneratedImage(
+            scene_number=scene.scene_number,
+            prompt_used=prompt,
+            local_path=filepath,
+            status="generated"
+        )
+        session.images[request.scene_index] = new_img
+        return {"image": new_img.model_dump()}
+    except Exception as e:
+        print(f"[REGEN ERROR] scene {scene.scene_number}: {e}")
+        raise HTTPException(status_code=500, detail=f"재생성 실패: {str(e)}")
 
 
 # ============================================

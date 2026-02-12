@@ -600,9 +600,9 @@
             <div class="step-line"></div>
             <div class="step" data-step="4" onclick="navigateToStep(4)"><span class="step-num">4</span> 이미지</div>
             <div class="step-line"></div>
-            <div class="step" data-step="5" onclick="navigateToStep(5)"><span class="step-num">5</span> 편집</div>
+            <div class="step" data-step="5" onclick="navigateToStep(5)"><span class="step-num">5</span> 생성</div>
             <div class="step-line"></div>
-            <div class="step" data-step="6" onclick="navigateToStep(6)"><span class="step-num">6</span> 캡션</div>
+            <div class="step" data-step="6" onclick="navigateToStep(6)"><span class="step-num">6</span> 편집</div>
             <div class="step-line"></div>
             <div class="step" data-step="7" onclick="navigateToStep(7)"><span class="step-num">7</span> 발행</div>
         </div>
@@ -1206,6 +1206,14 @@
                             "is_preset": true,
                             "type": "character"
                         },
+                        "bg_default": {
+                            "name": "스타일 기본", "emoji": "🎭",
+                            "desc": "스타일에 맞는 자연스러운 배경",
+                            "prompt": "",
+                            "bg_instruction": "",
+                            "is_preset": true,
+                            "type": "background"
+                        },
                         "bg_remove": {
                             "name": "배경 지우기", "emoji": "🚫",
                             "desc": "배경 없이 캐릭터만 (흰 배경)",
@@ -1314,11 +1322,11 @@
                             charTab.className = 'btn btn-sm btn-outline';
                             bgTab.className = 'btn btn-sm btn-primary';
 
-                            // 배경 탭 진입 시 기본 선택: bg_remove
+                            // 배경 탭 진입 시 기본 선택: bg_default
                             if (!selectedStyles.background || !selectedStyles.background.id) {
-                                currentSelectedStyle = 'bg_remove';
-                                selectedStyles.background = { ...PRESET_STYLES['bg_remove'], id: 'bg_remove' };
-                                if (label) label.innerText = '선택: 🚫 배경 지우기 - 배경 없이 캐릭터만 (흰 배경)';
+                                currentSelectedStyle = 'bg_default';
+                                selectedStyles.background = { ...PRESET_STYLES['bg_default'], id: 'bg_default' };
+                                if (label) label.innerText = '선택: 🎭 스타일 기본 - 스타일에 맞는 자연스러운 배경';
                                 if (colorPicker) colorPicker.style.display = 'none';
                             } else {
                                 currentSelectedStyle = selectedStyles.background.id;
@@ -1337,9 +1345,10 @@
                     }
 
                     function getAllStyles() {
-                        // ── 배경 탭: bg_remove, bg_solid 만 표시 (API 로드 배경 무시) ──
+                        // ── 배경 탭: bg_default, bg_remove, bg_solid 표시 ──
                         if (currentStyleType === 'background') {
                             return [
+                                { id: 'bg_default', ...PRESET_STYLES['bg_default'], is_preset: true },
                                 { id: 'bg_remove', ...PRESET_STYLES['bg_remove'], is_preset: true },
                                 { id: 'bg_solid', ...PRESET_STYLES['bg_solid'], is_preset: true }
                             ];
@@ -1405,7 +1414,9 @@
                             let contentHtml = '';
 
                             // 배경 스타일 특수 카드 렌더링
-                            if (style.id === 'bg_remove') {
+                            if (style.id === 'bg_default') {
+                                contentHtml = `<div class="new-style-no-thumb" style="background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); border:2px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:2rem;">🎭</div>`;
+                            } else if (style.id === 'bg_remove') {
                                 contentHtml = `<div class="new-style-no-thumb" style="background:#fff; border:2px dashed #ccc; display:flex; align-items:center; justify-content:center; font-size:2rem;">🚫</div>`;
                             } else if (style.id === 'bg_solid') {
                                 contentHtml = `<div class="new-style-no-thumb" style="background:${bgSolidColor}; border:2px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:1.2rem; color:#666;">
@@ -1421,7 +1432,7 @@
                             // If it has thumbnail, emoji is redundant or can be small badge. 
                             // But if we use new-style-no-thumb, the emoji is inside it.
                             // So we only show separate emoji if we have a real thumbnail.
-                            if (style.thumbnail && style.id !== 'bg_remove' && style.id !== 'bg_solid') {
+                            if (style.thumbnail && style.id !== 'bg_default' && style.id !== 'bg_remove' && style.id !== 'bg_solid') {
                                 contentHtml += `<div style="font-size:0.8rem; margin-bottom:0.2rem;">${style.emoji || ''}</div>`;
                             }
 
@@ -1430,7 +1441,7 @@
                             if (style.is_preset) {
                                 if (style.id === 'none') {
                                     badge = '<span class="style-badge preset">🚫 없음</span>';
-                                } else if (style.id === 'bg_remove' || style.id === 'bg_solid') {
+                                } else if (style.id === 'bg_default' || style.id === 'bg_remove' || style.id === 'bg_solid') {
                                     badge = '<span class="style-badge preset">🔧 배경</span>';
                                 } else {
                                     badge = '<span class="style-badge preset">🔒 기본</span>';
@@ -1703,8 +1714,8 @@
             </div>
         </div>
 
-        <!-- Step 5: 이미지 편집 단계 (NEW) -->
-        <div class="step-content" id="step-5">
+        <!-- Step 6: 이미지 편집 단계 -->
+        <div class="step-content" id="step-6">
             <div class="card">
                 <h2 class="card-title">✏️ 이미지 편집</h2>
                 <p class="card-desc">생성된 이미지의 톤을 조절하고, 각 씬을 확정한 후 다음 단계로 진행하세요.</p>
@@ -1759,55 +1770,55 @@
             </div>
 
             <div class="actions" style="margin-top: 1.5rem;">
-                <button class="btn btn-secondary" onclick="goToStep(4)">← 이전</button>
+                <button class="btn btn-secondary" onclick="goToStep(5)">← 이전 (생성 결과)</button>
                 <button class="btn btn-primary" id="edit-next-btn" onclick="proceedFromEditStage()" disabled>다음 단계 (캡션
                     생성) →</button>
             </div>
         </div>
 
-        <!-- Step 6: 이미지 생성 및 검토 (기존 Step 5) -->
-        <div class="step-content" id="step-6">
-            <div class="loading" id="loading-images">
-                <div class="spinner"></div>
-                <div id="image-progress-text">이미지 렌더링 중...</div>
-                <div style="margin-top: 1rem; width: 100%; max-width: 400px; margin-left: auto; margin-right: auto;">
-                    <div
-                        style="background: var(--bg-input); border-radius: 10px; height: 12px; overflow: hidden; border: 1px solid var(--border);">
-                        <div id="image-progress-bar"
-                            style="background: var(--primary); height: 100%; width: 0%; transition: width 0.5s;"></div>
+        <!-- Step 5: 이미지 생성 및 검토 -->
+        <div class="step-content" id="step-5">
+            <!-- 상단 진행 상태 바 -->
+            <div id="gen-status-bar" class="card" style="display:none; margin-bottom:1rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                    <div>
+                        <span id="gen-status-text" style="font-size:1.1rem; font-weight:700;">🎨 이미지 생성 중...</span>
+                        <span id="gen-status-count" style="font-size:0.9rem; color:var(--text-muted); margin-left:0.5rem;">0/0</span>
                     </div>
-                    <div id="image-progress-detail"
-                        style="text-align: right; font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">0 /
-                        0</div>
+                    <div style="display:flex; gap:0.5rem;" id="gen-control-buttons">
+                        <button class="btn btn-secondary" onclick="pauseGeneration()" id="btn-pause" style="padding:6px 14px; font-size:0.85rem;">⏸️ 일시정지</button>
+                        <button class="btn btn-secondary" onclick="stopGeneration()" id="btn-stop" style="padding:6px 14px; font-size:0.85rem; border-color:var(--danger); color:var(--danger);">⏹️ 중단</button>
+                    </div>
                 </div>
+                <div style="background:var(--bg-input); border-radius:10px; height:10px; overflow:hidden; border:1px solid var(--border);">
+                    <div id="gen-progress-bar" style="background:linear-gradient(90deg,var(--primary),#7c3aed); height:100%; width:0%; transition:width 0.5s; border-radius:10px;"></div>
+                </div>
+                <div id="gen-status-sub" style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">첫 번째 씬을 생성하고 있습니다...</div>
             </div>
 
-            <div id="images-review-area" style="display: none;">
-                <div class="card">
-                    <h2 class="card-title">🎞️ 이미지 생성 결과</h2>
-                    <div id="images-container"
-                        style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem;">
-                        <!-- Generated images will be injected here -->
-                    </div>
+            <!-- 실시간 이미지 그리드 -->
+            <div class="card">
+                <h2 class="card-title">🎞️ 이미지 생성 결과</h2>
+                <div id="images-container" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:1rem;">
+                    <!-- 씬 카드가 실시간으로 채워짐 -->
                 </div>
             </div>
 
             <div class="actions" id="image-actions" style="display: none;">
-                <button class="btn btn-secondary" onclick="goToStep(5)">← 이전</button>
+                <button class="btn btn-secondary" onclick="goToStep(4)">← 이전 (설정)</button>
                 <div style="display: flex; gap: 0.5rem;">
                     <button class="btn btn-primary" onclick="goToEditStage()">이미지 편집 →</button>
                 </div>
             </div>
+        </div>
 
+        <!-- Step 7: 캡션 생성 + 최종 발행 -->
+        <div class="step-content" id="step-7">
             <div class="loading" id="loading-caption" style="display: none;">
                 <div class="spinner"></div>
                 <div>AI가 인스타그램 맞춤형 캡션을 생성하고 있습니다...</div>
             </div>
-        </div>
-
-        <!-- Step 7: 최종 발행 & Instagram Preview (기존 Step 6) -->
-        <div class="step-content" id="step-7">
-            <div style="display: grid; grid-template-columns: 1fr 380px; gap: 2rem;">
+            <div id="caption-publish-area" style="display: grid; grid-template-columns: 1fr 380px; gap: 2rem;">
                 <!-- Left: Instagram Mockup -->
                 <div class="card"
                     style="padding: 0; overflow: hidden; background: #fff; color: #000; border-radius: 12px; border: 1px solid #dbdbdb;">
@@ -2310,6 +2321,7 @@
             const sceneCount = parseInt(document.getElementById('total-scene-count').value);
 
             try {
+                const storyModel = document.getElementById('ai-model-select') ? document.getElementById('ai-model-select').value : 'gemini-2.0-flash';
                 const res = await fetch('/api/workflow/generate-story', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -2317,7 +2329,8 @@
                         session_id: sessionId,
                         scene_count: sceneCount,
                         questioner_type: '일반인',
-                        expert_type: '세무사'
+                        expert_type: '세무사',
+                        model: storyModel
                     })
                 });
                 const data = await res.json();
@@ -2576,26 +2589,59 @@
         }
 
         // --- Step 5: 이미지 생성 ---
-        async function startImageGeneration() {
-            goToStep(6);
-            const loadingEl = document.getElementById('loading-images');
-            const reviewArea = document.getElementById('images-review-area');
+        var genPollInterval = null;  // 폴링 interval
+        var genIsStopped = false;    // 중단 플래그
+        var genIsPaused = false;     // 일시정지 플래그
 
-            loadingEl.style.display = 'block';
-            reviewArea.style.display = 'none';
+        function getImageUrl(localPath) {
+            // output/scene_1_xxx.png → /output/scene_1_xxx.png
+            if (!localPath) return '';
+            if (localPath.startsWith('/')) return localPath;
+            if (localPath.startsWith('http')) return localPath;
+            return '/' + localPath.replace(/\\/g, '/');
+        }
+
+        async function startImageGeneration() {
+            goToStep(5);
+            genIsStopped = false;
+            genIsPaused = false;
 
             const sceneCount = storyData.scenes.length;
+            const statusBar = document.getElementById('gen-status-bar');
+            const controlBtns = document.getElementById('gen-control-buttons');
+            const actionsEl = document.getElementById('image-actions');
+            actionsEl.style.display = 'none';
+            statusBar.style.display = 'block';
+            controlBtns.style.display = 'flex';
+
+            // 초기 그리드: 모든 씬을 "대기 중" 카드로 표시
+            const container = document.getElementById('images-container');
+            container.innerHTML = Array.from({length: sceneCount}, (_, i) => `
+                <div class="card" id="scene-card-${i}" style="padding:0.5rem; position:relative; min-height:220px;">
+                    <div id="scene-img-area-${i}" style="width:100%; aspect-ratio:9/16; background:var(--bg-input); border-radius:8px; display:flex; align-items:center; justify-content:center; margin-bottom:0.5rem; position:relative; overflow:hidden;">
+                        <div id="scene-placeholder-${i}" style="text-align:center;">
+                            <div style="font-size:1.5rem; margin-bottom:4px;">⏳</div>
+                            <div style="font-size:0.75rem; color:var(--text-muted);">대기 중</div>
+                        </div>
+                    </div>
+                    <div style="font-size:0.8rem; font-weight:600;">씬 ${i + 1}</div>
+                    <div id="scene-status-${i}" style="font-size:0.7rem; color:var(--text-muted); margin-top:2px;">대기 중</div>
+                </div>
+            `).join('');
+
+            // 진행 상태 초기화
+            document.getElementById('gen-status-text').innerText = '🎨 이미지 생성 중...';
+            document.getElementById('gen-status-count').innerText = `0/${sceneCount}`;
+            document.getElementById('gen-progress-bar').style.width = '0%';
+            document.getElementById('gen-status-sub').innerText = '첫 번째 씬을 생성하고 있습니다...';
 
             // Style System 2.0 Inputs
-            const charStyleId = selectedStyles.character ? selectedStyles.character.id : null;
             const model = document.getElementById('image-model').value;
-            // Style System 2.0 Check
             const stylePromptEl = document.getElementById('style-prompt-textarea');
             const stylePrompt = stylePromptEl ? stylePromptEl.value : '';
 
-            // 배경 스타일 → manual_overrides.background_style_prompt 로 처리
             let bgStylePrompt = "";
-            let bgStyleId = null;  // 더 이상 bg lookup 하지 않음
+            let bgStyleId = null;
             if (selectedStyles.background && selectedStyles.background.id) {
                 const bgId = selectedStyles.background.id;
                 if (bgId === 'bg_remove') {
@@ -2615,69 +2661,253 @@
             const ratio = document.getElementById('aspect-ratio').value;
 
             try {
-                await fetch('/api/workflow/generate-images', {
+                // 현재 "생성 중" 표시: 씬 1
+                updateSceneCard(0, 'generating');
+
+                // fire-and-forget: 백엔드에 생성 요청
+                fetch('/api/workflow/generate-images', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         session_id: sessionId,
                         character_style_id: selectedStyles.character ? selectedStyles.character.id : null,
                         background_style_id: bgStyleId,
-                        sub_style: "", // Deprecated in V2
+                        sub_style: "",
                         manual_overrides: overrides,
                         model: model,
                         aspect_ratio: ratio
                     })
-                });
+                }).catch(e => console.error('이미지 생성 백엔드 오류:', e));
 
+                // 즉시 폴링 시작
                 checkImageProgress(sceneCount);
             } catch (e) {
                 alert('이미지 생성 시작 오류: ' + e.message);
-                loadingEl.style.display = 'none';
+            }
+        }
+
+        function updateSceneCard(idx, state, imgData) {
+            const placeholder = document.getElementById(`scene-placeholder-${idx}`);
+            const imgArea = document.getElementById(`scene-img-area-${idx}`);
+            const statusEl = document.getElementById(`scene-status-${idx}`);
+            const card = document.getElementById(`scene-card-${idx}`);
+            if (!imgArea) return;
+
+            if (state === 'generating') {
+                if (placeholder) {
+                    placeholder.innerHTML = `
+                        <div class="spinner" style="width:24px;height:24px;border-width:3px;margin-bottom:4px;"></div>
+                        <div style="font-size:0.75rem;color:var(--primary);">생성 중...</div>`;
+                }
+                if (statusEl) statusEl.innerText = '🎨 생성 중...';
+                if (card) card.style.borderColor = 'var(--primary)';
+            } else if (state === 'done' && imgData) {
+                const url = getImageUrl(imgData.local_path);
+                imgArea.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" id="gen-img-${idx}">`;
+                if (statusEl) statusEl.innerHTML = `<span style="color:var(--success);">✅ 완료</span>`;
+                if (card) {
+                    card.style.borderColor = 'var(--success)';
+                    // 재생성 버튼 추가
+                    let btnEl = card.querySelector('.regen-btn');
+                    if (!btnEl) {
+                        const btn = document.createElement('button');
+                        btn.className = 'btn btn-secondary regen-btn';
+                        btn.style.cssText = 'width:100%;padding:4px;font-size:0.75rem;margin-top:0.5rem;';
+                        btn.innerText = '🔄 재생성';
+                        btn.onclick = () => regenerateOneImage(idx);
+                        card.appendChild(btn);
+                    }
+                }
+            } else if (state === 'error') {
+                imgArea.innerHTML = `<div style="text-align:center;"><span style="font-size:2rem;">⚠️</span><div style="font-size:0.75rem;color:var(--danger);margin-top:4px;">생성 실패</div></div>`;
+                if (statusEl) statusEl.innerHTML = `<span style="color:var(--danger);">❌ 오류</span>`;
+                if (card) {
+                    card.style.borderColor = 'var(--danger)';
+                    let btnEl = card.querySelector('.regen-btn');
+                    if (!btnEl) {
+                        const btn = document.createElement('button');
+                        btn.className = 'btn btn-primary regen-btn';
+                        btn.style.cssText = 'width:100%;padding:4px;font-size:0.75rem;margin-top:0.5rem;';
+                        btn.innerText = '🔄 재생성';
+                        btn.onclick = () => regenerateOneImage(idx);
+                        card.appendChild(btn);
+                    }
+                }
+            } else if (state === 'stopped') {
+                if (placeholder) {
+                    placeholder.innerHTML = `
+                        <div style="font-size:1.5rem;margin-bottom:4px;">⏹️</div>
+                        <div style="font-size:0.75rem;color:var(--text-muted);">중단됨</div>`;
+                }
+                if (statusEl) statusEl.innerText = '⏹️ 중단됨';
+                if (card) card.style.borderColor = 'var(--border)';
             }
         }
 
         function checkImageProgress(total) {
-            let current = 0;
-            const progressBar = document.getElementById('image-progress-bar');
-            const progressDetail = document.getElementById('image-progress-detail');
-            const loadingEl = document.getElementById('loading-images');
-            const reviewArea = document.getElementById('images-review-area');
+            let prevCount = 0;
+            let pollCount = 0;
+
+            const statusText = document.getElementById('gen-status-text');
+            const statusCount = document.getElementById('gen-status-count');
+            const progressBar = document.getElementById('gen-progress-bar');
+            const statusSub = document.getElementById('gen-status-sub');
             const actionsEl = document.getElementById('image-actions');
+            const controlBtns = document.getElementById('gen-control-buttons');
 
-            const interval = setInterval(async () => {
-                const res = await fetch(`/api/workflow/session/${sessionId}`);
-                const session = await res.json();
-                current = session.images ? session.images.filter(img => img.status === 'generated').length : 0;
-
-                const progress = (current / total) * 100;
-                progressBar.style.width = `${progress}%`;
-                progressDetail.innerText = `${current} / ${total}`;
-
-                if (current >= total) {
-                    clearInterval(interval);
-                    renderFinalImages(session.images);
-                    loadingEl.style.display = 'none';
-                    reviewArea.style.display = 'block';
-                    actionsEl.style.display = 'flex';
+            genPollInterval = setInterval(async () => {
+                if (genIsPaused) return; // 일시정지면 스킵
+                if (genIsStopped) {
+                    clearInterval(genPollInterval);
+                    return;
                 }
-            }, 2000);
+                pollCount++;
+                try {
+                    const res = await fetch(`/api/workflow/session/${sessionId}`);
+                    const session = await res.json();
+                    const allImages = session.images || [];
+                    const doneCount = allImages.length;  // 생성완료 + 에러 합산
+                    const generated = allImages.filter(img => img.status === 'generated');
+                    const errors = allImages.filter(img => img.status === 'error');
+                    const genCount = generated.length;
+
+                    // 새로 완료된 씬 카드 업데이트
+                    for (let i = prevCount; i < doneCount; i++) {
+                        const imgData = allImages[i];
+                        if (imgData.status === 'generated' && imgData.local_path) {
+                            updateSceneCard(i, 'done', imgData);
+                        } else {
+                            updateSceneCard(i, 'error', imgData);
+                        }
+                    }
+
+                    // 다음 생성 중인 씬 표시
+                    if (doneCount < total) {
+                        updateSceneCard(doneCount, 'generating');
+                    }
+
+                    prevCount = doneCount;
+
+                    // 상단 바 업데이트
+                    const pct = total > 0 ? Math.round((genCount / total) * 100) : 0;
+                    progressBar.style.width = `${pct}%`;
+                    statusCount.innerText = `${genCount}/${total}`;
+
+                    if (genCount > 0 && genCount < total) {
+                        statusText.innerText = `🎨 ${genCount}/${total} 생성 완료`;
+                        statusSub.innerText = `씬 ${doneCount + 1} 생성 중... (씬당 약 15~30초)`;
+                    } else if (genCount === 0) {
+                        statusText.innerText = '🎨 이미지 생성 중...';
+                        statusSub.innerText = pollCount > 3 ? '씬 1 생성 중... (첫 씬은 조금 더 걸립니다)' : '첫 번째 씬을 생성하고 있습니다...';
+                    }
+
+                    if (errors.length > 0) {
+                        statusSub.innerText += ` (⚠️ ${errors.length}개 오류)`;
+                    }
+
+                    // 전체 완료
+                    if (doneCount >= total) {
+                        clearInterval(genPollInterval);
+                        genPollInterval = null;
+                        statusText.innerText = `✅ ${genCount}/${total} 이미지 생성 완료!`;
+                        statusSub.innerText = errors.length > 0 ? `⚠️ ${errors.length}개 씬에서 오류 발생 — 개별 재생성 가능` : '모든 씬이 정상 생성되었습니다';
+                        progressBar.style.width = '100%';
+                        controlBtns.style.display = 'none';
+                        actionsEl.style.display = 'flex';
+                    }
+                } catch (e) {
+                    console.error('진행률 확인 오류:', e);
+                }
+            }, 2500);
         }
 
-        function renderFinalImages(images) {
-            const container = document.getElementById('images-container');
-            container.innerHTML = images.map(img => `
-                <div class="card" style="padding: 0.5rem;">
-                    <img src="${img.local_path}" style="width: 100%; border-radius: 8px; margin-bottom: 0.5rem;">
-                    <div style="font-size: 0.75rem; font-weight: 600;">씬 ${img.scene_number}</div>
-                    <button class="btn btn-secondary" style="width: 100%; padding: 4px; font-size: 0.75rem; margin-top: 0.5rem;">개별 재생성</button>
-                </div>
-            `).join('');
+        function pauseGeneration() {
+            genIsPaused = !genIsPaused;
+            const btn = document.getElementById('btn-pause');
+            if (genIsPaused) {
+                btn.innerText = '▶️ 계속';
+                document.getElementById('gen-status-sub').innerText = '⏸️ 일시정지됨 — "계속" 버튼을 눌러 진행률 확인을 재개하세요';
+            } else {
+                btn.innerText = '⏸️ 일시정지';
+                document.getElementById('gen-status-sub').innerText = '다시 진행률을 확인 중입니다...';
+            }
         }
 
-        // --- Step 5: 이미지 생성 완료 후 캡션 생성 시작 ---
+        function stopGeneration() {
+            if (!confirm('이미지 생성을 중단하시겠습니까?\n이미 생성된 이미지는 유지됩니다.')) return;
+            genIsStopped = true;
+            if (genPollInterval) {
+                clearInterval(genPollInterval);
+                genPollInterval = null;
+            }
+
+            // 백엔드에 중단 신호 보내기
+            fetch('/api/workflow/stop-generation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_id: sessionId })
+            }).catch(e => console.error('중단 요청 오류:', e));
+
+            // 남은 미완성 카드들에 "중단됨" 표시
+            const total = storyData.scenes.length;
+            for (let i = 0; i < total; i++) {
+                const statusEl = document.getElementById(`scene-status-${i}`);
+                if (statusEl && statusEl.innerText.includes('대기') || (statusEl && statusEl.innerText.includes('생성 중'))) {
+                    updateSceneCard(i, 'stopped');
+                }
+            }
+
+            document.getElementById('gen-status-text').innerText = '⏹️ 생성이 중단되었습니다';
+            document.getElementById('gen-status-sub').innerText = '이미 생성된 이미지는 아래에서 확인할 수 있습니다';
+            document.getElementById('gen-control-buttons').style.display = 'none';
+            document.getElementById('image-actions').style.display = 'flex';
+        }
+
+        async function regenerateOneImage(sceneIndex) {
+            const btn = event.target;
+            const origText = btn.innerText;
+            btn.innerText = '⏳ 재생성 중...';
+            btn.disabled = true;
+
+            // 카드도 로딩 상태로 전환
+            updateSceneCard(sceneIndex, 'generating');
+
+            try {
+                const model = document.getElementById('image-model') ? document.getElementById('image-model').value : 'gpt-image-1';
+                const res = await fetch('/api/workflow/regenerate-image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, scene_index: sceneIndex, model: model })
+                });
+
+                if (!res.ok) {
+                    const errText = await res.text();
+                    throw new Error(`서버 오류 (${res.status}): ${errText}`);
+                }
+
+                const data = await res.json();
+                if (data.image && data.image.local_path) {
+                    updateSceneCard(sceneIndex, 'done', data.image);
+                } else {
+                    throw new Error('이미지 경로가 없습니다');
+                }
+            } catch (e) {
+                updateSceneCard(sceneIndex, 'error');
+                alert('재생성 실패: ' + e.message);
+            } finally {
+                btn.innerText = origText;
+                btn.disabled = false;
+            }
+        }
+
+        // --- 캡션 생성 (Step 6 편집 → Step 7 캡션/발행) ---
         async function generateCaption() {
+            // 먼저 Step 7으로 이동하여 로딩 UI 표시
+            goToStep(7);
             const loadingEl = document.getElementById('loading-caption');
+            const captionArea = document.getElementById('caption-publish-area');
             loadingEl.style.display = 'block';
+            if (captionArea) captionArea.style.display = 'none';
 
             try {
                 const res = await fetch('/api/workflow/generate-caption', {
@@ -2688,18 +2918,19 @@
                 const data = await res.json();
                 const caption = data.caption;
 
-                // Step 6 입력 필드 세팅
+                // Step 7 입력 필드 세팅
                 document.getElementById('final-hook').value = caption.hook;
                 document.getElementById('final-body').value = caption.body;
                 document.getElementById('final-tip').value = caption.tip;
                 document.getElementById('final-hashtags').value = caption.hashtags.join(' ');
 
                 loadingEl.style.display = 'none';
-                goToStep(7);
+                if (captionArea) captionArea.style.display = 'grid';
                 updateInstaPreview();
             } catch (e) {
                 alert('캡션 생성 오류: ' + e.message);
                 loadingEl.style.display = 'none';
+                if (captionArea) captionArea.style.display = 'grid';
             }
         }
 
@@ -2798,19 +3029,21 @@
                 }
             }
 
-            // Step 5: 이미지 편집
+            // Step 5: 이미지 생성 결과
             if (step === 5) {
+                // 이미 생성된 이미지가 있으면 액션 버튼 표시
+                const hasImages = document.getElementById('images-container') && document.getElementById('images-container').children.length > 0;
+                if (hasImages && !genPollInterval) {
+                    document.getElementById('image-actions').style.display = 'flex';
+                }
+            }
+
+            // Step 6: 이미지 편집
+            if (step === 6) {
                 loadEditStageStatus();
             }
 
-            // Step 6: 이미지 생성 결과 (기존 Step 5)
-            if (step === 6) {
-                document.getElementById('loading-images').style.display = 'none';
-                document.getElementById('images-review-area').style.display = 'block';
-                document.getElementById('image-actions').style.display = 'flex';
-            }
-
-            // Step 7: 발행 (기존 Step 6)
+            // Step 7: 캡션 + 발행
             if (step === 7) {
                 updateInstaPreview();
             }
@@ -2826,7 +3059,7 @@
         // ============================================
 
         function goToEditStage() {
-            goToStep(5);
+            goToStep(6);
         }
 
         async function loadEditStageStatus() {

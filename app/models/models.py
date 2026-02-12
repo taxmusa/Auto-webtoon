@@ -60,12 +60,29 @@ class FieldInfo(BaseModel):
 # 3. 스토리 관련 모델
 # ============================================
 
+class VisualIdentity(BaseModel):
+    """캐릭터 시각적 고정 속성 — 모든 씬에서 불변"""
+    gender: str = ""                    # male / female
+    age_range: str = ""                 # e.g. "early 30s"
+    hair_style: str = ""                # e.g. "short black hair, side parted"
+    hair_color: str = ""                # e.g. "#1a1a1a jet black"
+    skin_tone: str = ""                 # e.g. "warm beige, light tan"
+    eye_shape: str = ""                 # e.g. "almond-shaped, medium size"
+    glasses: str = ""                   # e.g. "black rectangular glasses" or "none"
+    outfit: str = ""                    # e.g. "navy suit, white shirt, blue tie"
+    outfit_color: str = ""              # e.g. "navy #1B2A4A jacket, white #FFFFFF shirt"
+    accessories: str = ""               # e.g. "silver watch on left wrist" or "none"
+    body_type: str = ""                 # e.g. "average build, 175cm"
+    distinguishing_features: str = ""   # e.g. "small mole on right cheek"
+
+
 class CharacterProfile(BaseModel):
     """등장인물 프로필"""
     name: str
     role: str                   # 전문가, 일반인, 조력자 등
     appearance: Optional[str] = None # 외모 묘사 (Gemini용)
     personality: Optional[str] = None # 성격
+    visual_identity: Optional[VisualIdentity] = None  # 구체적 시각 속성 (이미지 일관성용)
 
 
 class Dialogue(BaseModel):

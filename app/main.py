@@ -26,6 +26,8 @@ app.include_router(edit_stage_router)
 # 정적 파일 및 템플릿 설정
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.mount("/app_data", StaticFiles(directory="app_data"), name="app_data")
+os.makedirs("output", exist_ok=True)
+app.mount("/output", StaticFiles(directory="output"), name="output")
 templates = Jinja2Templates(directory="app/templates")
 
 @app.get("/", response_class=HTMLResponse)

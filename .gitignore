@@ -2,6 +2,7 @@
 .env
 .env.local
 .env.*.local
+환경키값.txt
 
 # Python
 __pycache__/
@@ -20,5 +21,9 @@ output/
 # IDE
 .idea/
 .vscode/
+.cursor/
 *.swp
 *.swo
+
+# 학습 데이터 (용량 큼)
+trained_characters/
