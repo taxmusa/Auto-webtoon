@@ -350,7 +350,7 @@ class FluxKontextGenerator(ImageGeneratorBase):
         return ascii_safe
 
     async def _generate_text2img(self, prompt: str, size: str, seed=None) -> bytes:
-        """첫 씬: 텍스트→이미지 (Flux Dev)"""
+        """text2img: 텍스트→이미지 (Flux Dev)"""
         w, h = self._parse_size(size)
         safe_prompt = self._sanitize_prompt(prompt)
 
@@ -360,6 +360,7 @@ class FluxKontextGenerator(ImageGeneratorBase):
                 "image_size": {"width": w, "height": h},
                 "num_images": 1,
                 "output_format": "png",
+                "num_inference_steps": 35,  # ★ 품질 향상 (기본 28 → 35)
             }
             if seed is not None:
                 args["seed"] = seed
@@ -374,15 +375,15 @@ class FluxKontextGenerator(ImageGeneratorBase):
         return await self._download_image(image_url)
 
     async def _generate_with_reference(self, prompt: str, ref_bytes: bytes, size: str, seed=None) -> bytes:
-        """참조 이미지 기반 편집 (Kontext) — 체인 생성의 핵심
+        """참조 이미지 기반 편집 (Kontext) — CRS 참조 방식의 핵심
         
-        ★ 체인 생성 워크플로우:
-          씬 1 (text2img) → 씬 2 (img2img, 씬1 참조) → 씬 3 (img2img, 씬2 참조)...
+        ★ CRS 참조 방식:
+          CRS (캐릭터 레퍼런스 시트, 흰배경 정면) → 모든 씬 (img2img, CRS 참조)
           
         guidance_scale 설계:
-          - 4.0~5.0: 캐릭터 외모를 강하게 유지하면서 장면 변경 (체인 생성에 최적)
-          - 2.5 이하: 참조 이미지를 그대로 복사 (포즈까지 같아짐 - 나쁨)
-          - 7.5 이상: 프롬프트만 따르고 캐릭터 무시 (일관성 깨짐 - 나쁨)
+          - 4.0~5.0: CRS의 포즈/구도까지 복사됨 (나쁨!)
+          - 7.0: 씬 설명대로 새 장면 + 캐릭터만 CRS에서 유지 (최적!)
+          - 9.0+: CRS를 완전 무시 (일관성 깨짐 - 나쁨)
         """
         import base64
 
@@ -397,12 +398,16 @@ class FluxKontextGenerator(ImageGeneratorBase):
                 "image_url": data_uri,
                 "num_images": 1,
                 "output_format": "png",
-                # ★ guidance_scale 7.0: 앵커 참조 방식에 최적화
+                # ★ guidance_scale 7.0: CRS 참조 방식에 최적화
                 #   - 4.5~5.0: 참조 이미지의 포즈/구도까지 복사됨 (나쁨!)
-                #   - 7.0: 씬 설명대로 새 장면 그리되, 캐릭터 외모는 참조에서 유지
+                #   - 7.0: 씬 설명대로 새 장면 그리되, 캐릭터 외모는 CRS에서 유지
                 #   - 9.0+: 참조를 완전 무시 (일관성 깨짐)
                 "guidance_scale": 7.0,
-                "num_inference_steps": 28,
+                # ★ num_inference_steps 35: 품질 향상 (28 → 35)
+                #   - 28: 빠르지만 디테일 부족
+                #   - 35: 최적 품질 (속도 대비 품질 균형)
+                #   - 50: 높은 품질이지만 속도 2배
+                "num_inference_steps": 35,
             }
             if seed is not None:
                 args["seed"] = seed

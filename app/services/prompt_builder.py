@@ -347,8 +347,13 @@ Do NOT change: hair color, skin tone, outfit, glasses status between scenes.
     elif background_style:
         bg_prompt = background_style.prompt_block
     else:
-        # 배경 스타일 미지정 시: 씬 내용에 맞는 자연스러운 배경 (하드코딩 X)
-        bg_prompt = "Background appropriate for the scene context. Keep it simple and consistent with the art style."
+        # 배경 스타일 미지정 시: 일관된 기본 배경 강제
+        # → "배경이 있다가 없다가" 하는 문제 해결
+        bg_prompt = (
+            "Clean, well-lit modern indoor room with neutral warm tones. "
+            "Consistent background across ALL scenes. "
+            "Keep it simple and consistent with the art style."
+        )
 
     if additional_en:
         # 배경 관련 키워드가 추가지시에 있으면 배경 섹션을 완전히 대체
@@ -576,20 +581,101 @@ _FLUX_LAYOUT_SUFFIX = (
 )
 
 
+def build_character_reference_prompt(
+    characters,
+    character_style=None,
+    sub_style_name: str = "",
+) -> str:
+    """캐릭터 레퍼런스 시트(CRS) 생성용 프롬프트
+    
+    목적: 씬 생성 전에 "깨끗한 배경 + 정면 포즈" 캐릭터 기준 이미지를 만든다.
+    이 이미지를 모든 씬이 참조 → 일관된 캐릭터 외모 + 균일한 품질.
+    
+    ★ 핵심 원칙:
+    1. 흰색 배경 (씬 배경이 복사되지 않도록!)
+    2. 정면 상반신 (캐릭터 얼굴/옷 정보 최대화)
+    3. 아트 스타일 적용 (모든 씬과 동일한 화풍)
+    4. 텍스트/로고 절대 금지
+    """
+    parts = []
+    
+    # ── 1. 아트 스타일 ──
+    style_prompt = ""
+    if sub_style_name and sub_style_name in SUB_STYLES:
+        style_prompt = SUB_STYLES[sub_style_name]
+    elif character_style and hasattr(character_style, 'prompt_block'):
+        style_prompt = character_style.prompt_block
+    elif isinstance(character_style, str) and character_style:
+        style_prompt = character_style
+    
+    if style_prompt:
+        parts.append(f"Art style: {style_prompt}.")
+    
+    # ── 2. 캐릭터 외모 (상세하게) ──
+    char_descs = []
+    for char in (characters or [])[:3]:  # 최대 3명
+        vi = char.visual_identity
+        if not vi:
+            continue
+        desc_parts = [char.name]
+        if vi.gender:
+            desc_parts.append(vi.gender)
+        if vi.hair_color and vi.hair_style:
+            desc_parts.append(f"{vi.hair_color} {vi.hair_style}")
+        elif vi.hair_style:
+            desc_parts.append(vi.hair_style)
+        if vi.skin_tone:
+            desc_parts.append(f"{vi.skin_tone} skin")
+        glasses = (vi.glasses or "").strip().lower()
+        if not glasses or glasses == "none" or "no glass" in glasses:
+            desc_parts.append("without glasses, bare eyes")
+        else:
+            desc_parts.append(glasses)
+        if vi.outfit:
+            desc_parts.append(vi.outfit[:60])
+        char_descs.append(", ".join(desc_parts))
+    
+    if char_descs:
+        parts.append(f"Character reference sheet: {'; '.join(char_descs)}.")
+    else:
+        parts.append("Character reference sheet.")
+    
+    # ── 3. 포즈/구도 지정 ──
+    parts.append(
+        "Front-facing upper body portrait, neutral relaxed pose, "
+        "standing straight, looking at camera, centered composition."
+    )
+    
+    # ── 4. 배경 = 흰색 단색 (씬 배경 복사 방지!) ──
+    parts.append(
+        "Pure white (#FFFFFF) background only. "
+        "No background objects, no scenery, no furniture."
+    )
+    
+    # ── 5. 금지사항 ──
+    parts.append(
+        "No text, no speech bubbles, no words, no letters, "
+        "no logos, no watermarks, no writing, no symbols. "
+        "No glasses unless specified. Pure illustration only."
+    )
+    
+    return " ".join(parts)
+
+
 def optimize_for_flux_kontext(full_prompt: str, scene_description: str = "", 
                                is_reference: bool = False,
                                characters=None) -> str:
     """Flux에 최적화된 프롬프트 생성
     
-    ★ 핵심 설계 원칙 (앵커 참조 방식 v3):
+    ★ 핵심 설계 원칙 (CRS 참조 방식 v4):
     
-    [text2img 모드 - 씬 1]:
+    [text2img 모드 - CRS 없을 때 폴백]:
       1. 아트 스타일 → 맨 앞 (스타일 확립)
       2. 씬 설명 (캐릭터+장면 확립)
       3. 캐릭터 앵커
     
-    [img2img 모드 - 씬 2+]:
-      1. ★ 씬 설명이 최우선! (참조 이미지가 캐릭터를 유지하니까)
+    [img2img 모드 - 모든 씬 (CRS 참조)]:
+      1. ★ 씬 설명이 최우선! (CRS가 캐릭터를 유지하니까)
       2. 아트 스타일
       3. 캐릭터 외모 유지 지시 (간결하게)
       → 프롬프트 = "무엇을 그릴 것인가" 에 집중
@@ -602,10 +688,16 @@ def optimize_for_flux_kontext(full_prompt: str, scene_description: str = "",
     bg_text = _extract_section(full_prompt, "[BACKGROUND STYLE")
     char_anchor = _build_character_anchor(characters) if characters else ""
     
+    # ── 배경 일관성 강제 ──
+    # 배경 스타일이 지정되지 않았으면 기본 배경 부여
+    # → "배경이 있다가 없다가" 하는 문제 해결
+    _DEFAULT_BG = "Clean, well-lit modern indoor room background with neutral warm tones"
+    effective_bg = bg_text if bg_text else _DEFAULT_BG
+    
     if is_reference:
         # ═══════════════════════════════════════════
-        # IMG2IMG 모드 (씬 2+): 씬 설명이 최우선!
-        # 참조 이미지가 캐릭터 외모를 유지하므로,
+        # IMG2IMG 모드 (모든 씬, CRS 참조):
+        # CRS가 캐릭터 외모를 유지하므로,
         # 프롬프트는 "이번 씬에서 무엇이 일어나는가"에 집중
         # ═══════════════════════════════════════════
         
@@ -616,19 +708,23 @@ def optimize_for_flux_kontext(full_prompt: str, scene_description: str = "",
         # ── 2. 장면 변경 강제 지시 ──
         parts.append(
             "Draw a COMPLETELY DIFFERENT scene from the reference image. "
-            "Different pose, different action, different camera angle, different background."
+            "MUST CHANGE: pose, body position, camera angle, background, scene composition. "
+            "The reference is ONLY for character face and outfit — ignore everything else."
         )
         
         # ── 3. 아트 스타일 (간결하게) ──
         if style_text:
             parts.append(f"Style: {style_text[:150]}.")
         
-        # ── 4. 캐릭터 외모 유지 (참조 이미지 기반, 간결하게) ──
+        # ── 4. 캐릭터 외모 유지 (CRS 기반, 간결하게) ──
         parts.append(
             "Keep character appearances from reference: same face, hair, skin, outfit."
         )
         
-        # ── 5. 금지사항 ──
+        # ── 5. 배경 일관성 ──
+        parts.append(f"Background: {effective_bg}.")
+        
+        # ── 6. 금지사항 ──
         parts.append("No text, no speech bubbles, no logos.")
         
     else:
@@ -654,9 +750,8 @@ def optimize_for_flux_kontext(full_prompt: str, scene_description: str = "",
         if char_anchor:
             parts.append(f"Characters: {char_anchor}.")
         
-        # ── 5. 배경 ──
-        if bg_text:
-            parts.append(f"Background: {bg_text[:80]}.")
+        # ── 5. 배경 (일관성 강제) ──
+        parts.append(f"Background: {effective_bg[:80]}.")
     
     # 공통: 레이아웃
     parts.append(_FLUX_LAYOUT_SUFFIX)

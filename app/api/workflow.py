@@ -454,6 +454,57 @@ async def generate_images(request: GenerateImagesRequest):
     # Flux 모델이면 씬 설명을 미리 영어로 번역 (한 번만)
     if is_flux and session.story and session.story.scenes:
         await _translate_scenes_to_english(session.story.scenes)
+    
+    # ★★★ 씬 설명 전처리: 숫자/인포그래픽 → 시각적 비유 변환 ★★★
+    # "1.5억 증여" 같은 텍스트를 AI가 깨진 글자로 그리지 않도록
+    # Gemini로 시각적 비유로 변환한다.
+    if session.story and session.story.scenes:
+        try:
+            from app.services.scene_preprocessor import preprocess_scenes_for_image_gen
+            session.story.scenes = await preprocess_scenes_for_image_gen(
+                session.story.scenes
+            )
+            logger.info("[전처리] 씬 설명 전처리 완료 (숫자/인포그래픽 → 시각적 비유)")
+        except Exception as pp_err:
+            logger.warning(f"[전처리] 씬 설명 전처리 실패, 원본 유지: {pp_err}")
+
+    # ★★★ 캐릭터 레퍼런스 시트 자동 생성 ★★★
+    # 씬 생성 전에 "깨끗한 배경 + 정면 포즈" 캐릭터 기준 이미지를 만든다.
+    # 모든 씬(1번 포함)이 이 레퍼런스를 참조 → 품질/느낌 일관성 확보.
+    character_ref_bytes = None  # 캐릭터 레퍼런스 이미지
+    
+    if is_flux or is_flux_kontext:
+        try:
+            from app.services.prompt_builder import build_character_reference_prompt
+            
+            ref_prompt = build_character_reference_prompt(
+                characters=session.story.characters,
+                character_style=char_style,
+                sub_style_name=sub_style
+            )
+            
+            ref_seed = base_seed if base_seed else None
+            size = "1024x1536" if request.aspect_ratio in ("4:5", "9:16") else "1024x1024"
+            
+            logger.info("[레퍼런스] 캐릭터 레퍼런스 시트 생성 시작...")
+            character_ref_bytes = await generator.generate(
+                ref_prompt, reference_images=None, size=size, seed=ref_seed
+            )
+            
+            # 레퍼런스 이미지 저장 (디버깅/확인용)
+            if isinstance(character_ref_bytes, bytes):
+                ref_path = os.path.join("output", f"character_ref_{session.session_id[:8]}.png")
+                os.makedirs("output", exist_ok=True)
+                with open(ref_path, "wb") as f:
+                    f.write(character_ref_bytes)
+                logger.info(f"[레퍼런스] 캐릭터 레퍼런스 시트 저장: {ref_path}")
+            else:
+                character_ref_bytes = None
+                logger.warning("[레퍼런스] 레퍼런스 이미지 생성 실패 — text2img 폴백")
+                
+        except Exception as ref_err:
+            logger.warning(f"[레퍼런스] 캐릭터 레퍼런스 생성 실패, text2img 폴백: {ref_err}")
+            character_ref_bytes = None
 
     async def generate_single_scene(scene, scene_seed=None, ref_image_bytes=None):
         """단일 씬 이미지 생성
@@ -489,27 +540,27 @@ async def generate_images(request: GenerateImagesRequest):
             
             size = "1024x1536" if request.aspect_ratio in ("4:5", "9:16") else "1024x1024"
             
-            # ★★★ 체인 생성 핵심 ★★★
-            # 씬 1: text2img (기준 캐릭터 확립, 참조 없음)
-            # 씬 2+: img2img (이전 씬을 참조 → 캐릭터 외모 유지 + 장면만 변경)
+            # ★★★ CRS 참조 생성 핵심 ★★★
+            # 캐릭터 레퍼런스 시트가 있으면 → 모든 씬이 img2img로 참조
+            # 캐릭터 레퍼런스 시트가 없으면 → text2img 독립 생성 (폴백)
             if ref_image_bytes:
-                # Kontext img2img: 이전 씬의 캐릭터를 유지하면서 새 장면 생성
+                # CRS img2img: 레퍼런스의 캐릭터를 유지하면서 새 장면 생성
                 image_data = await generator.generate(
                     prompt,
                     reference_images=[ref_image_bytes],
                     size=size,
                     seed=scene_seed
                 )
-                logger.info(f"[체인] 씬 {scene.scene_number}: img2img (이전 씬 참조, 캐릭터 유지)")
+                logger.info(f"[CRS] 씬 {scene.scene_number}: img2img (캐릭터 레퍼런스 참조)")
             else:
-                # 첫 씬: text2img (기준 이미지)
+                # 레퍼런스 없음: text2img 독립 생성
                 image_data = await generator.generate(
                     prompt,
                     reference_images=None,
                     size=size,
                     seed=scene_seed
                 )
-                logger.info(f"[체인] 씬 {scene.scene_number}: text2img (기준 캐릭터 확립)")
+                logger.info(f"[CRS] 씬 {scene.scene_number}: text2img (독립 생성)")
             
             # 파일 저장
             filename = f"scene_{scene.scene_number}_{uuid.uuid4().hex[:6]}.png"
@@ -551,27 +602,32 @@ async def generate_images(request: GenerateImagesRequest):
                 "error": str(e)
             }
 
-    # ★★★ 앵커 참조 생성 (Star Topology) ★★★
+    # ★★★ 캐릭터 레퍼런스 시트 방식 (CRS Topology) ★★★
     # 
-    # [이전: 체인 방식 — 실패]
-    #   씬1 → 씬2 → 씬3 → 씬4 (복사의 복사 → 품질 열화 + 포즈 고정)
+    # [이전: 앵커 방식 — 씬1 품질과 나머지 차이]
+    #   씬1 (text2img) → 씬2, 씬3, 씬4 (img2img, 씬1 참조)
+    #   문제: 씬1은 원본 퀄리티, 씬2+는 참조 퀄리티 → 느낌 차이
     #
-    # [해결: 앵커 방식]
-    #   씬1 (text2img, 기준 캐릭터 확립)
-    #   씬1 → 씬2 (img2img, 씬1을 참조하여 캐릭터 유지 + 새 장면)
-    #   씬1 → 씬3 (img2img, 씬1을 참조하여 캐릭터 유지 + 새 장면)
-    #   씬1 → 씬4 (img2img, 씬1을 참조하여 캐릭터 유지 + 새 장면)
+    # [해결: 캐릭터 레퍼런스 시트 방식]
+    #   CRS (text2img, 깨끗한 배경 + 정면 포즈의 캐릭터 기준 이미지)
+    #   CRS → 씬1 (img2img, CRS 참조)
+    #   CRS → 씬2 (img2img, CRS 참조)
+    #   CRS → 씬3 (img2img, CRS 참조)
     #
     # 장점:
-    #   - 항상 원본(씬1)을 참조 → 품질 열화 없음
-    #   - 각 씬이 독립적으로 장면 변경 → 포즈/구도 다양성 확보
-    #   - 캐릭터 외모는 씬1에서 일관되게 유지
+    #   - 모든 씬이 동일한 "깨끗한" 레퍼런스를 참조 → 품질 균일
+    #   - 씬 1과 씬 2+의 느낌 차이 해소
+    #   - 레퍼런스는 장면 배경 없음 → 포즈/구도 복사 문제 해소
     from app.models.models import GeneratedImage
     session.images = []
     stop_signals[request.session_id] = False
     
-    anchor_image_bytes = None  # ★ 씬 1의 이미지 (앵커, 모든 씬이 이것을 참조)
-    use_anchor = is_flux_kontext or is_flux  # Flux 계열만 앵커 사용
+    use_ref = (is_flux_kontext or is_flux) and character_ref_bytes is not None
+    
+    if use_ref:
+        logger.info("[레퍼런스] 캐릭터 레퍼런스 시트 준비 완료 — 모든 씬이 이것을 참조합니다")
+    else:
+        logger.info("[text2img] 캐릭터 레퍼런스 없음 — 모든 씬을 독립 text2img로 생성")
     
     for scene in session.story.scenes:
         if stop_signals.get(request.session_id, False):
@@ -579,24 +635,18 @@ async def generate_images(request: GenerateImagesRequest):
                         f"({len(session.images)}/{len(session.story.scenes)} 완료)")
             break
         
-        # ★ 씬별 seed: 각 씬마다 다른 seed → 포즈/구도 다양성 확보
+        # 씬별 seed: 각 씬마다 다른 seed → 포즈/구도 다양성 확보
         scene_seed = (base_seed + scene.scene_number * 1000) if base_seed else None
         
-        # ★ 앵커 참조: 씬 1은 text2img, 씬 2+는 항상 씬 1(앵커)을 참조
-        ref_bytes = None
-        if use_anchor and anchor_image_bytes and scene.scene_number > 1:
-            ref_bytes = anchor_image_bytes  # 항상 씬 1을 참조 (체인 아님!)
+        # ★ 모든 씬(1번 포함)이 캐릭터 레퍼런스를 참조
+        #   → 씬1과 씬2+의 품질/느낌 차이 해소!
+        ref_bytes = character_ref_bytes if use_ref else None
         
-        mode_str = "img2img (씬1 앵커 참조)" if ref_bytes else "text2img (앵커 생성)"
+        mode_str = "img2img (캐릭터 레퍼런스 참조)" if ref_bytes else "text2img"
         logger.info(f"[생성] 씬 {scene.scene_number}/{len(session.story.scenes)} — "
                      f"seed={scene_seed}, {mode_str}")
         
         res = await generate_single_scene(scene, scene_seed=scene_seed, ref_image_bytes=ref_bytes)
-        
-        # ★ 씬 1 성공 시 앵커로 저장 (이후 모든 씬이 이것을 참조)
-        if scene.scene_number == 1 and res.get("image_bytes") and res["status"] == "generated":
-            anchor_image_bytes = res["image_bytes"]
-            logger.info("[앵커] 씬 1 앵커 이미지 저장 완료 — 이후 모든 씬이 이 이미지를 참조합니다")
         
         if res.get("local_path"):
             img = GeneratedImage(

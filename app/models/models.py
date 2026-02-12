@@ -96,6 +96,7 @@ class Scene(BaseModel):
     """개별 씬"""
     scene_number: int
     scene_description: str      # 장면 설명 (배경, 상황)
+    scene_description_original: Optional[str] = None  # 전처리 전 원본 (백업용)
     dialogues: List[Dialogue] = Field(default_factory=list)
     narration: Optional[str] = None  # 나레이션 (최대 30자 권장)
     status: str = "pending"     # pending | approved | needs_edit
