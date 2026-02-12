@@ -248,30 +248,40 @@ class FluxKontextGenerator(ImageGeneratorBase):
         """
         reference_images 가 있으면 → Kontext (이미지→이미지, 캐릭터 유지)
         reference_images 가 없으면 → Flux Dev (텍스트→이미지, 첫 씬)
+        최대 2회 재시도.
         """
-        t0 = time.time()
-        try:
-            if reference_images and len(reference_images) > 0:
-                # ── 이미지→이미지 (Kontext) ──
-                image_data = await self._generate_with_reference(prompt, reference_images[0], size)
-            else:
-                # ── 텍스트→이미지 (첫 씬) ──
-                image_data = await self._generate_text2img(prompt, size)
+        max_retries = 2
+        last_err = None
 
-            logger.info("Flux 이미지 생성 완료 %.1f초 (model=%s, ref=%s)",
-                        time.time() - t0, self.model,
-                        "있음" if reference_images else "없음")
-            return image_data
+        for attempt in range(max_retries + 1):
+            t0 = time.time()
+            try:
+                if reference_images and len(reference_images) > 0:
+                    image_data = await self._generate_with_reference(prompt, reference_images[0], size)
+                else:
+                    image_data = await self._generate_text2img(prompt, size)
 
-        except asyncio.TimeoutError:
-            logger.error("Flux 이미지 생성 타임아웃 (%.0f초)", time.time() - t0)
-            raise TimeoutError(
-                f"이미지 생성이 {IMAGE_GENERATION_TIMEOUT}초 안에 완료되지 않았습니다. "
-                "네트워크나 fal.ai 상태를 확인한 뒤 다시 시도해주세요."
-            )
-        except Exception as e:
-            logger.error("Flux Image Generation Failed (%.1f초): %s", time.time() - t0, e)
-            raise
+                logger.info("Flux 이미지 생성 완료 %.1f초 (model=%s, ref=%s, attempt=%d)",
+                            time.time() - t0, self.model,
+                            "있음" if reference_images else "없음", attempt + 1)
+                return image_data
+
+            except asyncio.TimeoutError:
+                logger.error("Flux 이미지 생성 타임아웃 (%.0f초, attempt=%d)", time.time() - t0, attempt + 1)
+                last_err = TimeoutError(
+                    f"이미지 생성이 {IMAGE_GENERATION_TIMEOUT}초 안에 완료되지 않았습니다. "
+                    "네트워크나 fal.ai 상태를 확인한 뒤 다시 시도해주세요."
+                )
+            except Exception as e:
+                logger.error("Flux 생성 실패 (%.1f초, attempt=%d): %s", time.time() - t0, attempt + 1, e)
+                last_err = e
+
+            if attempt < max_retries:
+                wait = 2 ** attempt
+                logger.info(f"[Flux] {wait}초 후 재시도...")
+                await asyncio.sleep(wait)
+
+        raise last_err
 
     async def _generate_text2img(self, prompt: str, size: str) -> bytes:
         """첫 씬: 텍스트→이미지 (Flux Dev)"""

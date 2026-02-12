@@ -396,6 +396,19 @@ async def generate_images(request: GenerateImagesRequest):
                 sub_style_name=sub_style
             )
             
+            # Flux Kontext/LoRA 프롬프트 최적화
+            if is_flux_kontext:
+                from app.services.prompt_builder import optimize_for_flux_kontext
+                prompt = optimize_for_flux_kontext(
+                    prompt,
+                    scene_description=scene.scene_description,
+                    is_reference=bool(ref_bytes)
+                )
+            elif "flux-lora" in request.model:
+                from app.services.prompt_builder import optimize_for_flux_lora
+                trigger = getattr(request, 'trigger_word', '') or ''
+                prompt = optimize_for_flux_lora(prompt, trigger_word=trigger)
+            
             # Using 1024x1536 for Webtoon (Vertical)
             size = "1024x1536" if request.aspect_ratio in ("4:5", "9:16") else "1024x1024"
             
@@ -534,6 +547,74 @@ async def generate_caption(request: GenerateCaptionRequest):
         "state": session.state.value,
         "caption": caption.model_dump()
     }
+
+
+# ============================================
+# 공통 캡션 생성 API (캐러셀/카드뉴스용)
+# ============================================
+
+class CommonCaptionRequest(BaseModel):
+    topic: str = ""
+    content: str = ""
+    content_type: str = "webtoon"  # webtoon | carousel | cardnews
+
+
+@router.post("/generate-common-caption")
+async def generate_common_caption(request: CommonCaptionRequest):
+    """콘텐츠 타입에 맞는 캡션 생성 (세션 불필요)"""
+    import google.generativeai as genai
+
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY", "")
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-2.0-flash")
+
+    type_label = {
+        "webtoon": "인스타그램 웹툰",
+        "carousel": "인스타그램 캐러셀",
+        "cardnews": "인스타그램 카드뉴스",
+    }.get(request.content_type, "인스타그램 콘텐츠")
+
+    prompt = f"""당신은 {type_label} 마케팅 전문가입니다.
+
+주제: {request.topic}
+콘텐츠 요약:
+{request.content[:2000]}
+
+위 콘텐츠의 인스타그램 캡션을 생성해주세요.
+
+규칙:
+1. 훅 문장: 호기심을 유발하는 첫 줄 (이모지 포함, 30자 이내)
+2. 본문: 핵심 가치를 전달 (이모지+줄바꿈 활용, 200자 내외)
+3. CTA: 행동 유도 문장 포함
+4. 해시태그: 관련 해시태그 10~15개
+
+반드시 아래 JSON으로만 응답:
+{{"hook": "훅 문장", "body": "본문 캡션", "hashtags": "#태그1 #태그2 ..."}}
+"""
+
+    try:
+        response = model.generate_content(prompt)
+        text = response.text.strip()
+
+        import json
+        if "```json" in text:
+            text = text.split("```json")[1].split("```")[0].strip()
+        elif "```" in text:
+            text = text.split("```")[1].split("```")[0].strip()
+
+        data = json.loads(text)
+        return {
+            "hook": data.get("hook", ""),
+            "body": data.get("body", ""),
+            "hashtags": data.get("hashtags", ""),
+        }
+    except Exception as e:
+        logger.error(f"[공통 캡션] 생성 실패: {e}")
+        return {
+            "hook": f"{request.topic} 알아보기",
+            "body": "자세한 내용은 캐러셀을 넘겨보세요!",
+            "hashtags": "#세무 #절세 #정보",
+        }
 
 
 # ============================================

@@ -482,3 +482,123 @@ Before generating this image, verify:
 """)
 
     return "\n".join(parts)
+
+
+# ==========================================
+# Flux Kontext 프롬프트 최적화
+# ==========================================
+
+def optimize_for_flux_kontext(full_prompt: str, scene_description: str = "", is_reference: bool = False) -> str:
+    """Flux Kontext에 최적화된 프롬프트 생성
+
+    Flux Kontext는:
+    - 참조 이미지 기반이므로 캐릭터 외모 설명 최소화 가능
+    - 짧고 명확한 프롬프트가 더 정확
+    - 'maintain the character appearance from the reference image' 같은 지시가 핵심
+    - 불필요한 네거티브/반복 제거
+    """
+    if not is_reference:
+        # 첫 씬 (참조 없음): 풀 프롬프트 사용하되 약간 간결화
+        lines = full_prompt.split("\n")
+        # GUARD, REMINDER 같은 반복 지시 줄이기
+        filtered = []
+        skip_guards = 0
+        for line in lines:
+            if "[GUARD]" in line or "[REMINDER" in line or "[FINAL REMINDER" in line:
+                skip_guards += 1
+                if skip_guards <= 2:  # 최대 2개만 유지
+                    filtered.append(line)
+                continue
+            filtered.append(line)
+        return "\n".join(filtered)
+
+    # 참조 이미지 있을 때: 간결한 프롬프트
+    parts = []
+
+    # 핵심 지시
+    parts.append("Maintain the EXACT same character appearance from the reference image.")
+    parts.append("Same face, hair, outfit, accessories, glasses, skin tone — pixel-identical.")
+
+    # 아트 스타일 유지
+    # full_prompt에서 [GLOBAL ART STYLE] 추출
+    if "[GLOBAL ART STYLE" in full_prompt:
+        style_start = full_prompt.index("[GLOBAL ART STYLE")
+        style_end = full_prompt.index("\n[", style_start + 10) if "\n[" in full_prompt[style_start + 10:] else len(full_prompt)
+        style_block = full_prompt[style_start:style_start + style_end - style_start]
+        # 헤더 제거, 내용만
+        style_lines = [l.strip() for l in style_block.split("\n") if l.strip() and not l.startswith("[")]
+        if style_lines:
+            parts.append("Art style: " + " ".join(style_lines[:2]))
+
+    # 배경
+    if "[BACKGROUND STYLE" in full_prompt:
+        bg_start = full_prompt.index("[BACKGROUND STYLE")
+        bg_end = full_prompt.index("\n[", bg_start + 10) if "\n[" in full_prompt[bg_start + 10:] else len(full_prompt)
+        bg_block = full_prompt[bg_start:bg_start + bg_end - bg_start]
+        bg_lines = [l.strip() for l in bg_block.split("\n") if l.strip() and not l.startswith("[")]
+        if bg_lines:
+            parts.append("Background: " + " ".join(bg_lines[:1]))
+
+    # 이 씬의 내용
+    if scene_description:
+        parts.append(f"Scene: {scene_description}")
+
+    # 레이아웃 지시 (간결)
+    parts.append("Leave top 25% of image empty for text overlay. Characters in lower-center, medium shot.")
+
+    # 텍스트 금지
+    parts.append("No text, no speech bubbles, no letters in the image.")
+
+    return "\n".join(parts)
+
+
+def optimize_for_flux_lora(full_prompt: str, trigger_word: str = "") -> str:
+    """Flux LoRA에 최적화된 프롬프트 생성
+
+    LoRA는 트리거 워드로 캐릭터를 소환하므로:
+    - 트리거 워드를 프롬프트 맨 앞에 배치
+    - 캐릭터 외모 설명 축소 (LoRA가 학습함)
+    - 씬/배경/구도에 집중
+    """
+    parts = []
+
+    # 트리거 워드 최우선
+    if trigger_word:
+        parts.append(f"[trigger: {trigger_word}]")
+        parts.append(f"A scene with {trigger_word}.")
+
+    # 아트 스타일
+    if "[GLOBAL ART STYLE" in full_prompt:
+        style_start = full_prompt.index("[GLOBAL ART STYLE")
+        style_end_idx = full_prompt.find("\n[", style_start + 10)
+        style_end = style_end_idx if style_end_idx != -1 else style_start + 500
+        style_block = full_prompt[style_start:style_end]
+        style_lines = [l.strip() for l in style_block.split("\n") if l.strip() and not l.startswith("[")]
+        if style_lines:
+            parts.append("Style: " + " ".join(style_lines[:2]))
+
+    # 씬 내용
+    if "[THIS SCENE]" in full_prompt:
+        scene_start = full_prompt.index("[THIS SCENE]")
+        scene_end_idx = full_prompt.find("\n[", scene_start + 10)
+        scene_end = scene_end_idx if scene_end_idx != -1 else scene_start + 500
+        scene_block = full_prompt[scene_start:scene_end]
+        scene_lines = [l.strip() for l in scene_block.split("\n") if l.strip() and not l.startswith("[")]
+        if scene_lines:
+            parts.append(" ".join(scene_lines))
+
+    # 배경
+    if "[BACKGROUND STYLE" in full_prompt:
+        bg_start = full_prompt.index("[BACKGROUND STYLE")
+        bg_end_idx = full_prompt.find("\n[", bg_start + 10)
+        bg_end = bg_end_idx if bg_end_idx != -1 else bg_start + 300
+        bg_block = full_prompt[bg_start:bg_end]
+        bg_lines = [l.strip() for l in bg_block.split("\n") if l.strip() and not l.startswith("[")]
+        if bg_lines:
+            parts.append("Background: " + " ".join(bg_lines[:1]))
+
+    # 레이아웃
+    parts.append("Leave top 25% of image empty. Medium shot. Characters in lower-center.")
+    parts.append("No text, no speech bubbles, no letters.")
+
+    return "\n".join(parts)

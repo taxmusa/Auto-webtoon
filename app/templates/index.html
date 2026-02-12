@@ -2129,6 +2129,27 @@
                 </div>
 
                 <div id="carousel-status" style="display:none; margin-top: 1rem; padding: 10px; background: var(--bg-card); border-radius: 8px; font-size: 0.85rem;"></div>
+
+                <!-- 캡션 + 발행 -->
+                <div id="carousel-publish-area" style="display:none; margin-top: 1.5rem; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem;">
+                    <h3 style="font-size: 1rem; margin-bottom: 0.75rem;">📝 캡션 & 발행</h3>
+                    <div class="form-group">
+                        <label>🔥 훅 문장</label>
+                        <input type="text" id="carousel-hook" placeholder="캐러셀 첫 문장" style="width:100%;">
+                    </div>
+                    <div class="form-group">
+                        <label>📝 캡션</label>
+                        <textarea id="carousel-caption" rows="4" placeholder="인스타그램 캡션..." style="width:100%;"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>#️⃣ 해시태그</label>
+                        <textarea id="carousel-hashtags" rows="2" placeholder="#세무 #절세팁" style="width:100%;"></textarea>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-primary" onclick="generateCarouselCaption()" style="flex:1;">✨ AI 캡션 생성</button>
+                        <button class="btn btn-secondary" onclick="downloadCarouselImages()" style="flex:1;">📥 이미지 다운로드</button>
+                    </div>
+                </div>
             </div>
 
             <div class="actions" style="margin-top: 2rem;">
@@ -2211,6 +2232,27 @@
                 </div>
 
                 <div id="cardnews-status" style="display:none; margin-top: 1rem; padding: 10px; background: var(--bg-card); border-radius: 8px; font-size: 0.85rem;"></div>
+
+                <!-- 캡션 + 발행 -->
+                <div id="cardnews-publish-area" style="display:none; margin-top: 1.5rem; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem;">
+                    <h3 style="font-size: 1rem; margin-bottom: 0.75rem;">📝 캡션 & 발행</h3>
+                    <div class="form-group">
+                        <label>🔥 훅 문장</label>
+                        <input type="text" id="cardnews-hook" placeholder="카드뉴스 첫 문장" style="width:100%;">
+                    </div>
+                    <div class="form-group">
+                        <label>📝 캡션</label>
+                        <textarea id="cardnews-caption" rows="4" placeholder="인스타그램 캡션..." style="width:100%;"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>#️⃣ 해시태그</label>
+                        <textarea id="cardnews-hashtags" rows="2" placeholder="#세무 #카드뉴스" style="width:100%;"></textarea>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-primary" onclick="generateCardNewsCaption()" style="flex:1;">✨ AI 캡션 생성</button>
+                        <button class="btn btn-secondary" onclick="downloadCardNewsImages()" style="flex:1;">📥 이미지 다운로드</button>
+                    </div>
+                </div>
             </div>
 
             <div class="actions" style="margin-top: 2rem;">
@@ -2783,6 +2825,40 @@
                     <div style="text-align:center; padding:4px; font-size:0.75rem; color:var(--text-muted);">${i+1}/${images.length}</div>
                 </div>
             `).join('');
+
+            // 발행 패널 표시
+            const pub = document.getElementById('carousel-publish-area');
+            if (pub) pub.style.display = 'block';
+        }
+
+        async function generateCarouselCaption() {
+            const hookEl = document.getElementById('carousel-hook');
+            const capEl = document.getElementById('carousel-caption');
+            const tagEl = document.getElementById('carousel-hashtags');
+            if (!carouselSessionId) return;
+
+            try {
+                const resp = await fetch(`/api/carousel/${carouselSessionId}`);
+                const session = await resp.json();
+                const topic = session.topic || '';
+                const slideTexts = (session.slides || []).map(s => s.title + ': ' + s.body).join('\n');
+
+                const aiResp = await fetch('/api/workflow/generate-common-caption', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ topic, content: slideTexts, content_type: 'carousel' }),
+                });
+                const data = await aiResp.json();
+                if (data.hook) hookEl.value = data.hook;
+                if (data.body) capEl.value = data.body;
+                if (data.hashtags) tagEl.value = data.hashtags;
+            } catch (err) {
+                alert('캡션 생성 오류: ' + err.message);
+            }
+        }
+
+        function downloadCarouselImages() {
+            alert('캐러셀 이미지가 output/carousel_' + carouselSessionId + '/ 폴더에 저장되어 있습니다.');
         }
 
         // ── 카드뉴스 JavaScript ──
@@ -2895,6 +2971,40 @@
                     <div style="text-align:center; padding:4px; font-size:0.75rem; color:var(--text-muted);">${i+1}/${images.length}</div>
                 </div>
             `).join('');
+
+            // 발행 패널 표시
+            const pub = document.getElementById('cardnews-publish-area');
+            if (pub) pub.style.display = 'block';
+        }
+
+        async function generateCardNewsCaption() {
+            const hookEl = document.getElementById('cardnews-hook');
+            const capEl = document.getElementById('cardnews-caption');
+            const tagEl = document.getElementById('cardnews-hashtags');
+            if (!cardnewsSessionId) return;
+
+            try {
+                const resp = await fetch(`/api/cardnews/${cardnewsSessionId}`);
+                const session = await resp.json();
+                const topic = session.topic || '';
+                const cardTexts = (session.cards || []).map(c => c.title + ': ' + c.body).join('\n');
+
+                const aiResp = await fetch('/api/workflow/generate-common-caption', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ topic, content: cardTexts, content_type: 'cardnews' }),
+                });
+                const data = await aiResp.json();
+                if (data.hook) hookEl.value = data.hook;
+                if (data.body) capEl.value = data.body;
+                if (data.hashtags) tagEl.value = data.hashtags;
+            } catch (err) {
+                alert('캡션 생성 오류: ' + err.message);
+            }
+        }
+
+        function downloadCardNewsImages() {
+            alert('카드뉴스 이미지가 output/cardnews_' + cardnewsSessionId + '/ 폴더에 저장되어 있습니다.');
         }
 
         // --- Step 3: 스토리 생성 ---

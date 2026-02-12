@@ -17,18 +17,43 @@ _playwright = None
 
 
 async def _get_browser():
-    """Playwright 브라우저 싱글톤 반환"""
+    """Playwright 브라우저 싱글톤 반환 (재시도 포함)"""
     global _browser, _playwright
 
     if _browser and _browser.is_connected():
         return _browser
 
+    # 기존 인스턴스 정리
+    if _browser:
+        try:
+            await _browser.close()
+        except Exception:
+            pass
+        _browser = None
+    if _playwright:
+        try:
+            await _playwright.stop()
+        except Exception:
+            pass
+        _playwright = None
+
     from playwright.async_api import async_playwright
 
-    _playwright = await async_playwright().start()
-    _browser = await _playwright.chromium.launch(headless=True)
-    logger.info("[Playwright] 브라우저 시작됨")
-    return _browser
+    for attempt in range(3):
+        try:
+            _playwright = await async_playwright().start()
+            _browser = await _playwright.chromium.launch(
+                headless=True,
+                args=['--no-sandbox', '--disable-setuid-sandbox']
+            )
+            logger.info("[Playwright] 브라우저 시작됨")
+            return _browser
+        except Exception as e:
+            logger.warning(f"[Playwright] 브라우저 시작 실패 (시도 {attempt+1}/3): {e}")
+            if attempt < 2:
+                await asyncio.sleep(1)
+            else:
+                raise RuntimeError(f"Playwright 브라우저를 시작할 수 없습니다: {e}")
 
 
 async def shutdown_browser():

@@ -1,6 +1,6 @@
 # Auto Webtoon - 전체 빌드 계획서
 > 작성일: 2025-02-11
-> 상태: Phase 1 준비 완료
+> 상태: Phase 3 완료 (전체 빌드 완료)
 
 ---
 
@@ -97,28 +97,28 @@ Step 3: Playwright 텍스트 오버레이 (Tab 6)
 
 ## 빌드 순서
 
-### Phase 1: 이미지 생성 강화 (Flux Kontext + LoRA)
-- [ ] ① Flux Kontext 이미지 생성기 추가 (image_generator.py)
-- [ ] ② fal_service.py - LoRA 학습/관리/추론 서비스
-- [ ] ③ models.py - TrainedCharacter, TrainingJob 모델
-- [ ] ④ training.py API 라우터 (학습 시작/상태/목록/추가학습/삭제)
-- [ ] ⑤ workflow.py - Flux Kontext 참조이미지 연동 + LoRA 트리거워드
-- [ ] ⑥ Tab 4 UI 개편 (학습 스타일 탭 + 학습캐릭터 배지 + 모델 선택)
-- [ ] ⑦ Pillow 여백 후처리 (image_postprocess.py)
-- [ ] ⑧ Tab 2 콘텐츠 타입 선택 메뉴 (웹툰/캐러셀/카드뉴스 3개 버튼)
+### Phase 1: 이미지 생성 강화 (Flux Kontext + LoRA) ✅ 완료
+- [x] ① Flux Kontext 이미지 생성기 추가 (image_generator.py)
+- [x] ② fal_service.py - LoRA 학습/관리/추론 서비스
+- [x] ③ models.py - TrainedCharacter, TrainingJob 모델
+- [x] ④ training.py API 라우터 (학습 시작/상태/목록/추가학습/삭제)
+- [x] ⑤ workflow.py - Flux Kontext 참조이미지 연동 + LoRA 트리거워드
+- [x] ⑥ Tab 4 UI 개편 (학습 스타일 탭 + 학습캐릭터 배지 + 모델 선택)
+- [x] ⑦ Pillow 여백 후처리 (pillow_service.py)
+- [x] ⑧ Tab 2 콘텐츠 타입 선택 메뉴 (웹툰/캐러셀/카드뉴스 3개 버튼)
 
-### Phase 2: 텍스트 오버레이 + 캐러셀/카드뉴스
-- [ ] ⑨ Playwright 설치 + 렌더링 엔진 (render_service.py)
-- [ ] ⑩ 말풍선 CSS 템플릿 시스템 (웹툰용)
-- [ ] ⑪ Tab 6 텍스트 오버레이 Playwright 연동
-- [ ] ⑫ 캐러셀 API + 템플릿 + UI (carousel.py)
-- [ ] ⑬ 카드뉴스 API + 템플릿 + UI (cardnews.py)
+### Phase 2: 텍스트 오버레이 + 캐러셀/카드뉴스 ✅ 완료
+- [x] ⑨ Playwright 설치 + 렌더링 엔진 (render_service.py)
+- [x] ⑩ 말풍선 CSS 템플릿 시스템 (웹툰용)
+- [x] ⑪ Tab 6 텍스트 오버레이 Playwright 연동
+- [x] ⑫ 캐러셀 API + 템플릿 + UI (carousel.py)
+- [x] ⑬ 카드뉴스 API + 템플릿 + UI (cardnews.py)
 
-### Phase 3: 마무리 + 통합
-- [ ] ⑭ 전체 발행 흐름 통합 (3개 경로 → 공통 발행)
-- [ ] ⑮ 프롬프트 최적화 (Flux Kontext용)
-- [ ] ⑯ 에러 처리 + 안정성 강화
-- [ ] ⑰ 테스트 + 버그 수정
+### Phase 3: 마무리 + 통합 ✅ 완료
+- [x] ⑭ 전체 발행 흐름 통합 (3개 경로 → 공통 캡션/발행)
+- [x] ⑮ 프롬프트 최적화 (Flux Kontext/LoRA 전용)
+- [x] ⑯ 에러 처리 + 안정성 강화 (Playwright 재시도, Flux 재시도)
+- [x] ⑰ 임포트 검증 + 통합 테스트
 
 ---
 
