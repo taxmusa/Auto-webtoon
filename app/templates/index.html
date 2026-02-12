@@ -950,8 +950,35 @@
                         </div>
                     </div>
 
-                    <!-- 3. Preview Area -->
-
+                    <!-- 3. 단색 배경 색상 선택기 -->
+                    <div id="bg-color-picker-area" style="display: none; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
+                        <h4 style="font-weight: 600; margin-bottom: 0.8rem; font-size: 0.95rem;">🎨 배경 색상 선택</h4>
+                        <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                            <input type="color" id="bg-color-input" value="#F5F5DC"
+                                style="width: 50px; height: 40px; border: 2px solid var(--border); border-radius: 6px; cursor: pointer; padding: 2px;"
+                                onchange="onBgColorChange(this.value)">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span style="font-size: 0.85rem; color: var(--text-muted);">HEX:</span>
+                                <input type="text" id="bg-color-hex" value="#F5F5DC"
+                                    style="width: 90px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-input); color: var(--text); font-family: monospace; font-size: 0.9rem;"
+                                    onchange="onBgHexInput(this.value)">
+                            </div>
+                            <div id="bg-color-preview" style="width: 120px; height: 40px; border-radius: 6px; border: 2px solid var(--border); background: #F5F5DC;"></div>
+                        </div>
+                        <!-- 자주 쓰는 색상 퀵 선택 -->
+                        <div style="display: flex; gap: 6px; margin-top: 0.8rem; flex-wrap: wrap;">
+                            <button onclick="onBgColorChange('#FFFFFF')" style="width:28px; height:28px; background:#FFFFFF; border:2px solid #ccc; border-radius:50%; cursor:pointer;" title="흰색"></button>
+                            <button onclick="onBgColorChange('#F5F5DC')" style="width:28px; height:28px; background:#F5F5DC; border:2px solid #ccc; border-radius:50%; cursor:pointer;" title="베이지"></button>
+                            <button onclick="onBgColorChange('#FFE4E1')" style="width:28px; height:28px; background:#FFE4E1; border:2px solid #ccc; border-radius:50%; cursor:pointer;" title="연핑크"></button>
+                            <button onclick="onBgColorChange('#E0F0FF')" style="width:28px; height:28px; background:#E0F0FF; border:2px solid #ccc; border-radius:50%; cursor:pointer;" title="연파랑"></button>
+                            <button onclick="onBgColorChange('#E8F5E9')" style="width:28px; height:28px; background:#E8F5E9; border:2px solid #ccc; border-radius:50%; cursor:pointer;" title="연초록"></button>
+                            <button onclick="onBgColorChange('#FFF9C4')" style="width:28px; height:28px; background:#FFF9C4; border:2px solid #ccc; border-radius:50%; cursor:pointer;" title="연노랑"></button>
+                            <button onclick="onBgColorChange('#F3E5F5')" style="width:28px; height:28px; background:#F3E5F5; border:2px solid #ccc; border-radius:50%; cursor:pointer;" title="연보라"></button>
+                            <button onclick="onBgColorChange('#D7CCC8')" style="width:28px; height:28px; background:#D7CCC8; border:2px solid #ccc; border-radius:50%; cursor:pointer;" title="웜그레이"></button>
+                            <button onclick="onBgColorChange('#263238')" style="width:28px; height:28px; background:#263238; border:2px solid #555; border-radius:50%; cursor:pointer;" title="다크"></button>
+                            <button onclick="onBgColorChange('#000000')" style="width:28px; height:28px; background:#000000; border:2px solid #555; border-radius:50%; cursor:pointer;" title="검정"></button>
+                        </div>
+                    </div>
 
                     <!-- 4. Manual Prompt Edit -->
                     <div class="manual-edit-section" style="margin-top: 2rem;">
@@ -1037,7 +1064,7 @@
                             "desc": "기본 스타일만 사용",
                             "prompt": "",
                             "is_preset": true,
-                            "type": "all"
+                            "type": "character"
                         },
                         "ghibli": {
                             "name": "지브리", "emoji": "🌿",
@@ -1179,43 +1206,38 @@
                             "is_preset": true,
                             "type": "character"
                         },
-                        "bg_anime": {
-                            "name": "애니메이션 배경 (Anime)", "emoji": "🏙️",
-                            "desc": "청량하고 디테일한 하늘과 풍경",
-                            "prompt": "Anime background art, Makoto Shinkai style, high detailed clouds, vibrant blue sky, pictorial lighting, emotional atmosphere, lens flare, intricate details, vast scale",
+                        "bg_remove": {
+                            "name": "배경 지우기", "emoji": "🚫",
+                            "desc": "배경 없이 캐릭터만 (흰 배경)",
+                            "prompt": "",
+                            "bg_instruction": "Pure white (#FFFFFF) background only. No background elements, no objects, no scenery, no environment. Show only the character on a completely blank white background.",
                             "is_preset": true,
                             "type": "background"
                         },
-                        "bg_realistic": {
-                            "name": "실사풍 배경 (Realistic)", "emoji": "📷",
-                            "desc": "영화 같은 사실적인 라이팅과 질감",
-                            "prompt": "Photorealistic background, 8k resolution, cinematic lighting, unreal engine 5 render style, highly detailed textures, dramatic lighting, depth of field, photography style",
-                            "is_preset": true,
-                            "type": "background"
-                        },
-                        "bg_simple": {
-                            "name": "단순 배경 (Simple)", "emoji": "🎨",
-                            "desc": "인물에 집중할 수 있는 단순한 배경",
-                            "prompt": "Simple minimal background, flat colors, abstract shapes, soft gradient, vector art style, clean, less detail to focus on character, corporate memphis style, illustration",
+                        "bg_solid": {
+                            "name": "단색 배경", "emoji": "🎨",
+                            "desc": "선택한 색상의 단색 배경",
+                            "prompt": "",
+                            "bg_instruction": "",
                             "is_preset": true,
                             "type": "background"
                         }
                     };
 
-                    let currentSelectedStyle = "none";
+                    var currentSelectedStyle = "none";
                     // sessionId matches global decl in main script
-                    let customStyles = {}; // Load from API later
-                    let stylePage = 1;
+                    var customStyles = {}; // Load from API later
+                    var stylePage = 1;
                     const itemsPerPage = 12;
 
-                    // Fixed: Missing variables for preview generation
-                    let currentStyleType = 'character';
-                    let selectedStyles = {
+                    // 다른 <script> 블록에서도 접근 가능하도록 var 사용
+                    var currentStyleType = 'character';
+                    var selectedStyles = {
                         character: null,
                         background: null
                     };
-                    let stylesData = { character: [], background: [] };
-                    let manualOverrides = { charPrompt: '', bgPrompt: '', additional: '' };
+                    var stylesData = { character: [], background: [] };
+                    var manualOverrides = { charPrompt: '', bgPrompt: '', additional: '' };
 
                     async function loadCustomStyles() {
                         try {
@@ -1271,39 +1293,72 @@
                         // 탭 버튼 스타일 전환
                         const charTab = document.getElementById('style-tab-character');
                         const bgTab = document.getElementById('style-tab-background');
+                        const label = document.getElementById('selected-style-label');
+                        const colorPicker = document.getElementById('bg-color-picker-area');
+
                         if (type === 'character') {
                             charTab.className = 'btn btn-sm btn-primary';
                             bgTab.className = 'btn btn-sm btn-outline';
+                            if (colorPicker) colorPicker.style.display = 'none';
+
+                            // 인물 탭 선택 라벨 복원
+                            if (selectedStyles.character) {
+                                currentSelectedStyle = selectedStyles.character.id || 'none';
+                                const s = selectedStyles.character;
+                                if (label) label.innerText = `선택: ${s.emoji || '🖼️'} ${s.name}${s.desc ? ' - ' + s.desc : ''}`;
+                            } else {
+                                currentSelectedStyle = 'none';
+                                if (label) label.innerText = '선택: 🚫 없음 - 기본 스타일만 사용';
+                            }
                         } else {
                             charTab.className = 'btn btn-sm btn-outline';
                             bgTab.className = 'btn btn-sm btn-primary';
+
+                            // 배경 탭 진입 시 기본 선택: bg_remove
+                            if (!selectedStyles.background || !selectedStyles.background.id) {
+                                currentSelectedStyle = 'bg_remove';
+                                selectedStyles.background = { ...PRESET_STYLES['bg_remove'], id: 'bg_remove' };
+                                if (label) label.innerText = '선택: 🚫 배경 지우기 - 배경 없이 캐릭터만 (흰 배경)';
+                                if (colorPicker) colorPicker.style.display = 'none';
+                            } else {
+                                currentSelectedStyle = selectedStyles.background.id;
+                                const s = selectedStyles.background;
+                                if (currentSelectedStyle === 'bg_solid') {
+                                    if (colorPicker) colorPicker.style.display = 'block';
+                                    if (label) label.innerHTML = `선택: 🎨 단색 배경 — <span style="display:inline-block;width:14px;height:14px;background:${bgSolidColor};border:1px solid #888;border-radius:3px;vertical-align:middle;"></span> ${bgSolidColor}`;
+                                } else {
+                                    if (colorPicker) colorPicker.style.display = 'none';
+                                    if (label) label.innerText = `선택: ${s.emoji || '🖼️'} ${s.name}${s.desc ? ' - ' + s.desc : ''}`;
+                                }
+                            }
                         }
 
                         renderNewStyleGrid();
                     }
 
                     function getAllStyles() {
-                        // 1. Get all unique IDs
+                        // ── 배경 탭: bg_remove, bg_solid 만 표시 (API 로드 배경 무시) ──
+                        if (currentStyleType === 'background') {
+                            return [
+                                { id: 'bg_remove', ...PRESET_STYLES['bg_remove'], is_preset: true },
+                                { id: 'bg_solid', ...PRESET_STYLES['bg_solid'], is_preset: true }
+                            ];
+                        }
+
+                        // ── 인물 탭: 프리셋 + 커스텀 인물 스타일 ──
                         const presetIds = Object.keys(PRESET_STYLES);
                         const customIds = Object.keys(customStyles);
                         const allIds = Array.from(new Set([...presetIds, ...customIds]));
 
-                        // 2. Map IDs to Style Objects (Prioritize API data)
                         let combined = allIds.map(id => {
-                            // If API has data, use it (it contains valid preview paths from app_data)
                             if (customStyles[id]) {
                                 const style = { ...customStyles[id] };
-
-                                // Fallback: If it matches a PRESET_STYLE key, ensure is_preset is true
-                                // This covers cases where API might miss the flag, or to respect frontend logic
                                 if (PRESET_STYLES[id]) {
                                     style.is_preset = true;
-                                    // PRESET에서 type 가져오기
                                     if (!style.type) style.type = PRESET_STYLES[id].type;
                                 }
                                 return style;
                             } else {
-                                // Only in PRESET (Virtual presets)
                                 const preset = { id, ...PRESET_STYLES[id] };
                                 if (id !== 'none') {
                                     preset.thumbnail = `/static/img/presets/${id}.png`;
@@ -1313,16 +1368,15 @@
                             }
                         });
 
-                        // 3. currentStyleType 기준 필터링 (none/all은 양쪽 모두 표시)
+                        // 인물 타입만 필터 (배경 타입 제외)
                         combined = combined.filter(s => {
-                            if (s.id === 'none') return false; // none은 아래에서 맨 앞에 추가
-                            if (s.type === 'all') return true;
-                            return s.type === currentStyleType;
+                            if (s.id === 'none') return false; // 아래에서 맨 앞에 추가
+                            return s.type === 'character';
                         });
 
-                        // 4. Move 'none' to top
+                        // "없음"을 맨 앞에 추가
                         if (PRESET_STYLES['none']) {
-                            combined.unshift({ id: 'none', ...PRESET_STYLES['none'], is_preset: true, type: currentStyleType });
+                            combined.unshift({ id: 'none', ...PRESET_STYLES['none'], is_preset: true, type: 'character' });
                         }
 
                         return combined;
@@ -1349,7 +1403,15 @@
                             card.onclick = () => onStyleCardClick(style.id);
 
                             let contentHtml = '';
-                            if (style.thumbnail) {
+
+                            // 배경 스타일 특수 카드 렌더링
+                            if (style.id === 'bg_remove') {
+                                contentHtml = `<div class="new-style-no-thumb" style="background:#fff; border:2px dashed #ccc; display:flex; align-items:center; justify-content:center; font-size:2rem;">🚫</div>`;
+                            } else if (style.id === 'bg_solid') {
+                                contentHtml = `<div class="new-style-no-thumb" style="background:${bgSolidColor}; border:2px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:1.2rem; color:#666;">
+                                    <span style="background:rgba(255,255,255,0.8); padding:2px 6px; border-radius:4px; font-size:0.75rem;">${bgSolidColor}</span>
+                                </div>`;
+                            } else if (style.thumbnail) {
                                 const thumbUrl = (style.thumbnail && style.thumbnail.indexOf('/app_data/') === 0) ? (style.thumbnail + '?t=' + Date.now()) : style.thumbnail;
                                 contentHtml = `<img src="${thumbUrl}" class="new-style-thumb" onerror="this.replaceWith(document.createElement('div')); this.className='new-style-no-thumb'; this.innerText='${style.emoji || '🖼️'}';">`;
                             } else {
@@ -1359,18 +1421,19 @@
                             // If it has thumbnail, emoji is redundant or can be small badge. 
                             // But if we use new-style-no-thumb, the emoji is inside it.
                             // So we only show separate emoji if we have a real thumbnail.
-                            if (style.thumbnail) {
+                            if (style.thumbnail && style.id !== 'bg_remove' && style.id !== 'bg_solid') {
                                 contentHtml += `<div style="font-size:0.8rem; margin-bottom:0.2rem;">${style.emoji || ''}</div>`;
                             }
 
                             // Badge Logic
                             let badge = '';
                             if (style.is_preset) {
-                                if (style.id !== 'none') {
-                                    badge = '<span class="style-badge preset">🔒 기본</span>';
-                                } else {
-                                    // 'none' style
+                                if (style.id === 'none') {
                                     badge = '<span class="style-badge preset">🚫 없음</span>';
+                                } else if (style.id === 'bg_remove' || style.id === 'bg_solid') {
+                                    badge = '<span class="style-badge preset">🔧 배경</span>';
+                                } else {
+                                    badge = '<span class="style-badge preset">🔒 기본</span>';
                                 }
                             } else {
                                 badge = '<span class="style-badge custom">👤 커스텀</span>';
@@ -1388,6 +1451,29 @@
                             card.innerHTML = contentHtml;
                             grid.appendChild(card);
                         });
+                    }
+
+                    // 단색 배경 색상 변수 (다른 <script> 블록에서도 접근 가능하도록 var 사용)
+                    var bgSolidColor = '#F5F5DC';
+
+                    function onBgColorChange(hex) {
+                        bgSolidColor = hex;
+                        document.getElementById('bg-color-input').value = hex;
+                        document.getElementById('bg-color-hex').value = hex;
+                        document.getElementById('bg-color-preview').style.background = hex;
+                        // 라벨 업데이트
+                        const label = document.getElementById('selected-style-label');
+                        if (label) {
+                            label.innerHTML = `선택: 🎨 단색 배경 — <span style="display:inline-block;width:14px;height:14px;background:${hex};border:1px solid #888;border-radius:3px;vertical-align:middle;"></span> ${hex}`;
+                        }
+                    }
+
+                    function onBgHexInput(val) {
+                        let hex = val.trim();
+                        if (!hex.startsWith('#')) hex = '#' + hex;
+                        if (/^#[0-9A-Fa-f]{6}$/.test(hex)) {
+                            onBgColorChange(hex);
+                        }
                     }
 
                     function onStyleCardClick(styleId) {
@@ -1411,10 +1497,21 @@
                             label.innerText = `선택: ${style.emoji || '🖼️'} ${style.name}${desc}`;
                         }
 
+                        // 단색 배경 색상 피커 표시/숨김
+                        const colorPicker = document.getElementById('bg-color-picker-area');
+                        if (colorPicker) {
+                            if (styleId === 'bg_solid') {
+                                colorPicker.style.display = 'block';
+                                onBgColorChange(bgSolidColor); // 라벨도 갱신
+                            } else {
+                                colorPicker.style.display = 'none';
+                            }
+                        }
+
                         // Fixed: Update selectedStyles for Preview
                         // 인물/배경 독립 선택: 현재 탭 기준으로 해당 타입만 업데이트
                         if (currentStyleType === 'background') {
-                            selectedStyles.background = style;
+                            selectedStyles.background = { ...style, id: styleId };
                         } else {
                             selectedStyles.character = style;
                         }
@@ -1786,12 +1883,12 @@
     </main>
 
     <script>
-        let currentStep = 1;
-        let sessionId = null;
-        let storyData = null;
-        let collectedData = [];
-        let characters = [];
-        let selectedMode = 'auto'; // 'auto' or 'manual'
+        var currentStep = 1;
+        var sessionId = null;
+        var storyData = null;
+        var collectedData = [];
+        var characters = [];
+        var selectedMode = 'auto'; // 'auto' or 'manual'
 
         function selectMode(mode) {
             selectedMode = mode;
@@ -2491,15 +2588,26 @@
 
             // Style System 2.0 Inputs
             const charStyleId = selectedStyles.character ? selectedStyles.character.id : null;
-            const bgStyleId = selectedStyles.background ? selectedStyles.background.id : null;
             const model = document.getElementById('image-model').value;
             // Style System 2.0 Check
             const stylePromptEl = document.getElementById('style-prompt-textarea');
             const stylePrompt = stylePromptEl ? stylePromptEl.value : '';
 
+            // 배경 스타일 → manual_overrides.background_style_prompt 로 처리
+            let bgStylePrompt = "";
+            let bgStyleId = null;  // 더 이상 bg lookup 하지 않음
+            if (selectedStyles.background && selectedStyles.background.id) {
+                const bgId = selectedStyles.background.id;
+                if (bgId === 'bg_remove') {
+                    bgStylePrompt = "Pure white (#FFFFFF) background only. No background elements, no objects, no scenery, no environment. Show only the character on a completely blank white background.";
+                } else if (bgId === 'bg_solid') {
+                    bgStylePrompt = `Solid flat single color background (${bgSolidColor}). No background elements, no objects, no patterns, no gradients. Plain flat ${bgSolidColor} color fill only.`;
+                }
+            }
+
             const overrides = {
                 character_style_prompt: "",
-                background_style_prompt: "",
+                background_style_prompt: bgStylePrompt,
                 style_prompt: stylePrompt,
                 additional_instructions: ""
             };
@@ -2513,7 +2621,7 @@
                     body: JSON.stringify({
                         session_id: sessionId,
                         character_style_id: selectedStyles.character ? selectedStyles.character.id : null,
-                        background_style_id: selectedStyles.background ? selectedStyles.background.id : null,
+                        background_style_id: bgStyleId,
                         sub_style: "", // Deprecated in V2
                         manual_overrides: overrides,
                         model: model,
@@ -3354,9 +3462,21 @@
             const additionalEl = document.getElementById('manual-additional');
             const additionalPrompt = additionalEl ? additionalEl.value : '';
 
+            // 배경 스타일 → background_style_prompt 로 처리 (프리뷰)
+            let previewBgPrompt = "";
+            let previewBgId = null;
+            if (selectedStyles.background && selectedStyles.background.id) {
+                const bgId = selectedStyles.background.id;
+                if (bgId === 'bg_remove') {
+                    previewBgPrompt = "Pure white (#FFFFFF) background only. No background elements, no objects, no scenery, no environment. Show only the character on a completely blank white background.";
+                } else if (bgId === 'bg_solid') {
+                    previewBgPrompt = `Solid flat single color background (${bgSolidColor}). No background elements, no objects, no patterns, no gradients. Plain flat ${bgSolidColor} color fill only.`;
+                }
+            }
+
             const overrides = {
                 character_style_prompt: "",
-                background_style_prompt: "",
+                background_style_prompt: previewBgPrompt,
                 style_prompt: stylePrompt,
                 additional_instructions: additionalPrompt
             };
@@ -3397,7 +3517,7 @@
                     body: JSON.stringify({
                         session_id: sessionId,
                         character_style_id: selectedStyles.character ? selectedStyles.character.id : null,
-                        background_style_id: selectedStyles.background ? selectedStyles.background.id : null,
+                        background_style_id: previewBgId,
                         sub_style: "",
                         manual_overrides: overrides,
                         model: document.getElementById('image-model').value

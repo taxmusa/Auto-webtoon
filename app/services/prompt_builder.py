@@ -301,17 +301,23 @@ The following instruction takes absolute precedence over every other section bel
 """)
 
     # 3. Background Style
-    #    additional_instructions에 배경 관련 지시가 있으면 기본값("사무실") 대신 반영
-    bg_prompt = background_style.prompt_block if background_style else "Modern office setting, bright lighting"
+    #    manual_overrides.background_style_prompt 우선 → background_style 객체 → 씬 자연 배경
+    bg_prompt = ""
     if manual_overrides and manual_overrides.background_style_prompt:
+        # 프론트에서 "배경 지우기" / "단색 배경" 등을 직접 프롬프트로 전달
         bg_prompt = manual_overrides.background_style_prompt
+    elif background_style:
+        bg_prompt = background_style.prompt_block
+    else:
+        # 배경 스타일 미지정 시: 씬 내용에 맞는 자연스러운 배경 (하드코딩 X)
+        bg_prompt = "Background appropriate for the scene context. Keep it simple and consistent with the art style."
 
     if additional_en:
         # 배경 관련 키워드가 추가지시에 있으면 배경 섹션을 완전히 대체
         _bg_keywords = ["배경", "background", "흰", "white", "단색", "solid", "없", "remove", "plain",
                          "character only", "no background", "simple"]
         if any(kw in (additional + " " + additional_en).lower() for kw in _bg_keywords):
-            bg_prompt = additional_en  # 영어 번역으로 완전 대체 (기본값 제거)
+            bg_prompt = additional_en  # 영어 번역으로 완전 대체
 
     parts.append(f"""
 [BACKGROUND STYLE - CONSISTENT ACROSS ALL SCENES]
