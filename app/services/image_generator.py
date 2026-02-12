@@ -33,7 +33,8 @@ class ImageGeneratorBase(ABC):
         prompt: str,
         reference_images: Optional[List[bytes]] = None,
         size: str = "1024x1536",
-        quality: str = "medium"
+        quality: str = "medium",
+        seed: Optional[int] = None
     ) -> Union[bytes, str]:
         pass
 
@@ -70,12 +71,13 @@ class OpenAIGenerator(ImageGeneratorBase):
     # dall-e-2 허용 사이즈
     _DALLE2_SIZES = {"256x256", "512x512", "1024x1024"}
 
-    async def generate(self, prompt, reference_images=None, size="1024x1024", quality="standard"):
+    async def generate(self, prompt, reference_images=None, size="1024x1024", quality="standard", seed=None):
         """
         모델에 따라 적절한 파라미터로 이미지 생성.
         ─ gpt-image-1 계열: size, quality, output_format 지원 / response_format 미지원
         ─ dall-e-3         : size, quality, response_format 지원
         ─ dall-e-2         : size, response_format 지원 / quality 미지원
+        (seed는 OpenAI 모델에서는 무시됨)
         """
         import base64
         t0 = time.time()
@@ -163,7 +165,7 @@ class GeminiGenerator(ImageGeneratorBase):
         self.client = genai.Client(api_key=api_key)
         self.model = model
 
-    async def generate(self, prompt, reference_images=None, size="1024x1024", quality="medium"):
+    async def generate(self, prompt, reference_images=None, size="1024x1024", quality="medium", seed=None):
         t0 = time.time()
         try:
             contents = [prompt]
@@ -244,22 +246,26 @@ class FluxKontextGenerator(ImageGeneratorBase):
         self.model = model
         self.endpoint = self._MODEL_MAP.get(model, "fal-ai/flux-kontext/dev")
 
-    async def generate(self, prompt, reference_images=None, size="1024x1536", quality="medium"):
+    async def generate(self, prompt, reference_images=None, size="1024x1536", quality="medium", seed=None):
         """
         reference_images 가 있으면 → Kontext (이미지→이미지, 캐릭터 유지)
         reference_images 가 없으면 → Flux Dev (텍스트→이미지, 첫 씬)
+        seed: 동일 seed 사용 시 캐릭터 일관성 향상. None이면 랜덤.
         최대 2회 재시도.
         """
         max_retries = 2
         last_err = None
 
+        if seed is not None:
+            logger.info("[Flux] 고정 seed 사용: %d", seed)
+
         for attempt in range(max_retries + 1):
             t0 = time.time()
             try:
                 if reference_images and len(reference_images) > 0:
-                    image_data = await self._generate_with_reference(prompt, reference_images[0], size)
+                    image_data = await self._generate_with_reference(prompt, reference_images[0], size, seed=seed)
                 else:
-                    image_data = await self._generate_text2img(prompt, size)
+                    image_data = await self._generate_text2img(prompt, size, seed=seed)
 
                 logger.info("Flux 이미지 생성 완료 %.1f초 (model=%s, ref=%s, attempt=%d)",
                             time.time() - t0, self.model,
@@ -273,7 +279,25 @@ class FluxKontextGenerator(ImageGeneratorBase):
                     "네트워크나 fal.ai 상태를 확인한 뒤 다시 시도해주세요."
                 )
             except Exception as e:
-                logger.error("Flux 생성 실패 (%.1f초, attempt=%d): %s", time.time() - t0, attempt + 1, e)
+                import traceback
+                err_msg = str(e)
+                logger.error("Flux 생성 실패 (%.1f초, attempt=%d): %s\n%s", 
+                           time.time() - t0, attempt + 1, e, traceback.format_exc())
+                
+                # fal.ai 잔액 부족 — 재시도 무의미, 즉시 중단
+                if "Exhausted balance" in err_msg or "locked" in err_msg.lower():
+                    raise RuntimeError(
+                        "fal.ai 잔액이 소진되었습니다. "
+                        "https://fal.ai/dashboard/billing 에서 충전 후 다시 시도해주세요."
+                    ) from e
+                
+                # 인증 오류 — 재시도 무의미
+                if "401" in err_msg or "403" in err_msg or "Unauthorized" in err_msg:
+                    raise RuntimeError(
+                        "fal.ai 인증 실패. .env 파일의 FAL_KEY를 확인해주세요. "
+                        "(https://fal.ai/dashboard/keys 에서 발급)"
+                    ) from e
+                
                 last_err = e
 
             if attempt < max_retries:
@@ -283,20 +307,63 @@ class FluxKontextGenerator(ImageGeneratorBase):
 
         raise last_err
 
-    async def _generate_text2img(self, prompt: str, size: str) -> bytes:
+    @staticmethod
+    def _sanitize_prompt(prompt: str) -> str:
+        """프롬프트의 한국어를 영어로 번역하여 fal.ai에 전달.
+        
+        SmartTranslator를 사용한 3단계 번역:
+          1. 캐시 히트 → 비용 0
+          2. 로컬 사전(prompt_dictionary.json) → 비용 0
+          3. Gemini AI → 미번역 부분만 호출
+        + 최종: 비-ASCII 문자 강제 제거 (fal_client가 ASCII만 허용)
+        """
+        import re
+        from app.services.smart_translator import translate_prompt
+        
+        translated = translate_prompt(prompt)
+        
+        # ── 최종 안전장치: fal_client는 비-ASCII를 전혀 허용하지 않음 ──
+        # 번역 후에도 남은 한국어/특수문자를 공백으로 치환
+        ascii_safe = translated.encode('ascii', errors='replace').decode('ascii')
+        # '?' 문자(치환 결과)를 공백으로 변환 후 정리
+        ascii_safe = ascii_safe.replace('?', ' ')
+        ascii_safe = re.sub(r'\s+', ' ', ascii_safe).strip()
+        
+        if len(ascii_safe) < 20:
+            ascii_safe = "Korean webtoon style, clean professional illustration. " + ascii_safe
+        
+        # ── 텍스트/로고/마크 금지 보장 (앞 + 뒤 이중 배치) ──
+        # Flux는 프롬프트의 앞부분과 뒷부분을 가장 강하게 따름
+        anti_front = "no text, no speech bubbles, no logos, no watermarks, no writing, no symbols, no icons, no marks"
+        anti_back = "Pure illustration only. Absolutely no text or logos anywhere."
+        
+        if "no text" not in ascii_safe.lower():
+            ascii_safe = anti_front + ". " + ascii_safe
+        
+        # 프롬프트 끝에도 안티텍스트 리마인더 추가
+        if not ascii_safe.rstrip().endswith("logos.") and not ascii_safe.rstrip().endswith("logos"):
+            ascii_safe = ascii_safe.rstrip() + " " + anti_back
+        
+        if ascii_safe != translated:
+            logger.info("[Flux] ASCII 강제 정리 적용 (비-ASCII 문자 제거됨)")
+        
+        return ascii_safe
+
+    async def _generate_text2img(self, prompt: str, size: str, seed=None) -> bytes:
         """첫 씬: 텍스트→이미지 (Flux Dev)"""
         w, h = self._parse_size(size)
+        safe_prompt = self._sanitize_prompt(prompt)
 
         def _sync():
-            handler = fal_client.submit(
-                self._TEXT2IMG_MODEL,
-                arguments={
-                    "prompt": prompt,
-                    "image_size": {"width": w, "height": h},
-                    "num_images": 1,
-                    "output_format": "png",
-                }
-            )
+            args = {
+                "prompt": safe_prompt,
+                "image_size": {"width": w, "height": h},
+                "num_images": 1,
+                "output_format": "png",
+            }
+            if seed is not None:
+                args["seed"] = seed
+            handler = fal_client.submit(self._TEXT2IMG_MODEL, arguments=args)
             return handler.get()
 
         result = await asyncio.wait_for(
@@ -306,26 +373,39 @@ class FluxKontextGenerator(ImageGeneratorBase):
         image_url = result["images"][0]["url"]
         return await self._download_image(image_url)
 
-    async def _generate_with_reference(self, prompt: str, ref_bytes: bytes, size: str) -> bytes:
-        """후속 씬: 이미지→이미지 (Kontext, 캐릭터 유지)"""
+    async def _generate_with_reference(self, prompt: str, ref_bytes: bytes, size: str, seed=None) -> bytes:
+        """참조 이미지 기반 편집 (Kontext) — 체인 생성의 핵심
+        
+        ★ 체인 생성 워크플로우:
+          씬 1 (text2img) → 씬 2 (img2img, 씬1 참조) → 씬 3 (img2img, 씬2 참조)...
+          
+        guidance_scale 설계:
+          - 4.0~5.0: 캐릭터 외모를 강하게 유지하면서 장면 변경 (체인 생성에 최적)
+          - 2.5 이하: 참조 이미지를 그대로 복사 (포즈까지 같아짐 - 나쁨)
+          - 7.5 이상: 프롬프트만 따르고 캐릭터 무시 (일관성 깨짐 - 나쁨)
+        """
         import base64
 
-        # 참조 이미지를 data URI 로 변환
+        safe_prompt = self._sanitize_prompt(prompt)
+
         b64 = base64.b64encode(ref_bytes).decode("utf-8")
         data_uri = f"data:image/png;base64,{b64}"
 
         def _sync():
-            handler = fal_client.submit(
-                self.endpoint,
-                arguments={
-                    "prompt": prompt,
-                    "image_url": data_uri,
-                    "num_images": 1,
-                    "output_format": "png",
-                    "guidance_scale": 2.5,
-                    "num_inference_steps": 28,
-                }
-            )
+            args = {
+                "prompt": safe_prompt,
+                "image_url": data_uri,
+                "num_images": 1,
+                "output_format": "png",
+                # ★ guidance_scale 4.5: 캐릭터 일관성 + 장면 다양성의 최적 균형점
+                #   - 참조 이미지에서 캐릭터 외모(얼굴/머리/옷) 유지
+                #   - 프롬프트의 장면 설명은 적극 반영 (포즈/배경/구도 변경)
+                "guidance_scale": 4.5,
+                "num_inference_steps": 28,
+            }
+            if seed is not None:
+                args["seed"] = seed
+            handler = fal_client.submit(self.endpoint, arguments=args)
             return handler.get()
 
         result = await asyncio.wait_for(
@@ -382,7 +462,7 @@ class FluxLoraGenerator(ImageGeneratorBase):
         self.lora_url = lora_url
         self.trigger_word = trigger_word
 
-    async def generate(self, prompt, reference_images=None, size="1024x1536", quality="medium"):
+    async def generate(self, prompt, reference_images=None, size="1024x1536", quality="medium", seed=None):
         """LoRA 학습 모델로 이미지 생성"""
         t0 = time.time()
         w, h = FluxKontextGenerator._parse_size(size)
@@ -391,10 +471,13 @@ class FluxLoraGenerator(ImageGeneratorBase):
         if self.trigger_word and self.trigger_word not in prompt:
             prompt = f"{self.trigger_word}, {prompt}"
 
+        # 한국어 제거 (fal.ai는 영어만)
+        safe_prompt = FluxKontextGenerator._sanitize_prompt(prompt)
+
         try:
             def _sync():
                 arguments = {
-                    "prompt": prompt,
+                    "prompt": safe_prompt,
                     "image_size": {"width": w, "height": h},
                     "num_images": 1,
                     "output_format": "png",
@@ -402,6 +485,9 @@ class FluxLoraGenerator(ImageGeneratorBase):
                 # LoRA 가중치가 있으면 적용
                 if self.lora_url:
                     arguments["loras"] = [{"path": self.lora_url, "scale": 1.0}]
+                # Seed 고정 (캐릭터 일관성)
+                if seed is not None:
+                    arguments["seed"] = seed
 
                 handler = fal_client.submit(self._ENDPOINT, arguments=arguments)
                 return handler.get()

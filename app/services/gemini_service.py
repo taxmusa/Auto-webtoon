@@ -241,7 +241,7 @@ class GeminiService:
 - hair_color: 예) "jet black #1A1A1A" (색상 + 헥스코드)
 - skin_tone: 예) "warm beige, light tan" (밝기와 톤 포함)
 - eye_shape: 예) "almond-shaped, medium size, double eyelid"
-- glasses: 반드시 명시 — 예) "black rectangular thin-frame glasses" 또는 "none (no glasses)"
+- glasses: 기본값은 "none (no glasses)". 안경을 쓰는 캐릭터는 특별한 이유가 없으면 만들지 마세요. 대부분의 캐릭터는 안경을 쓰지 않습니다.
 - outfit: 예) "navy blue suit jacket, white dress shirt, blue striped tie" (상의, 하의, 넥타이 등 구체적)
 - outfit_color: 예) "navy #1B2A4A jacket, white #FFFFFF shirt, blue #3B5998 tie" (각 부위별 헥스코드)
 - accessories: 예) "silver watch on left wrist, black leather belt" 또는 "none"

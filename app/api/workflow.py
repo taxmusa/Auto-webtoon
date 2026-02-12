@@ -13,7 +13,8 @@ from app.models.models import (
     Story, Scene, InstagramCaption, ProjectSettings,
     CharacterSettings, ImageStyle, SubStyle, SpecializedField,
     ManualPromptOverrides, ThumbnailData, ThumbnailSource, ThumbnailPosition,
-    SeriesInfo, ToBeContinuedStyle, GeneratedImage
+    SeriesInfo, ToBeContinuedStyle, GeneratedImage,
+    BubbleLayer, BubbleOverlay, BubblePosition, BubbleShape, CHARACTER_COLORS
 )
 from app.services.gemini_service import get_gemini_service
 from app.services.openai_service import get_openai_service
@@ -47,6 +48,39 @@ def _resolve_api_key(model_name: str) -> str:
         return os.getenv("OPENAI_API_KEY", "")
     else:
         return os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY", "")
+
+
+async def _translate_scenes_to_english(scenes):
+    """Flux 모델용: 모든 씬의 한국어 설명을 영어로 일괄 번역.
+    
+    SmartTranslator를 사용하여 캐시/사전/AI 3단계로 번역.
+    캐시 누적으로 같은 표현은 다시 AI를 호출하지 않음.
+    """
+    import re
+
+    # 한국어 포함 씬만 수집
+    korean_scenes = []
+    for s in scenes:
+        if re.search(r'[\uac00-\ud7af]', s.scene_description or ''):
+            korean_scenes.append(s)
+    
+    if not korean_scenes:
+        return  # 이미 전부 영어
+
+    try:
+        from app.services.smart_translator import translate_prompts_batch
+        
+        texts = [s.scene_description for s in korean_scenes]
+        translated = translate_prompts_batch(texts)
+        
+        for s, t in zip(korean_scenes, translated):
+            if t and len(t) > 5:
+                s.scene_description = t
+        
+        logger.info(f"[번역] {len(korean_scenes)}개 씬 설명 한→영 번역 완료 (SmartTranslator)")
+
+    except Exception as e:
+        logger.warning(f"[번역] 씬 일괄 번역 실패 (개별 번역으로 폴백): {e}")
 
 
 # ============================================
@@ -317,6 +351,19 @@ async def generate_preview(request: GeneratePreviewRequest):
             sub_style_name=request.sub_style
         )
         
+        # ★ Flux 모델 선택 시 프롬프트 최적화 적용
+        #   (미리보기에서도 실제 생성과 동일한 최적화를 적용해야 예측 가능)
+        is_flux = "flux" in (request.model or "").lower()
+        if is_flux:
+            from app.services.prompt_builder import optimize_for_flux_kontext
+            prompt = optimize_for_flux_kontext(
+                prompt,
+                scene_description=target_scene.scene_description,
+                is_reference=False,
+                characters=characters
+            )
+            logger.info(f"[PREVIEW] Flux 최적화 적용됨 → {len(prompt)}자")
+        
         # Select generator — 모델별 API 키 자동 선택
         api_key = _resolve_api_key(request.model)
         generator = get_generator(request.model, api_key)
@@ -324,8 +371,15 @@ async def generate_preview(request: GeneratePreviewRequest):
         # Generate single image
         print(f"[PREVIEW] model={request.model}, prompt_len={len(prompt)}자, api_key={'SET' if api_key else 'MISSING'}")
         logger.info(f"미리보기 생성 시작 (model={request.model}, prompt_len={len(prompt)}자)")
+        
+        # Flux 모델은 seed도 적용
+        seed = None
+        if is_flux:
+            import random
+            seed = random.randint(1, 2**31 - 1)
+        
         image_data = await asyncio.wait_for(
-            generator.generate(prompt, size="1024x1024", quality="standard"),
+            generator.generate(prompt, size="1024x1024", quality="standard", seed=seed),
             timeout=95.0  # IMAGE_GENERATION_TIMEOUT(90) + 여유
         )
 
@@ -381,12 +435,35 @@ async def generate_images(request: GenerateImagesRequest):
     
     generated_images = []
     import asyncio
+    import random
     
-    # 첫 씬 이미지 바이트 (Flux Kontext: 씬 2+ 에서 참조용)
-    first_scene_bytes: bytes = b""
+    # Flux 모델: 세션당 기본 seed 생성 (캐릭터 일관성 + 씬별 변형)
+    is_flux = "flux" in request.model
+    if is_flux:
+        # 기존 세션에 seed가 있으면 재사용, 없으면 새로 생성
+        if session.settings.image.flux_seed:
+            base_seed = session.settings.image.flux_seed
+            logger.info(f"[Flux] 기존 세션 base_seed 재사용: {base_seed}")
+        else:
+            base_seed = random.randint(1, 2**31 - 100000)  # 씬 오프셋 여유
+            session.settings.image.flux_seed = base_seed
+            logger.info(f"[Flux] 새 세션 base_seed 생성: {base_seed}")
+    else:
+        base_seed = None
     
-    async def generate_single_scene(scene, ref_bytes: bytes = b""):
+    # Flux 모델이면 씬 설명을 미리 영어로 번역 (한 번만)
+    if is_flux and session.story and session.story.scenes:
+        await _translate_scenes_to_english(session.story.scenes)
+
+    async def generate_single_scene(scene, scene_seed=None, ref_image_bytes=None):
+        """단일 씬 이미지 생성
+        
+        ref_image_bytes가 있으면 → Kontext img2img (캐릭터 유지 + 장면 변경)
+        ref_image_bytes가 없으면 → Flux Dev text2img (첫 씬, 기준 캐릭터 확립)
+        """
         try:
+            from app.services.prompt_builder import optimize_for_flux_kontext
+            
             prompt = build_styled_prompt(
                 scene=scene,
                 characters=session.story.characters,
@@ -396,27 +473,45 @@ async def generate_images(request: GenerateImagesRequest):
                 sub_style_name=sub_style
             )
             
-            # Flux Kontext/LoRA 프롬프트 최적화
-            if is_flux_kontext:
-                from app.services.prompt_builder import optimize_for_flux_kontext
+            # Flux 모델: 프롬프트 최적화
+            if is_flux_kontext or is_flux:
                 prompt = optimize_for_flux_kontext(
                     prompt,
                     scene_description=scene.scene_description,
-                    is_reference=bool(ref_bytes)
+                    is_reference=(ref_image_bytes is not None),
+                    characters=session.story.characters
                 )
             elif "flux-lora" in request.model:
                 from app.services.prompt_builder import optimize_for_flux_lora
                 trigger = getattr(request, 'trigger_word', '') or ''
-                prompt = optimize_for_flux_lora(prompt, trigger_word=trigger)
+                prompt = optimize_for_flux_lora(prompt, trigger_word=trigger,
+                                                characters=session.story.characters)
             
-            # Using 1024x1536 for Webtoon (Vertical)
             size = "1024x1536" if request.aspect_ratio in ("4:5", "9:16") else "1024x1024"
             
-            # Flux Kontext: 참조 이미지가 있으면 전달 (캐릭터 일관성 유지)
-            ref_images = [ref_bytes] if ref_bytes and is_flux_kontext else None
-            image_data = await generator.generate(prompt, reference_images=ref_images, size=size)
+            # ★★★ 체인 생성 핵심 ★★★
+            # 씬 1: text2img (기준 캐릭터 확립, 참조 없음)
+            # 씬 2+: img2img (이전 씬을 참조 → 캐릭터 외모 유지 + 장면만 변경)
+            if ref_image_bytes:
+                # Kontext img2img: 이전 씬의 캐릭터를 유지하면서 새 장면 생성
+                image_data = await generator.generate(
+                    prompt,
+                    reference_images=[ref_image_bytes],
+                    size=size,
+                    seed=scene_seed
+                )
+                logger.info(f"[체인] 씬 {scene.scene_number}: img2img (이전 씬 참조, 캐릭터 유지)")
+            else:
+                # 첫 씬: text2img (기준 이미지)
+                image_data = await generator.generate(
+                    prompt,
+                    reference_images=None,
+                    size=size,
+                    seed=scene_seed
+                )
+                logger.info(f"[체인] 씬 {scene.scene_number}: text2img (기준 캐릭터 확립)")
             
-            # Save file
+            # 파일 저장
             filename = f"scene_{scene.scene_number}_{uuid.uuid4().hex[:6]}.png"
             filepath = os.path.join("output", filename)
             os.makedirs("output", exist_ok=True)
@@ -425,7 +520,7 @@ async def generate_images(request: GenerateImagesRequest):
                 with open(filepath, "wb") as f:
                     f.write(image_data)
                 
-                # Pillow 후처리: 상단 25% 여백 강제 확보 (텍스트 오버레이 공간)
+                # Pillow 후처리: 상단 여백 확보
                 try:
                     from app.services.pillow_service import get_pillow_service
                     from PIL import Image
@@ -434,7 +529,6 @@ async def generate_images(request: GenerateImagesRequest):
                     img = Image.open(filepath)
                     img = pillow.ensure_top_margin(img, margin_ratio=0.25)
                     img.save(filepath, "PNG")
-                    # image_data 도 갱신 (참조용)
                     buf = BytesIO()
                     img.save(buf, format="PNG")
                     image_data = buf.getvalue()
@@ -457,24 +551,41 @@ async def generate_images(request: GenerateImagesRequest):
                 "error": str(e)
             }
 
-    # 순차 생성: 한 씬 완료마다 session.images에 즉시 추가 → 프론트 폴링으로 실시간 진행률 확인 가능
+    # ★★★ 체인 생성: 씬 1 → 참조 → 씬 2 → 참조 → 씬 3... ★★★
+    # Flux Kontext 공식 권장 워크플로우:
+    #   1. 씬 1을 text2img로 생성 (기준 캐릭터 확립)
+    #   2. 씬 1의 이미지를 reference로 씬 2를 img2img 생성 (캐릭터 유지)
+    #   3. 씬 2의 이미지를 reference로 씬 3를 img2img 생성
+    #   → 캐릭터 외모가 체인처럼 연결되어 일관성 유지!
     from app.models.models import GeneratedImage
     session.images = []
-    stop_signals[request.session_id] = False  # 중단 신호 초기화
+    stop_signals[request.session_id] = False
+    
+    prev_image_bytes = None  # ★ 이전 씬의 이미지 데이터 (체인 참조용)
+    use_chain = is_flux_kontext or is_flux  # Flux 계열만 체인 사용
     
     for scene in session.story.scenes:
-        # 중단 신호 체크
         if stop_signals.get(request.session_id, False):
-            logger.info(f"[STOP] 세션 {request.session_id} 이미지 생성 중단됨 ({len(session.images)}/{len(session.story.scenes)} 완료)")
+            logger.info(f"[STOP] 세션 {request.session_id} 이미지 생성 중단됨 "
+                        f"({len(session.images)}/{len(session.story.scenes)} 완료)")
             break
         
-        # Flux Kontext: 씬 2+ 는 첫 씬 이미지를 참조로 전달
-        ref = first_scene_bytes if (is_flux_kontext and first_scene_bytes) else b""
-        res = await generate_single_scene(scene, ref_bytes=ref)
+        scene_seed = (base_seed + scene.scene_number * 1000) if base_seed else None
         
-        # 첫 씬 결과를 참조 이미지로 저장
-        if not first_scene_bytes and res.get("image_bytes"):
-            first_scene_bytes = res["image_bytes"]
+        # ★ 체인 결정: 씬 1은 무조건 text2img, 씬 2+는 이전 씬 참조
+        ref_bytes = None
+        if use_chain and prev_image_bytes and scene.scene_number > 1:
+            ref_bytes = prev_image_bytes
+        
+        mode_str = "img2img 체인" if ref_bytes else "text2img 기준"
+        logger.info(f"[생성] 씬 {scene.scene_number}/{len(session.story.scenes)} — "
+                     f"seed={scene_seed}, {mode_str}")
+        
+        res = await generate_single_scene(scene, scene_seed=scene_seed, ref_image_bytes=ref_bytes)
+        
+        # ★ 체인 연결: 성공한 이미지를 다음 씬의 참조로 사용
+        if res.get("image_bytes") and res["status"] == "generated":
+            prev_image_bytes = res["image_bytes"]
         
         if res.get("local_path"):
             img = GeneratedImage(
@@ -524,12 +635,20 @@ async def generate_caption(request: GenerateCaptionRequest):
     
     gemini = get_gemini_service()
     
-    # 스토리 요약 생성
+    # 스토리 전체 요약 생성 (모든 씬 포함)
     story_summary = f"제목: {session.story.title}\n"
+    story_summary += f"등장인물: {', '.join([c.name + '(' + c.role + ')' for c in session.story.characters])}\n"
     story_summary += "\n".join([
         f"씬{s.scene_number}: {s.scene_description}"
-        for s in session.story.scenes[:3]
+        for s in session.story.scenes  # ★ 전체 씬 사용 (기존: [:3])
     ])
+    # 대사도 요약에 포함 (스토리 맥락 강화)
+    dialogues_summary = []
+    for s in session.story.scenes[:5]:
+        for d in s.dialogues[:2]:
+            dialogues_summary.append(f"  {d.character}: \"{d.line}\"")
+    if dialogues_summary:
+        story_summary += "\n주요 대사:\n" + "\n".join(dialogues_summary)
     
     field = session.field_info.field if session.field_info else SpecializedField.GENERAL
     
@@ -899,15 +1018,44 @@ async def regenerate_image(request: RegenerateImageRequest):
     try:
         size = "1024x1536"  # 웹툰 기본 세로
         
-        # Flux Kontext: 첫 씬 이미지를 참조로 전달 (일관성)
+        # Flux Kontext/LoRA 프롬프트 최적화
+        is_flux_kontext = "flux-kontext" in model_name
+        is_flux_regen = "flux" in model_name
         ref_images = None
-        if "flux-kontext" in model_name and session.images:
-            first_img = session.images[0]
-            if first_img.local_path and os.path.exists(first_img.local_path):
-                with open(first_img.local_path, "rb") as rf:
-                    ref_images = [rf.read()]
         
-        image_data = await generator.generate(prompt, reference_images=ref_images, size=size)
+        if is_flux_kontext:
+            # ★ 재생성: 현재 씬의 기존 이미지를 참조로 전달 (캐릭터 외모 유지)
+            if session.images and request.scene_index < len(session.images):
+                current_img = session.images[request.scene_index]
+                if current_img.local_path and os.path.exists(current_img.local_path):
+                    with open(current_img.local_path, "rb") as rf:
+                        ref_images = [rf.read()]
+                    logger.info(f"[재생성] 씬 {scene.scene_number}: 기존 이미지를 참조로 사용 (캐릭터 외모 유지)")
+            
+            from app.services.prompt_builder import optimize_for_flux_kontext
+            prompt = optimize_for_flux_kontext(
+                prompt,
+                scene_description=scene.scene_description,
+                is_reference=bool(ref_images),
+                characters=session.story.characters
+            )
+        elif "flux-lora" in model_name:
+            from app.services.prompt_builder import optimize_for_flux_lora
+            prompt = optimize_for_flux_lora(prompt, characters=session.story.characters)
+        elif is_flux_regen:
+            # flux-dev 등 일반 Flux: text2img 최적화
+            from app.services.prompt_builder import optimize_for_flux_kontext
+            prompt = optimize_for_flux_kontext(
+                prompt,
+                scene_description=scene.scene_description,
+                is_reference=False,
+                characters=session.story.characters
+            )
+        
+        # ★ 재생성 시 씬별 seed 사용 (최초 생성과 동일 seed → 유사한 결과)
+        base_seed = session.settings.image.flux_seed if is_flux_regen else None
+        regen_seed = (base_seed + scene.scene_number * 1000) if base_seed else None
+        image_data = await generator.generate(prompt, reference_images=ref_images, size=size, seed=regen_seed)
         
         # 파일 저장
         filename = f"scene_{scene.scene_number}_{uuid.uuid4().hex[:6]}.png"
@@ -1387,4 +1535,262 @@ async def apply_to_be_continued(request: ToBeContinuedRequest):
         "enabled": True,
         "style": request.style,
         "applied_to_scene": last_img.scene_number
+    }
+
+
+# ============================================
+# 비파괴 말풍선 레이어 API (Non-destructive Bubble Layer)
+# ============================================
+
+@router.post("/bubble-layers/{session_id}/init")
+async def init_bubble_layers(session_id: str):
+    """스토리 대사를 기반으로 말풍선 레이어 초기화
+    
+    원본 이미지는 절대 수정하지 않음.
+    대사/나레이션을 BubbleOverlay JSON으로 분리 저장.
+    """
+    session = sessions.get(session_id)
+    if not session or not session.story:
+        raise HTTPException(status_code=404, detail="세션 또는 스토리를 찾을 수 없습니다")
+    
+    # 캐릭터별 색상 매핑 생성
+    char_names = list({c.name for c in session.story.characters})
+    char_color_map = {}
+    for i, name in enumerate(char_names):
+        char_color_map[name] = CHARACTER_COLORS[i % len(CHARACTER_COLORS)]
+    
+    layers = []
+    for scene in session.story.scenes:
+        bubbles = []
+        
+        # 대사 → BubbleOverlay 변환
+        for j, dialogue in enumerate(scene.dialogues):
+            # 위치 자동 배정: 대사 인덱스에 따라 다른 위치
+            positions = [
+                BubblePosition.TOP_LEFT, BubblePosition.TOP_RIGHT,
+                BubblePosition.TOP_CENTER, BubblePosition.MIDDLE_LEFT,
+                BubblePosition.MIDDLE_RIGHT
+            ]
+            pos = positions[j % len(positions)]
+            
+            colors = char_color_map.get(dialogue.character, CHARACTER_COLORS[0])
+            
+            bubbles.append(BubbleOverlay(
+                id=f"s{scene.scene_number}_d{j}",
+                type="dialogue",
+                character=dialogue.character,
+                text=dialogue.text,
+                position=pos,
+                shape=BubbleShape.ROUND,
+                bg_color=colors["bg"],
+                text_color=colors["text"],
+                border_color=colors["border"],
+                font_size=15,
+                visible=True
+            ))
+        
+        # 나레이션 → BubbleOverlay
+        if scene.narration:
+            bubbles.append(BubbleOverlay(
+                id=f"s{scene.scene_number}_narr",
+                type="narration",
+                character="",
+                text=scene.narration,
+                position=BubblePosition.BOTTOM_CENTER,
+                shape=BubbleShape.SQUARE,
+                bg_color="rgba(0,0,0,0.7)",
+                text_color="#FFFFFF",
+                border_color="transparent",
+                font_size=13,
+                visible=True,
+                opacity=0.85
+            ))
+        
+        layers.append(BubbleLayer(
+            scene_number=scene.scene_number,
+            bubbles=bubbles,
+            show_all=True,
+            font_family="Nanum Gothic"
+        ))
+    
+    session.bubble_layers = layers
+    
+    return {
+        "success": True,
+        "layers_count": len(layers),
+        "layers": [layer.model_dump() for layer in layers],
+        "char_color_map": char_color_map
+    }
+
+
+@router.get("/bubble-layers/{session_id}")
+async def get_bubble_layers(session_id: str):
+    """세션의 전체 말풍선 레이어 조회"""
+    session = sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다")
+    
+    return {
+        "success": True,
+        "layers": [layer.model_dump() for layer in session.bubble_layers]
+    }
+
+
+class UpdateBubbleLayerRequest(BaseModel):
+    bubbles: List[dict] = []
+    show_all: bool = True
+    font_family: str = "Nanum Gothic"
+
+
+@router.put("/bubble-layers/{session_id}/{scene_num}")
+async def update_bubble_layer(session_id: str, scene_num: int, request: UpdateBubbleLayerRequest):
+    """특정 씬의 말풍선 레이어 업데이트 (비파괴 — 원본 이미지 수정 없음)"""
+    session = sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다")
+    
+    # 해당 씬 레이어 찾기
+    target = None
+    for layer in session.bubble_layers:
+        if layer.scene_number == scene_num:
+            target = layer
+            break
+    
+    if not target:
+        # 없으면 새로 생성
+        target = BubbleLayer(scene_number=scene_num, bubbles=[], show_all=True)
+        session.bubble_layers.append(target)
+    
+    # 업데이트
+    target.bubbles = [BubbleOverlay(**b) for b in request.bubbles]
+    target.show_all = request.show_all
+    target.font_family = request.font_family
+    
+    return {"success": True, "scene_number": scene_num}
+
+
+@router.post("/bubble-layers/{session_id}/export")
+async def export_with_bubbles(session_id: str):
+    """말풍선이 합성된 최종 이미지 내보내기 (Pillow 기반)
+    
+    이때만 원본 이미지 + 말풍선을 합성함 (비파괴 원칙 유지).
+    합성 결과는 별도 파일로 저장 → 원본은 그대로 보존.
+    """
+    session = sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다")
+    
+    if not session.images:
+        raise HTTPException(status_code=400, detail="생성된 이미지가 없습니다")
+    
+    from PIL import Image, ImageDraw, ImageFont
+    from io import BytesIO
+    import base64
+    
+    export_dir = os.path.join("output", "export")
+    os.makedirs(export_dir, exist_ok=True)
+    
+    exported = []
+    
+    for img_data in session.images:
+        scene_num = img_data.scene_number
+        img_path = img_data.local_path
+        
+        if not img_path or not os.path.exists(img_path):
+            continue
+        
+        img = Image.open(img_path).convert("RGBA")
+        
+        # 해당 씬의 bubble layer 찾기
+        layer = None
+        for bl in session.bubble_layers:
+            if bl.scene_number == scene_num:
+                layer = bl
+                break
+        
+        if layer and layer.show_all:
+            # Pillow로 말풍선 합성
+            overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+            draw = ImageDraw.Draw(overlay)
+            
+            # 9-Grid 위치 → 픽셀 좌표 변환
+            w, h = img.size
+            pos_map = {
+                "top-left":      (int(w*0.05), int(h*0.03)),
+                "top-center":    (int(w*0.30), int(h*0.03)),
+                "top-right":     (int(w*0.55), int(h*0.03)),
+                "middle-left":   (int(w*0.05), int(h*0.35)),
+                "middle-center": (int(w*0.30), int(h*0.35)),
+                "middle-right":  (int(w*0.55), int(h*0.35)),
+                "bottom-left":   (int(w*0.05), int(h*0.70)),
+                "bottom-center": (int(w*0.20), int(h*0.78)),
+                "bottom-right":  (int(w*0.55), int(h*0.70)),
+            }
+            
+            for bubble in layer.bubbles:
+                if not bubble.visible or not bubble.text:
+                    continue
+                
+                xy = pos_map.get(bubble.position, (int(w*0.3), int(h*0.03)))
+                
+                # 폰트 로드
+                try:
+                    font = ImageFont.truetype("C:/Windows/Fonts/malgun.ttf", bubble.font_size * 2)
+                except:
+                    font = ImageFont.load_default()
+                
+                # 텍스트 영역 계산
+                bbox = draw.textbbox((0, 0), bubble.text, font=font)
+                tw = bbox[2] - bbox[0]
+                th = bbox[3] - bbox[1]
+                padding = 20
+                
+                # 말풍선 배경
+                bx1, by1 = xy[0], xy[1]
+                bx2 = min(bx1 + tw + padding*2, w - 10)
+                by2 = by1 + th + padding*2
+                
+                if bubble.type == "narration":
+                    # 나레이션: 하단 전체 폭 반투명 바
+                    bx1 = 0
+                    bx2 = w
+                    by1 = int(h * 0.85)
+                    by2 = h
+                    draw.rectangle([bx1, by1, bx2, by2], fill=(0, 0, 0, 180))
+                    draw.text((bx1 + 20, by1 + 10), bubble.text, fill="white", font=font)
+                else:
+                    # 대사: 둥근 사각형 말풍선
+                    draw.rounded_rectangle(
+                        [bx1, by1, bx2, by2],
+                        radius=15,
+                        fill="white",
+                        outline=bubble.border_color,
+                        width=2
+                    )
+                    draw.text(
+                        (bx1 + padding, by1 + padding),
+                        bubble.text,
+                        fill=bubble.text_color,
+                        font=font
+                    )
+            
+            img = Image.alpha_composite(img, overlay)
+        
+        # 별도 파일로 저장 (원본 보존!)
+        export_path = os.path.join(export_dir, f"scene_{scene_num}_final.png")
+        img.convert("RGB").save(export_path, "PNG")
+        
+        exported.append({
+            "scene_number": scene_num,
+            "export_path": export_path,
+            "original_path": img_path  # 원본은 그대로
+        })
+    
+    # final_images 업데이트
+    session.final_images = [e["export_path"] for e in exported]
+    
+    return {
+        "success": True,
+        "exported_count": len(exported),
+        "images": exported
     }

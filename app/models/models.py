@@ -68,12 +68,12 @@ class VisualIdentity(BaseModel):
     hair_color: str = ""                # e.g. "#1a1a1a jet black"
     skin_tone: str = ""                 # e.g. "warm beige, light tan"
     eye_shape: str = ""                 # e.g. "almond-shaped, medium size"
-    glasses: str = ""                   # e.g. "black rectangular glasses" or "none"
+    glasses: str = "none"               # 기본값: 안경 없음. "none" 또는 구체적 안경 설명
     outfit: str = ""                    # e.g. "navy suit, white shirt, blue tie"
     outfit_color: str = ""              # e.g. "navy #1B2A4A jacket, white #FFFFFF shirt"
-    accessories: str = ""               # e.g. "silver watch on left wrist" or "none"
+    accessories: str = "none"           # e.g. "silver watch on left wrist" or "none"
     body_type: str = ""                 # e.g. "average build, 175cm"
-    distinguishing_features: str = ""   # e.g. "small mole on right cheek"
+    distinguishing_features: str = "none"  # e.g. "small mole on right cheek"
 
 
 class CharacterProfile(BaseModel):
@@ -237,6 +237,68 @@ class ThumbnailData(BaseModel):
 
 
 # ============================================
+# 4.7 비파괴 말풍선 레이어 (Non-destructive Bubble Layer)
+# ============================================
+
+class BubblePosition(str, Enum):
+    """9-Grid 위치"""
+    TOP_LEFT = "top-left"
+    TOP_CENTER = "top-center"
+    TOP_RIGHT = "top-right"
+    MIDDLE_LEFT = "middle-left"
+    MIDDLE_CENTER = "middle-center"
+    MIDDLE_RIGHT = "middle-right"
+    BOTTOM_LEFT = "bottom-left"
+    BOTTOM_CENTER = "bottom-center"
+    BOTTOM_RIGHT = "bottom-right"
+
+
+class BubbleShape(str, Enum):
+    """말풍선 모양"""
+    ROUND = "round"
+    SQUARE = "square"
+    SHOUT = "shout"
+    THOUGHT = "thought"
+
+
+class BubbleOverlay(BaseModel):
+    """개별 말풍선 오버레이"""
+    id: str                                          # 고유 ID
+    type: str = "dialogue"                           # dialogue | narration
+    character: str = ""                              # 캐릭터 이름 (narration이면 빈 문자열)
+    text: str = ""                                   # 대사/나레이션 텍스트
+    position: BubblePosition = BubblePosition.TOP_CENTER
+    shape: BubbleShape = BubbleShape.ROUND
+    bg_color: str = "#FFFFFF"                        # 말풍선 배경색
+    text_color: str = "#000000"                      # 텍스트 색
+    border_color: str = "#333333"                    # 테두리 색
+    font_size: int = 15                              # px
+    visible: bool = True                             # 표시/숨기기 토글
+    opacity: float = 0.95                            # 투명도 (0~1)
+
+
+class BubbleLayer(BaseModel):
+    """씬별 비파괴 말풍선 레이어 — 원본 이미지는 절대 건드리지 않음"""
+    scene_number: int
+    bubbles: List[BubbleOverlay] = Field(default_factory=list)
+    show_all: bool = True                            # 씬 전체 말풍선 표시/숨기기
+    font_family: str = "Nanum Gothic"                # 전체 폰트
+
+
+# 캐릭터별 자동 색상 팔레트 (최대 8명)
+CHARACTER_COLORS = [
+    {"bg": "#FFFFFF", "text": "#000000", "border": "#333333"},   # 기본 흰색
+    {"bg": "#E3F2FD", "text": "#0D47A1", "border": "#1565C0"},   # 파랑
+    {"bg": "#FFF3E0", "text": "#E65100", "border": "#F57C00"},   # 주황
+    {"bg": "#F3E5F5", "text": "#6A1B9A", "border": "#8E24AA"},   # 보라
+    {"bg": "#E8F5E9", "text": "#1B5E20", "border": "#2E7D32"},   # 초록
+    {"bg": "#FCE4EC", "text": "#880E4F", "border": "#C2185B"},   # 핑크
+    {"bg": "#FFF9C4", "text": "#F57F17", "border": "#FBC02D"},   # 노랑
+    {"bg": "#EFEBE9", "text": "#3E2723", "border": "#5D4037"},   # 갈색
+]
+
+
+# ============================================
 # 5. 캡션 관련 모델
 # ============================================
 
@@ -322,6 +384,9 @@ class ImageSettings(BaseModel):
     character_style_id: Optional[str] = None
     background_style_id: Optional[str] = None
     manual_overrides: Optional[ManualPromptOverrides] = None
+    
+    # Flux 캐릭터 일관성: 세션당 고정 seed
+    flux_seed: Optional[int] = None
 
 
 class OutputSettings(BaseModel):
@@ -372,6 +437,7 @@ class WorkflowSession(BaseModel):
     collected_data: List[dict] = Field(default_factory=list) # 수집된 자료 저장
     # ★ 이미지 편집 단계 관련
     global_tone_adjustments: List[dict] = Field(default_factory=list)  # 전체 톤 조절 이력
+    bubble_layers: List[BubbleLayer] = Field(default_factory=list)     # ★ 비파괴 말풍선 레이어
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
 
