@@ -76,6 +76,11 @@ def create_session(photo_url: str, photo_local_path: str = "") -> dict:
 def build_generation_prompt(style_id: str, pose_prompt: str, custom_prompt: str = None) -> str:
     """24컷 각각에 대한 프롬프트를 생성한다.
 
+    ★ 핵심 설계:
+      - Flux Kontext는 프롬프트의 **앞부분**을 가장 강하게 따름
+      - 따라서 포즈/표정 지시를 맨 앞에 배치하고, "same person"은 뒤에 배치
+      - anti-text 는 24컷 학습용이므로 넣지 않음 (웹툰 본편과 달리 텍스트 걱정 없음)
+
     Args:
         style_id: 선택된 스타일 ("original", "realistic_sketch", ...)
         pose_prompt: 해당 컷의 포즈/표정 설명 (영어)
@@ -91,13 +96,79 @@ def build_generation_prompt(style_id: str, pose_prompt: str, custom_prompt: str 
     style_part = style_prompts.get(style_id, "")
 
     if style_id == "original":
-        # 원본 스타일: 스타일 변환 프롬프트 없이 포즈/표정만 지시
-        prompt = f"same person, same style as the input image, {pose_prompt}, clean background"
+        # ★ 원본 스타일: 포즈/표정을 맨 앞에, 얼굴 유지는 보조로
+        # "Change the pose to ..." 형식이 Kontext에서 변형 효과가 가장 좋음
+        prompt = (
+            f"Change the pose and expression: {pose_prompt}. "
+            f"Keep the same person's face and identity. "
+            f"Clean white background, high quality, 1024x1024"
+        )
     else:
-        # 스타일 변환: 스타일 프롬프트 + 포즈/표정
-        prompt = f"{style_part}, {pose_prompt}"
+        # 스타일 변환: 포즈 지시를 앞에, 스타일은 뒤에
+        prompt = (
+            f"{pose_prompt}, "
+            f"{style_part}, "
+            f"same person's face and identity, high quality"
+        )
 
     return prompt
+
+
+async def _generate_cut_kontext(
+    prompt: str,
+    ref_bytes: bytes,
+    fal_key: str,
+) -> bytes:
+    """24컷 전용 Kontext 호출 — anti-text 없이 순수 프롬프트만 전달
+
+    일반 웹툰 본편 생성(_sanitize_prompt 포함)과 달리,
+    24컷 학습 데이터 생성에서는 텍스트/로고 걱정이 없으므로
+    포즈/표정 지시를 최대한 살려야 한다.
+    """
+    import base64
+
+    try:
+        import fal_client as _fal
+    except ImportError:
+        raise ImportError("fal-client 라이브러리가 필요합니다.")
+
+    os.environ["FAL_KEY"] = fal_key
+
+    # ASCII 안전 처리 (최소한만 — anti-text 없음)
+    import re
+    safe = prompt.encode('ascii', errors='replace').decode('ascii')
+    safe = safe.replace('?', ' ')
+    safe = re.sub(r'\\s+', ' ', safe).strip()
+
+    b64 = base64.b64encode(ref_bytes).decode("utf-8")
+    data_uri = f"data:image/png;base64,{b64}"
+
+    def _sync():
+        args = {
+            "prompt": safe,
+            "image_url": data_uri,
+            "num_images": 1,
+            "output_format": "png",
+            # ★ guidance_scale 4.0: 24컷 학습용 최적
+            #   - 4.0: 참조 이미지의 얼굴을 강하게 유지하면서 포즈/표정 변경
+            #   - 7.0: 본편 웹툰용 (씬 설명 자유도 높음, 얼굴 유지 약함)
+            #   → 24컷은 "동일 인물의 다양한 포즈"가 핵심이므로 4.0이 적절
+            "guidance_scale": 4.0,
+            "num_inference_steps": 28,
+        }
+        handler = _fal.submit("fal-ai/flux-kontext/dev", arguments=args)
+        return handler.get()
+
+    result = await asyncio.wait_for(
+        asyncio.to_thread(_sync),
+        timeout=120,
+    )
+    image_url = result["images"][0]["url"]
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.get(image_url)
+        resp.raise_for_status()
+        return resp.content
 
 
 async def generate_single_cut(
@@ -119,33 +190,28 @@ async def generate_single_cut(
     Returns:
         생성된 이미지의 fal.ai URL 또는 None
     """
-    from app.services.image_generator import FluxKontextGenerator, get_generator
+    from app.services.image_generator import get_generator
 
     settings = get_settings()
     prompt = build_generation_prompt(style_id, cut_prompt["prompt"], custom_prompt)
 
     try:
         if style_id == "original":
-            # ── 경로 A: Flux Kontext (img2img) ──
-            # 원본 사진을 input으로 넣고, 포즈/표정만 변경
+            # ── 경로 A: Flux Kontext (img2img) — 24컷 전용 호출 ──
+            # anti-text 없이, 포즈/표정 지시만 순수하게 전달
             if not settings.fal_key:
                 raise ValueError("FAL_KEY가 설정되지 않았습니다.")
-
-            generator = FluxKontextGenerator(settings.fal_key, "flux-kontext-dev")
-
-            if photo_bytes:
-                # 참조 이미지로 생성
-                result = await generator.generate(
-                    prompt=prompt,
-                    reference_images=[photo_bytes],
-                    size="1024x1024",
-                )
-            else:
+            if not photo_bytes:
                 raise ValueError("original 스타일은 사진 바이트 데이터가 필요합니다.")
+
+            result = await _generate_cut_kontext(
+                prompt=prompt,
+                ref_bytes=photo_bytes,
+                fal_key=settings.fal_key,
+            )
 
         else:
             # ── 경로 B: 기존 이미지 생성 모델 (스타일 변환) ──
-            # GPT Image로 스타일 변환 (레퍼런스 이미지를 프롬프트에 설명으로 포함)
             if settings.openai_api_key:
                 generator = get_generator("gpt-image-1-mini", settings.openai_api_key)
             elif settings.gemini_api_key:
@@ -153,7 +219,6 @@ async def generate_single_cut(
             else:
                 raise ValueError("이미지 생성 API 키가 설정되지 않았습니다. (OpenAI 또는 Gemini)")
 
-            # 레퍼런스 이미지 포함 생성
             if photo_bytes:
                 result = await generator.generate(
                     prompt=prompt,
@@ -170,7 +235,6 @@ async def generate_single_cut(
         if isinstance(result, bytes):
             return await _save_and_get_url(result, cut_prompt["id"])
         elif isinstance(result, str):
-            # 이미 URL인 경우
             return result
         else:
             return None
