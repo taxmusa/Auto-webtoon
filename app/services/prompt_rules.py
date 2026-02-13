@@ -1,7 +1,7 @@
 """
 프롬프트 마스터 규칙 (Prompt Master Rules)
 ==========================================
-모든 이미지 생성 경로(LoRA, 일반, 미리보기)에서 공통 적용되는 대원칙.
+모든 이미지 생성 경로(일반, 미리보기)에서 공통 적용되는 대원칙.
 
 사용법:
     from app.services.prompt_rules import (
@@ -48,11 +48,7 @@ MASTER_POSITIVE_SUFFIX = (
     "pure illustration only, absolutely no text or writing anywhere in the image"
 )
 
-# LoRA 전용 스타일 앵커 — LoRA 사용 시 추가
-LORA_STYLE_ANCHOR = (
-    "consistent art style, same drawing technique, "
-    "uniform line weight, same color palette"
-)
+# (LORA_STYLE_ANCHOR 제거됨 — LoRA 기능 삭제)
 
 
 # ═══════════════════════════════════════════════════
@@ -187,7 +183,6 @@ def build_final_prompt(
     style_prompt: str = "",
     bg_prompt: str = "",
     character_anchor: str = "",
-    is_lora: bool = False,
     extra_instructions: str = ""
 ) -> str:
     """모든 마스터 규칙이 적용된 최종 프롬프트 생성
@@ -204,7 +199,7 @@ def build_final_prompt(
     # 1. 네거티브 접두사 (프롬프트 앞부분에 위치 — Flux가 앞부분을 강하게 따름)
     parts.append(MASTER_POSITIVE_PREFIX)
     
-    # 2. 트리거 워드 (LoRA)
+    # 2. 트리거 워드
     if trigger_word:
         parts.append(trigger_word)
     
@@ -212,14 +207,9 @@ def build_final_prompt(
     if character_anchor:
         parts.append(character_anchor)
     
-    # 4. LoRA 스타일 앵커
-    if is_lora:
-        parts.append(LORA_STYLE_ANCHOR)
-    
-    # 5. 정제된 씬 설명 (핵심)
+    # 4. 정제된 씬 설명 (핵심)
     if clean_desc:
-        # 길이 제한 (너무 길면 LoRA 스타일이 약해짐)
-        max_len = 150 if is_lora else 250
+        max_len = 250
         if len(clean_desc) > max_len:
             clean_desc = clean_desc[:max_len]
         parts.append(clean_desc)

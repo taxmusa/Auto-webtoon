@@ -20,18 +20,49 @@ class PillowService:
     # 말풍선 스타일
     BUBBLE_STYLES = {
         "round": {
-            "border_radius": 20,
-            "padding": 15,
-            "bg_color": (255, 255, 255, 230),
-            "border_color": (0, 0, 0),
-            "border_width": 2
+            "border_radius": 20, "padding": 15,
+            "bg_color": (255, 255, 255, 230), "border_color": (0, 0, 0), "border_width": 2
         },
         "square": {
-            "border_radius": 5,
-            "padding": 12,
-            "bg_color": (255, 255, 255, 230),
-            "border_color": (0, 0, 0),
-            "border_width": 2
+            "border_radius": 5, "padding": 12,
+            "bg_color": (255, 255, 255, 230), "border_color": (0, 0, 0), "border_width": 2
+        },
+        "shout": {
+            "border_radius": 4, "padding": 14,
+            "bg_color": (255, 255, 255, 242), "border_color": (0, 0, 0), "border_width": 3
+        },
+        "thought": {
+            "border_radius": 18, "padding": 16,
+            "bg_color": (255, 255, 255, 220), "border_color": (136, 136, 136), "border_width": 2
+        },
+        "whisper": {
+            "border_radius": 14, "padding": 12,
+            "bg_color": (255, 255, 255, 178), "border_color": (170, 170, 170), "border_width": 1
+        },
+        "scream": {
+            "border_radius": 2, "padding": 14,
+            "bg_color": (255, 255, 255, 242), "border_color": (0, 0, 0), "border_width": 4
+        },
+        "cloud": {
+            "border_radius": 30, "padding": 16,
+            "bg_color": (255, 255, 255, 230), "border_color": (85, 85, 85), "border_width": 2
+        },
+        "dark": {
+            "border_radius": 4, "padding": 14,
+            "bg_color": (30, 30, 30, 235), "border_color": (85, 85, 85), "border_width": 2,
+            "text_color": (255, 255, 255)
+        },
+        "emphasis": {
+            "border_radius": 12, "padding": 15,
+            "bg_color": (255, 255, 255, 242), "border_color": (0, 0, 0), "border_width": 2
+        },
+        "system": {
+            "border_radius": 0, "padding": 12,
+            "bg_color": (240, 240, 240, 230), "border_color": (153, 153, 153), "border_width": 1
+        },
+        "soft": {
+            "border_radius": 22, "padding": 15,
+            "bg_color": (255, 255, 255, 230), "border_color": (200, 200, 200), "border_width": 0
         }
     }
     

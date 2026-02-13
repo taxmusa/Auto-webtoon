@@ -95,8 +95,9 @@ class Dialogue(BaseModel):
 class Scene(BaseModel):
     """개별 씬"""
     scene_number: int
-    scene_description: str      # 장면 설명 (배경, 상황)
+    scene_description: str      # 장면 설명 (배경, 상황) — 스토리용
     scene_description_original: Optional[str] = None  # 전처리 전 원본 (백업용)
+    image_prompt: Optional[str] = None  # 이미지 생성용 상세 프롬프트 (시각 묘사 전용)
     dialogues: List[Dialogue] = Field(default_factory=list)
     narration: Optional[str] = None  # 나레이션 (최대 30자 권장)
     status: str = "pending"     # pending | approved | needs_edit
@@ -172,6 +173,14 @@ class BackgroundStyle(BaseModel):
     preview_image: Optional[str] = None
     description: Optional[str] = None
     is_default: bool = False
+
+
+class ReferenceImageSet(BaseModel):
+    """3종 레퍼런스 이미지 상태 (캐릭터/연출/화풍)"""
+    character_path: Optional[str] = None   # Character.jpg 경로
+    method_path: Optional[str] = None      # Method.jpg 경로 (구도/연출)
+    style_path: Optional[str] = None       # Style.jpg 경로 (화풍)
+    preset_id: Optional[str] = None        # 적용된 프리셋 ID
 
 
 class ManualPromptOverrides(BaseModel):
@@ -260,6 +269,13 @@ class BubbleShape(str, Enum):
     SQUARE = "square"
     SHOUT = "shout"
     THOUGHT = "thought"
+    WHISPER = "whisper"
+    SCREAM = "scream"
+    CLOUD = "cloud"
+    DARK = "dark"
+    EMPHASIS = "emphasis"
+    SYSTEM = "system"
+    SOFT = "soft"
 
 
 class BubbleOverlay(BaseModel):
@@ -270,6 +286,9 @@ class BubbleOverlay(BaseModel):
     text: str = ""                                   # 대사/나레이션 텍스트
     position: BubblePosition = BubblePosition.TOP_CENTER
     shape: BubbleShape = BubbleShape.ROUND
+    font_family: str = ""                            # 개별 폰트 (빈 문자열=레이어 글로벌 따라감)
+    tail_direction: str = "none"                     # 꼬리 방향: none|bottom-left|bottom-right|top-left|top-right
+    narration_style: str = "classic"                 # 나레이션 전용 스타일: classic|light|gradient|minimal|cinematic|parchment
     bg_color: str = "#FFFFFF"                        # 말풍선 배경색
     text_color: str = "#000000"                      # 텍스트 색
     border_color: str = "#333333"                    # 테두리 색
@@ -283,12 +302,25 @@ class BubbleOverlay(BaseModel):
     h: Optional[float] = None                        # 높이 %
 
 
+class CharacterBubbleStyle(BaseModel):
+    """캐릭터별 기본 말풍선 스타일"""
+    character: str                                   # 캐릭터 이름
+    shape: str = "round"                             # 기본 모양
+    font_family: str = ""                            # 기본 폰트
+    font_size: int = 15                              # 기본 크기
+    bg_color: str = "#FFFFFF"                        # 기본 배경색
+    text_color: str = "#000000"                      # 기본 글자색
+    border_color: str = "#333333"                    # 기본 테두리색
+    tail_direction: str = "bottom-left"              # 기본 꼬리 방향
+
+
 class BubbleLayer(BaseModel):
     """씬별 비파괴 말풍선 레이어 — 원본 이미지는 절대 건드리지 않음"""
     scene_number: int
     bubbles: List[BubbleOverlay] = Field(default_factory=list)
     show_all: bool = True                            # 씬 전체 말풍선 표시/숨기기
     font_family: str = "Nanum Gothic"                # 전체 폰트
+    character_styles: List[CharacterBubbleStyle] = Field(default_factory=list)  # 캐릭터별 스타일
 
 
 # 캐릭터별 자동 색상 팔레트 (최대 8명)
@@ -393,6 +425,10 @@ class ImageSettings(BaseModel):
     
     # Flux 캐릭터 일관성: 세션당 고정 seed
     flux_seed: Optional[int] = None
+    
+    # 3종 레퍼런스 이미지 (Character/Method/Style)
+    reference_images: ReferenceImageSet = Field(default_factory=ReferenceImageSet)
+    scene_chaining: bool = True  # 이전 씬 참조 (직전 씬 이미지 + 텍스트 요약)
 
 
 class OutputSettings(BaseModel):

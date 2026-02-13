@@ -201,10 +201,17 @@ def build_bubble_overlay_html(
         투명 배경 HTML 문자열
     """
     bubble_styles = {
-        "round": "border-radius: 20px; background: rgba(255,255,255,0.95);",
-        "square": "border-radius: 6px; background: rgba(255,255,255,0.95);",
-        "shout": "border-radius: 4px; background: #fff; border: 3px solid #000; font-weight: 800;",
-        "thought": "border-radius: 50% / 40%; background: rgba(255,255,255,0.9); border: 2px dashed #888;",
+        "round":    "border-radius: 20px; background: rgba(255,255,255,0.95);",
+        "square":   "border-radius: 6px; background: rgba(255,255,255,0.95);",
+        "shout":    "border-radius: 4px; background: #fff; border: 3px solid #000; font-weight: 800;",
+        "thought":  "border-radius: 50% / 40%; background: rgba(255,255,255,0.9); border: 2px dashed #888; font-style: italic;",
+        "whisper":  "border-radius: 14px; background: rgba(255,255,255,0.7); border: 1px solid #aaa; font-style: italic; opacity: 0.7;",
+        "scream":   "border-radius: 2px; background: #fff; border: 4px solid #000; font-weight: 900;",
+        "cloud":    "border-radius: 30px 30px 30px 5px; background: rgba(255,255,255,0.95); border: 2px solid #555;",
+        "dark":     "border-radius: 4px; background: rgba(30,30,30,0.92); color: #fff; border: 2px solid #555;",
+        "emphasis": "border-radius: 12px; background: rgba(255,255,255,0.95); border: 2px solid #000; font-weight: 700;",
+        "system":   "border-radius: 0px; background: rgba(240,240,240,0.9); border: 1px solid #999; font-family: 'Nanum Gothic', sans-serif;",
+        "soft":     "border-radius: 22px; background: rgba(255,255,255,0.95); border: none; box-shadow: 0 4px 16px rgba(0,0,0,0.12);",
     }
 
     bubble_css = bubble_styles.get(style, bubble_styles["round"])

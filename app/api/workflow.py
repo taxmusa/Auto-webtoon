@@ -106,12 +106,14 @@ class GenerateStoryRequest(BaseModel):
     expert_type: str = "friendly_expert"
     scene_count: int = 8
     model: str = "gemini-2.0-flash"
+    character_names: str = ""  # 쉼표 구분 등장인물 이름 (빈 문자열이면 AI 자동 생성)
 
 
 class UpdateSceneRequest(BaseModel):
     session_id: str
     scene_number: int
     scene_description: Optional[str] = None
+    image_prompt: Optional[str] = None  # 이미지 생성용 상세 시각 프롬프트
     dialogues: Optional[List[dict]] = None
     narration: Optional[str] = None
 
@@ -121,23 +123,25 @@ class GenerateImagesRequest(BaseModel):
     style: str = "webtoon"
     sub_style: str = "normal"
     aspect_ratio: str = "4:5"
-    model: str = "gpt-image-1-mini"
+    model: str = "nano-banana-pro"  # Gemini 3.0 Preview 고정
     
     # Style System 2.0
     character_style_id: Optional[str] = None
     background_style_id: Optional[str] = None
-    trained_character_id: Optional[str] = None  # LoRA 학습 캐릭터 ID
     manual_overrides: Optional[dict] = None
+    
+    # 3종 레퍼런스 & 씬 체이닝
+    use_reference_images: bool = True    # 레퍼런스 이미지 사용 여부
+    scene_chaining: bool = True          # 이전 씬 참조 (직전 씬 이미지 + 텍스트 요약)
 
 
 class GeneratePreviewRequest(BaseModel):
     session_id: str
     character_style_id: Optional[str] = None
     background_style_id: Optional[str] = None
-    trained_character_id: Optional[str] = None  # LoRA 학습 캐릭터 ID
     sub_style: Optional[str] = None # Added for compatibility
     manual_overrides: Optional[dict] = None # ManualPromptOverrides
-    model: str = "gpt-image-1-mini"
+    model: str = "nano-banana-pro"  # Gemini 3.0 Preview 고정
 
 
 class GenerateCaptionRequest(BaseModel):
@@ -227,7 +231,8 @@ async def generate_story(request: GenerateStoryRequest):
             scene_count=request.scene_count,
             character_settings=character_settings,
             rule_settings=rule_settings,
-            model=request.model
+            model=request.model,
+            character_names=request.character_names
         )
         
         if not story:
@@ -280,6 +285,8 @@ async def update_scene(request: UpdateSceneRequest):
         if scene.scene_number == request.scene_number:
             if request.scene_description:
                 scene.scene_description = request.scene_description
+            if request.image_prompt is not None:
+                scene.image_prompt = request.image_prompt
             if request.dialogues:
                 from app.models.models import Dialogue
                 scene.dialogues = [
@@ -292,6 +299,84 @@ async def update_scene(request: UpdateSceneRequest):
             break
     
     return {"success": True, "story": session.story.model_dump()}
+
+
+class RegenerateImagePromptRequest(BaseModel):
+    session_id: str
+    scene_number: int
+    model: str = "gemini-2.0-flash"
+
+
+@router.post("/regenerate-image-prompt")
+async def regenerate_image_prompt(request: RegenerateImagePromptRequest):
+    """특정 씬의 이미지 프롬프트를 AI로 다시 생성"""
+    session = sessions.get(request.session_id)
+    if not session or not session.story:
+        raise HTTPException(status_code=404, detail="Session or story not found")
+    
+    target_scene = None
+    for scene in session.story.scenes:
+        if scene.scene_number == request.scene_number:
+            target_scene = scene
+            break
+    
+    if not target_scene:
+        raise HTTPException(status_code=404, detail=f"Scene {request.scene_number} not found")
+    
+    try:
+        from app.services.gemini_service import get_gemini_service
+        gemini = get_gemini_service()
+        
+        # 캐릭터 정보 구성
+        char_info = ""
+        if session.story.characters:
+            char_names = [c.name for c in session.story.characters]
+            char_descs = []
+            for c in session.story.characters:
+                desc = c.appearance or ""
+                if hasattr(c, 'visual_identity') and c.visual_identity:
+                    vi = c.visual_identity
+                    desc += f" / {vi.get('hair_style', '')} {vi.get('hair_color', '')}, {vi.get('outfit', '')}"
+                char_descs.append(f"- {c.name}({c.role}): {desc}")
+            char_info = "\n".join(char_descs)
+        
+        regen_prompt = f"""아래 씬의 "image_prompt"를 다시 작성해주세요.
+image_prompt는 AI 이미지 생성 모델에게 전달되는 시각 묘사입니다.
+
+[등장 캐릭터]
+{char_info}
+
+[씬 설명]
+{target_scene.scene_description}
+
+[작성 규칙]
+1. 한국어로 작성
+2. 대사/텍스트/글자 절대 포함 금지 — 순수하게 그림만 묘사
+3. 포함해야 할 요소: 스타일, 배경/장소, 캐릭터 위치·포즈·표정, 조명/분위기, 카메라 앵글
+4. 80~150자 범위
+5. "웹툰 스타일."로 시작
+
+image_prompt만 텍스트로 반환하세요. 다른 설명이나 JSON 없이 프롬프트 텍스트만."""
+
+        import google.generativeai as genai
+        api_key = gemini.api_key
+        genai.configure(api_key=api_key)
+        
+        model = genai.GenerativeModel(request.model)
+        response = model.generate_content(regen_prompt)
+        new_prompt = response.text.strip().strip('"').strip("'")
+        
+        # 씬에 저장
+        target_scene.image_prompt = new_prompt
+        
+        return {
+            "success": True,
+            "scene_number": request.scene_number,
+            "image_prompt": new_prompt
+        }
+    except Exception as e:
+        logger.error(f"이미지 프롬프트 재생성 실패 (씬 {request.scene_number}): {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/approve-scenes")
@@ -317,116 +402,65 @@ async def generate_preview(request: GeneratePreviewRequest):
         raise HTTPException(status_code=404, detail="Session not found")
 
     try:
-        # ── LoRA 학습 캐릭터 정보 로드 ──
-        lora_url = ""
-        trigger_word = ""
-        trained_char = None
-        if request.trained_character_id:
-            from app.services import fal_service
-            trained_char = fal_service.load_character(request.trained_character_id)
-            if trained_char and trained_char.get("status") == "completed":
-                lora_url = trained_char.get("lora_url", "") or trained_char.get("lora_weights_url", "")
-                trigger_word = trained_char.get("trigger_word", "")
-                logger.info(f"[PREVIEW] LoRA 캐릭터 로드: {trained_char.get('name')}, trigger={trigger_word}")
-            else:
-                logger.warning(f"[PREVIEW] 학습 캐릭터를 찾을 수 없거나 미완료: {request.trained_character_id}")
+        char_style = get_character_style(request.character_style_id) if request.character_style_id else None
+        bg_style = get_background_style(request.background_style_id) if request.background_style_id else None
 
-        # ══════════════════════════════════════════
-        # LoRA 학습 캐릭터 전용 빠른 경로
-        # ══════════════════════════════════════════
-        if lora_url:
-            from app.services.prompt_rules import build_final_prompt
-            
-            # 사용자가 입력한 추가 프롬프트 (style_prompt textarea)
-            user_prompt = ""
-            if request.manual_overrides:
-                user_prompt = request.manual_overrides.get("style_prompt", "").strip()
-            
-            # LoRA 미리보기도 마스터 규칙 적용 (텍스트 금지, 일관성 유지)
-            preview_scene = "character portrait, simple background, clean composition"
-            prompt = build_final_prompt(
-                scene_description=preview_scene,
-                trigger_word=trigger_word,
-                style_prompt=user_prompt,
-                is_lora=True,
+        overrides_obj = None
+        if request.manual_overrides:
+            overrides_obj = ManualPromptOverrides(**request.manual_overrides)
+
+        # Use first scene or placeholder
+        if session.story and session.story.scenes:
+            target_scene = session.story.scenes[0]
+            characters = session.story.characters
+        else:
+            target_scene = Scene(
+                scene_number=1, 
+                scene_description="A generic scene for style preview. A character standing in a simple background.", 
+                dialogues=[],
+                image_prompt="A character standing in a simple background."
             )
-            
-            api_key = _resolve_api_key("flux-lora")
-            generator = get_generator("flux-lora", api_key,
-                                      lora_url=lora_url, trigger_word="")  # trigger는 이미 prompt에 포함
+            characters = []
+        
+        # Build Prompt
+        prompt = build_styled_prompt(
+            scene=target_scene,
+            characters=characters,
+            character_style=char_style,
+            background_style=bg_style,
+            manual_overrides=overrides_obj,
+            sub_style_name=request.sub_style
+        )
+        
+        # ★ Flux 모델 선택 시 프롬프트 최적화 적용
+        is_flux = "flux" in (request.model or "").lower()
+        if is_flux:
+            from app.services.prompt_builder import optimize_for_flux_kontext
+            # image_prompt가 있으면 우선 사용 (시각 묘사 전용)
+            _scene_desc_for_flux = target_scene.image_prompt or target_scene.scene_description
+            prompt = optimize_for_flux_kontext(
+                prompt,
+                scene_description=_scene_desc_for_flux,
+                is_reference=False,
+                characters=characters
+            )
+            logger.info(f"[PREVIEW] Flux 최적화 적용됨 → {len(prompt)}자")
+        
+        api_key = _resolve_api_key(request.model)
+        generator = get_generator(request.model, api_key)
 
+        print(f"[PREVIEW] model={request.model}, prompt_len={len(prompt)}자, api_key={'SET' if api_key else 'MISSING'}")
+        logger.info(f"미리보기 생성 시작 (model={request.model}, prompt_len={len(prompt)}자)")
+        
+        seed = None
+        if is_flux:
             import random
             seed = random.randint(1, 2**31 - 1)
-
-            logger.info(f"[PREVIEW-LoRA] 빠른 경로: prompt='{prompt}', lora={lora_url[:60]}...")
-            print(f"[PREVIEW-LoRA] prompt='{prompt}', seed={seed}")
-
-            image_data = await asyncio.wait_for(
-                generator.generate(prompt, size="1024x1024", quality="standard", seed=seed),
-                timeout=30.0  # LoRA 생성은 빠름 (5~10초)
-            )
-
-        else:
-            # ══════════════════════════════════════════
-            # 일반 스타일 경로 (기존 로직)
-            # ══════════════════════════════════════════
-            char_style = get_character_style(request.character_style_id) if request.character_style_id else None
-            bg_style = get_background_style(request.background_style_id) if request.background_style_id else None
-
-            overrides_obj = None
-            if request.manual_overrides:
-                overrides_obj = ManualPromptOverrides(**request.manual_overrides)
-
-            # Use first scene or placeholder
-            if session.story and session.story.scenes:
-                target_scene = session.story.scenes[0]
-                characters = session.story.characters
-            else:
-                target_scene = Scene(
-                    scene_number=1, 
-                    scene_description="A generic scene for style preview. A character standing in a simple background.", 
-                    dialogues=[],
-                    image_prompt="A character standing in a simple background."
-                )
-                characters = []
-            
-            # Build Prompt
-            prompt = build_styled_prompt(
-                scene=target_scene,
-                characters=characters,
-                character_style=char_style,
-                background_style=bg_style,
-                manual_overrides=overrides_obj,
-                sub_style_name=request.sub_style
-            )
-            
-            # ★ Flux 모델 선택 시 프롬프트 최적화 적용
-            is_flux = "flux" in (request.model or "").lower()
-            if is_flux:
-                from app.services.prompt_builder import optimize_for_flux_kontext
-                prompt = optimize_for_flux_kontext(
-                    prompt,
-                    scene_description=target_scene.scene_description,
-                    is_reference=False,
-                    characters=characters
-                )
-                logger.info(f"[PREVIEW] Flux 최적화 적용됨 → {len(prompt)}자")
-            
-            api_key = _resolve_api_key(request.model)
-            generator = get_generator(request.model, api_key)
-
-            print(f"[PREVIEW] model={request.model}, prompt_len={len(prompt)}자, api_key={'SET' if api_key else 'MISSING'}")
-            logger.info(f"미리보기 생성 시작 (model={request.model}, prompt_len={len(prompt)}자)")
-            
-            seed = None
-            if is_flux:
-                import random
-                seed = random.randint(1, 2**31 - 1)
-            
-            image_data = await asyncio.wait_for(
-                generator.generate(prompt, size="1024x1024", quality="standard", seed=seed),
-                timeout=95.0
-            )
+        
+        image_data = await asyncio.wait_for(
+            generator.generate(prompt, size="1024x1024", quality="standard", seed=seed),
+            timeout=95.0
+        )
 
         import base64
         if isinstance(image_data, bytes):
@@ -467,161 +501,6 @@ async def generate_images(request: GenerateImagesRequest):
 
     import asyncio
     import random
-
-    # ── LoRA 학습 캐릭터 정보 로드 ──
-    lora_url = ""
-    trigger_word = ""
-    is_lora = False
-    if request.trained_character_id:
-        from app.services import fal_service
-        trained_char = fal_service.load_character(request.trained_character_id)
-        if trained_char and trained_char.get("status") == "completed":
-            lora_url = trained_char.get("lora_url", "") or trained_char.get("lora_weights_url", "")
-            trigger_word = trained_char.get("trigger_word", "")
-            is_lora = bool(lora_url)
-            logger.info(f"[GENERATE] LoRA 캐릭터 로드: {trained_char.get('name')}, "
-                        f"trigger={trigger_word}, lora_url={lora_url[:60]}...")
-        else:
-            logger.warning(f"[GENERATE] 학습 캐릭터를 찾을 수 없거나 미완료: {request.trained_character_id}")
-
-    # ══════════════════════════════════════════════════════
-    # LoRA 전용 경로: LoRA 학습 캐릭터로 이미지 일괄 생성
-    # ══════════════════════════════════════════════════════
-    if is_lora:
-        logger.info(f"[GENERATE-LoRA] LoRA 전용 경로 시작 — trigger_word='{trigger_word}'")
-        
-        # LoRA 전용 제너레이터
-        api_key = _resolve_api_key("flux-lora")
-        generator = get_generator("flux-lora", api_key, lora_url=lora_url, trigger_word="")
-        
-        # 세션 seed
-        if session.settings.image.flux_seed:
-            base_seed = session.settings.image.flux_seed
-        else:
-            base_seed = random.randint(1, 2**31 - 100000)
-            session.settings.image.flux_seed = base_seed
-        
-        # 씬 설명을 영어로 번역
-        if session.story and session.story.scenes:
-            await _translate_scenes_to_english(session.story.scenes)
-
-        # 사용자가 입력한 추가 스타일 프롬프트
-        user_style_prompt = ""
-        bg_prompt = ""
-        if request.manual_overrides:
-            user_style_prompt = request.manual_overrides.get("style_prompt", "")
-            bg_prompt = request.manual_overrides.get("background_style_prompt", "")
-
-        from app.models.models import GeneratedImage
-        session.images = []
-        stop_signals[request.session_id] = False
-
-        # LoRA 캐릭터 앵커 — 모든 씬에 동일한 캐릭터 설명 삽입
-        from app.services.prompt_rules import build_final_prompt, build_character_anchor
-        char_anchor = ""
-        if session.story and hasattr(session.story, 'characters') and session.story.characters:
-            char_anchor = build_character_anchor(session.story.characters)
-        
-        for scene in session.story.scenes:
-            if stop_signals.get(request.session_id, False):
-                logger.info(f"[STOP] 세션 {request.session_id} LoRA 이미지 생성 중단됨 "
-                            f"({len(session.images)}/{len(session.story.scenes)} 완료)")
-                break
-            
-            # seed 간격을 줄여 스타일 일관성 향상 (1000→100)
-            scene_seed = base_seed + scene.scene_number * 100
-            
-            # 씬 설명 가져오기
-            scene_desc = getattr(scene, 'scene_description_en', '') or scene.scene_description
-            
-            # 마스터 규칙이 적용된 최종 프롬프트 생성
-            prompt = build_final_prompt(
-                scene_description=scene_desc,
-                trigger_word=trigger_word,
-                style_prompt=user_style_prompt,
-                bg_prompt=bg_prompt,
-                character_anchor=char_anchor,
-                is_lora=True,
-            )
-            
-            size = "1024x1536" if request.aspect_ratio in ("4:5", "9:16") else "1024x1024"
-            
-            logger.info(f"[GENERATE-LoRA] 씬 {scene.scene_number}/{len(session.story.scenes)} — "
-                         f"seed={scene_seed}, prompt='{prompt[:80]}...'")
-            
-            try:
-                image_data = await asyncio.wait_for(
-                    generator.generate(prompt, size=size, seed=scene_seed),
-                    timeout=60.0
-                )
-                
-                filename = f"scene_{scene.scene_number}_{uuid.uuid4().hex[:6]}.png"
-                filepath = os.path.join("output", filename)
-                os.makedirs("output", exist_ok=True)
-                
-                if isinstance(image_data, bytes):
-                    with open(filepath, "wb") as f:
-                        f.write(image_data)
-                    
-                    try:
-                        from app.services.pillow_service import get_pillow_service
-                        from PIL import Image
-                        from io import BytesIO
-                        pillow = get_pillow_service()
-                        img_pil = Image.open(filepath)
-                        img_pil = pillow.ensure_top_margin(img_pil, margin_ratio=0.25)
-                        img_pil.save(filepath, "PNG")
-                        buf = BytesIO()
-                        img_pil.save(buf, format="PNG")
-                        image_data = buf.getvalue()
-                    except Exception as margin_err:
-                        logger.warning(f"여백 후처리 실패 (씬 {scene.scene_number}): {margin_err}")
-                    
-                    img = GeneratedImage(
-                        scene_number=scene.scene_number,
-                        prompt_used=prompt,
-                        local_path=filepath,
-                        status="generated"
-                    )
-                else:
-                    img = GeneratedImage(
-                        scene_number=scene.scene_number,
-                        prompt_used=prompt,
-                        local_path="",
-                        status="error"
-                    )
-                
-            except asyncio.TimeoutError:
-                logger.error(f"[GENERATE-LoRA] 씬 {scene.scene_number} 시간 초과 (60초)")
-                img = GeneratedImage(
-                    scene_number=scene.scene_number,
-                    prompt_used=prompt,
-                    local_path="",
-                    status="error"
-                )
-            except Exception as e:
-                logger.error(f"[GENERATE-LoRA] 씬 {scene.scene_number} 오류: {e}")
-                img = GeneratedImage(
-                    scene_number=scene.scene_number,
-                    prompt_used=prompt,
-                    local_path="",
-                    status="error"
-                )
-            
-            session.images.append(img)
-        
-        stop_signals.pop(request.session_id, None)
-        session.state = WorkflowState.REVIEWING_IMAGES
-        
-        return {
-            "session_id": session.session_id,
-            "state": session.state.value,
-            "images": [img.model_dump() for img in session.images]
-        }
-
-    # ══════════════════════════════════════════════════════
-    # 일반 스타일 경로 (LoRA가 아닌 경우)
-    # ══════════════════════════════════════════════════════
         
     # Load styles
     char_style = get_character_style(request.character_style_id) if request.character_style_id else None
@@ -669,12 +548,25 @@ async def generate_images(request: GenerateImagesRequest):
         except Exception as pp_err:
             logger.warning(f"[전처리] 씬 설명 전처리 실패, 원본 유지: {pp_err}")
 
-    # ★★★ 캐릭터 레퍼런스 시트 자동 생성 ★★★
-    # 씬 생성 전에 "깨끗한 배경 + 정면 포즈" 캐릭터 기준 이미지를 만든다.
-    # 모든 씬(1번 포함)이 이 레퍼런스를 참조 → 품질/느낌 일관성 확보.
-    character_ref_bytes = None  # 캐릭터 레퍼런스 이미지
+    # ★★★ 3종 레퍼런스 이미지 로드 + CRS 폴백 ★★★
+    # 1. 사용자가 설정한 Character/Method/Style 레퍼런스를 로드
+    # 2. Character.jpg가 없으면 기존 CRS 자동 생성으로 폴백
+    from app.services.reference_service import ReferenceService
+    from app.services.prompt_builder import build_scene_chaining_context
     
-    if is_flux or is_flux_kontext:
+    ref_service = ReferenceService(request.session_id)
+    ref_data = ref_service.load_for_model(request.model) if request.use_reference_images else {}
+    
+    character_ref_bytes = ref_data.get("character")  # Character.jpg
+    method_ref_bytes = ref_data.get("method")        # Method.jpg
+    style_ref_bytes = ref_data.get("style")          # Style.jpg
+    
+    # Gemini 모델 판별
+    model_lower = request.model.lower() if request.model else ""
+    is_gemini = any(k in model_lower for k in ["gemini", "nano-banana"])
+    
+    # Character.jpg 없으면 기존 CRS 자동 생성 (Flux 계열만)
+    if not character_ref_bytes and (is_flux or is_flux_kontext):
         try:
             from app.services.prompt_builder import build_character_reference_prompt
             
@@ -687,31 +579,41 @@ async def generate_images(request: GenerateImagesRequest):
             ref_seed = base_seed if base_seed else None
             size = "1024x1536" if request.aspect_ratio in ("4:5", "9:16") else "1024x1024"
             
-            logger.info("[레퍼런스] 캐릭터 레퍼런스 시트 생성 시작...")
+            logger.info("[레퍼런스] Character.jpg 없음 → CRS 자동 생성으로 폴백...")
             character_ref_bytes = await generator.generate(
                 ref_prompt, reference_images=None, size=size, seed=ref_seed
             )
             
-            # 레퍼런스 이미지 저장 (디버깅/확인용)
             if isinstance(character_ref_bytes, bytes):
                 ref_path = os.path.join("output", f"character_ref_{session.session_id[:8]}.png")
                 os.makedirs("output", exist_ok=True)
                 with open(ref_path, "wb") as f:
                     f.write(character_ref_bytes)
-                logger.info(f"[레퍼런스] 캐릭터 레퍼런스 시트 저장: {ref_path}")
+                logger.info(f"[레퍼런스] CRS 자동 생성 저장: {ref_path}")
             else:
                 character_ref_bytes = None
-                logger.warning("[레퍼런스] 레퍼런스 이미지 생성 실패 — text2img 폴백")
+                logger.warning("[레퍼런스] CRS 자동 생성 실패 — text2img 폴백")
                 
         except Exception as ref_err:
-            logger.warning(f"[레퍼런스] 캐릭터 레퍼런스 생성 실패, text2img 폴백: {ref_err}")
+            logger.warning(f"[레퍼런스] CRS 자동 생성 실패, text2img 폴백: {ref_err}")
             character_ref_bytes = None
 
-    async def generate_single_scene(scene, scene_seed=None, ref_image_bytes=None):
-        """단일 씬 이미지 생성
+    # 레퍼런스 상태 로그
+    ref_status = []
+    if character_ref_bytes: ref_status.append("Character")
+    if method_ref_bytes: ref_status.append("Method")
+    if style_ref_bytes: ref_status.append("Style")
+    logger.info(f"[레퍼런스] 사용 가능: {', '.join(ref_status) if ref_status else '없음'} (모델: {request.model})")
+
+    async def generate_single_scene(scene, scene_seed=None, ref_image_bytes=None,
+                                     method_bytes=None, style_bytes=None,
+                                     prev_scene_image=None, prev_scene_summaries=None):
+        """단일 씬 이미지 생성 — 3종 레퍼런스 + 씬 체이닝 지원
         
-        ref_image_bytes가 있으면 → Kontext img2img (캐릭터 유지 + 장면 변경)
-        ref_image_bytes가 없으면 → Flux Dev text2img (첫 씬, 기준 캐릭터 확립)
+        모델별 레퍼런스 사용:
+        - Gemini: 3종 레퍼런스 + 이전 씬 → contents에 모두 전달
+        - Flux Kontext: Character.jpg → img2img CRS
+        - DALL-E: 프롬프트만 (이미지 참조 불가)
         """
         try:
             from app.services.prompt_builder import optimize_for_flux_kontext
@@ -725,38 +627,59 @@ async def generate_images(request: GenerateImagesRequest):
                 sub_style_name=sub_style
             )
             
-            # Flux 모델: 프롬프트 최적화
-            if is_flux_kontext or is_flux:
+            size = "1024x1536" if request.aspect_ratio in ("4:5", "9:16") else "1024x1024"
+            
+            # ★ 모델별 분기
+            if is_gemini:
+                # Gemini: 3종 레퍼런스 + 이전 씬 체이닝을 모두 활용
+                # 일관성 체이닝: prev_scene_number 전달하여 라벨에 장면 번호 포함
+                _prev_sn = scene.scene_number - 1 if prev_scene_image else None
+                image_data = await generator.generate(
+                    prompt,
+                    reference_images=[ref_image_bytes] if ref_image_bytes else None,
+                    size=size,
+                    seed=scene_seed,
+                    method_image=method_bytes,
+                    style_image=style_bytes,
+                    prev_scene_image=prev_scene_image,
+                    prev_scene_summaries=prev_scene_summaries,
+                    prev_scene_number=_prev_sn
+                )
+                ref_count = sum(1 for x in [ref_image_bytes, method_bytes, style_bytes] if x)
+                logger.info(f"[Gemini] 씬 {scene.scene_number}: {ref_count}종 레퍼런스"
+                            f"{' + 씬체이닝' if prev_scene_image else ''}")
+            
+            elif is_flux_kontext or is_flux:
+                # Flux: 프롬프트 최적화 + Character CRS img2img
+                # image_prompt가 있으면 우선 사용 (시각 묘사 전용)
+                _scene_desc_flux = getattr(scene, 'image_prompt', None) or scene.scene_description
                 prompt = optimize_for_flux_kontext(
                     prompt,
-                    scene_description=scene.scene_description,
+                    scene_description=_scene_desc_flux,
                     is_reference=(ref_image_bytes is not None),
                     characters=session.story.characters
                 )
+                
+                if ref_image_bytes:
+                    image_data = await generator.generate(
+                        prompt,
+                        reference_images=[ref_image_bytes],
+                        size=size,
+                        seed=scene_seed
+                    )
+                    logger.info(f"[Flux] 씬 {scene.scene_number}: img2img (Character 참조)")
+                else:
+                    image_data = await generator.generate(
+                        prompt, reference_images=None, size=size, seed=scene_seed
+                    )
+                    logger.info(f"[Flux] 씬 {scene.scene_number}: text2img (독립 생성)")
             
-            size = "1024x1536" if request.aspect_ratio in ("4:5", "9:16") else "1024x1024"
-            
-            # ★★★ CRS 참조 생성 핵심 ★★★
-            # 캐릭터 레퍼런스 시트가 있으면 → 모든 씬이 img2img로 참조
-            # 캐릭터 레퍼런스 시트가 없으면 → text2img 독립 생성 (폴백)
-            if ref_image_bytes:
-                # CRS img2img: 레퍼런스의 캐릭터를 유지하면서 새 장면 생성
-                image_data = await generator.generate(
-                    prompt,
-                    reference_images=[ref_image_bytes],
-                    size=size,
-                    seed=scene_seed
-                )
-                logger.info(f"[CRS] 씬 {scene.scene_number}: img2img (캐릭터 레퍼런스 참조)")
             else:
-                # 레퍼런스 없음: text2img 독립 생성
+                # DALL-E 등: 프롬프트만 사용
                 image_data = await generator.generate(
-                    prompt,
-                    reference_images=None,
-                    size=size,
-                    seed=scene_seed
+                    prompt, reference_images=None, size=size, seed=scene_seed
                 )
-                logger.info(f"[CRS] 씬 {scene.scene_number}: text2img (독립 생성)")
+                logger.info(f"[기타] 씬 {scene.scene_number}: text2img")
             
             # 파일 저장
             filename = f"scene_{scene.scene_number}_{uuid.uuid4().hex[:6]}.png"
@@ -798,32 +721,22 @@ async def generate_images(request: GenerateImagesRequest):
                 "error": str(e)
             }
 
-    # ★★★ 캐릭터 레퍼런스 시트 방식 (CRS Topology) ★★★
-    # 
-    # [이전: 앵커 방식 — 씬1 품질과 나머지 차이]
-    #   씬1 (text2img) → 씬2, 씬3, 씬4 (img2img, 씬1 참조)
-    #   문제: 씬1은 원본 퀄리티, 씬2+는 참조 퀄리티 → 느낌 차이
+    # ★★★ 레퍼런스 + 씬 체이닝 통합 생성 루프 ★★★
     #
-    # [해결: 캐릭터 레퍼런스 시트 방식]
-    #   CRS (text2img, 깨끗한 배경 + 정면 포즈의 캐릭터 기준 이미지)
-    #   CRS → 씬1 (img2img, CRS 참조)
-    #   CRS → 씬2 (img2img, CRS 참조)
-    #   CRS → 씬3 (img2img, CRS 참조)
+    # [모델별 전략]
+    #   Gemini: 3종 레퍼런스 + 이전 씬 이미지/요약 → 최고 일관성
+    #   Flux Kontext: Character CRS → img2img → 캐릭터 일관성
+    #   DALL-E: 프롬프트만 → 텍스트 기반 일관성
     #
-    # 장점:
-    #   - 모든 씬이 동일한 "깨끗한" 레퍼런스를 참조 → 품질 균일
-    #   - 씬 1과 씬 2+의 느낌 차이 해소
-    #   - 레퍼런스는 장면 배경 없음 → 포즈/구도 복사 문제 해소
+    # [씬 체이닝]
+    #   씬 2+부터 직전 씬 이미지 + 이전 씬 텍스트 요약 전달
+    #   "현재 프롬프트 우선, 직전 씬은 캐릭터 외형 참고용"
     from app.models.models import GeneratedImage
     session.images = []
     stop_signals[request.session_id] = False
     
-    use_ref = (is_flux_kontext or is_flux) and character_ref_bytes is not None
-    
-    if use_ref:
-        logger.info("[레퍼런스] 캐릭터 레퍼런스 시트 준비 완료 — 모든 씬이 이것을 참조합니다")
-    else:
-        logger.info("[text2img] 캐릭터 레퍼런스 없음 — 모든 씬을 독립 text2img로 생성")
+    # 생성된 씬 이미지 저장 (체이닝용)
+    generated_scene_images = {}  # {scene_number: image_bytes}
     
     for scene in session.story.scenes:
         if stop_signals.get(request.session_id, False):
@@ -831,18 +744,46 @@ async def generate_images(request: GenerateImagesRequest):
                         f"({len(session.images)}/{len(session.story.scenes)} 완료)")
             break
         
-        # 씬별 seed: 각 씬마다 다른 seed → 포즈/구도 다양성 확보
+        # 씬별 seed
         scene_seed = (base_seed + scene.scene_number * 1000) if base_seed else None
         
-        # ★ 모든 씬(1번 포함)이 캐릭터 레퍼런스를 참조
-        #   → 씬1과 씬2+의 품질/느낌 차이 해소!
-        ref_bytes = character_ref_bytes if use_ref else None
+        # 씬 체이닝: 직전 씬 이미지 + 이전 씬 텍스트 요약
+        prev_scene_image = None
+        prev_scene_summaries = None
         
-        mode_str = "img2img (캐릭터 레퍼런스 참조)" if ref_bytes else "text2img"
+        if request.scene_chaining and scene.scene_number > 1:
+            prev_summaries, prev_sn = build_scene_chaining_context(
+                session.story.scenes, scene.scene_number
+            )
+            prev_scene_summaries = prev_summaries if prev_summaries else None
+            
+            # 직전 씬 이미지 로드
+            if prev_sn and prev_sn in generated_scene_images:
+                prev_scene_image = generated_scene_images[prev_sn]
+        
+        mode_parts = []
+        if character_ref_bytes: mode_parts.append("Character")
+        if method_ref_bytes: mode_parts.append("Method")
+        if style_ref_bytes: mode_parts.append("Style")
+        if prev_scene_image: mode_parts.append("체이닝")
+        mode_str = f"레퍼런스({'+'.join(mode_parts)})" if mode_parts else "독립 생성"
+        
         logger.info(f"[생성] 씬 {scene.scene_number}/{len(session.story.scenes)} — "
                      f"seed={scene_seed}, {mode_str}")
         
-        res = await generate_single_scene(scene, scene_seed=scene_seed, ref_image_bytes=ref_bytes)
+        res = await generate_single_scene(
+            scene,
+            scene_seed=scene_seed,
+            ref_image_bytes=character_ref_bytes,
+            method_bytes=method_ref_bytes if is_gemini else None,
+            style_bytes=style_ref_bytes if is_gemini else None,
+            prev_scene_image=prev_scene_image,
+            prev_scene_summaries=prev_scene_summaries
+        )
+        
+        # 체이닝용 이미지 저장
+        if res.get("image_bytes"):
+            generated_scene_images[scene.scene_number] = res["image_bytes"]
         
         if res.get("local_path"):
             img = GeneratedImage(
@@ -1268,14 +1209,14 @@ async def regenerate_image(request: RegenerateImageRequest):
     )
     
     # API 키 결정 — 모델별 자동 선택
-    model_name = request.model or "gpt-image-1"
+    model_name = request.model or "nano-banana-pro"
     api_key = _resolve_api_key(model_name)
     generator = get_generator(model_name, api_key)
     
     try:
         size = "1024x1536"  # 웹툰 기본 세로
         
-        # Flux Kontext/LoRA 프롬프트 최적화
+        # Flux Kontext 프롬프트 최적화
         is_flux_kontext = "flux-kontext" in model_name
         is_flux_regen = "flux" in model_name
         ref_images = None
@@ -1290,21 +1231,20 @@ async def regenerate_image(request: RegenerateImageRequest):
                     logger.info(f"[재생성] 씬 {scene.scene_number}: 기존 이미지를 참조로 사용 (캐릭터 외모 유지)")
             
             from app.services.prompt_builder import optimize_for_flux_kontext
+            _regen_desc = getattr(scene, 'image_prompt', None) or scene.scene_description
             prompt = optimize_for_flux_kontext(
                 prompt,
-                scene_description=scene.scene_description,
+                scene_description=_regen_desc,
                 is_reference=bool(ref_images),
                 characters=session.story.characters
             )
-        elif "flux-lora" in model_name:
-            from app.services.prompt_builder import optimize_for_flux_lora
-            prompt = optimize_for_flux_lora(prompt, characters=session.story.characters)
         elif is_flux_regen:
             # flux-dev 등 일반 Flux: text2img 최적화
             from app.services.prompt_builder import optimize_for_flux_kontext
+            _regen_desc2 = getattr(scene, 'image_prompt', None) or scene.scene_description
             prompt = optimize_for_flux_kontext(
                 prompt,
-                scene_description=scene.scene_description,
+                scene_description=_regen_desc2,
                 is_reference=False,
                 characters=session.story.characters
             )
@@ -1478,7 +1418,7 @@ async def list_story_history():
     files = glob.glob(os.path.join(history_dir, "*.json"))
     files.sort(key=os.path.getmtime, reverse=True)
     
-    recent_files = files[:5]
+    recent_files = files[:10]
     result = []
     
     for f in recent_files:
@@ -1839,6 +1779,7 @@ async def init_bubble_layers(session_id: str):
                 text=dialogue.text,
                 position=pos,
                 shape=BubbleShape.ROUND,
+                tail_direction="bottom-left" if j % 2 == 0 else "bottom-right",
                 bg_color=colors["bg"],
                 text_color=colors["text"],
                 border_color=colors["border"],
@@ -2041,49 +1982,133 @@ async def export_with_bubbles(session_id: str):
                 bx2 = min(bx2, img_w - 2)
                 by2 = min(by2, img_h - 2)
                 
-                # 폰트 로드 (이미지 해상도 대비 적절한 크기)
+                # ── 폰트 결정: 개별 폰트 > 레이어 글로벌 > 시스템 기본 ──
                 font_size_px = max(12, int(bubble.font_size * img_w / 480))
+                bubble_font_family = getattr(bubble, 'font_family', '') or ''
+                layer_font_family = getattr(layer, 'font_family', '') or ''
+                
+                # 폰트 이름 → Windows 시스템 폰트 경로 매핑
+                _FONT_MAP = {
+                    "Nanum Gothic": "C:/Windows/Fonts/NanumGothic.ttf",
+                    "Do Hyeon": "C:/Windows/Fonts/DoHyeon-Regular.ttf",
+                    "Jua": "C:/Windows/Fonts/Jua-Regular.ttf",
+                    "Gaegu": "C:/Windows/Fonts/Gaegu-Regular.ttf",
+                    "Black Han Sans": "C:/Windows/Fonts/BlackHanSans-Regular.ttf",
+                    "Nanum Pen Script": "C:/Windows/Fonts/NanumPenScript-Regular.ttf",
+                }
+                _DEFAULT_FONT = "C:/Windows/Fonts/malgun.ttf"
+                
+                chosen_font_name = bubble_font_family or layer_font_family
+                font_path = _FONT_MAP.get(chosen_font_name, _DEFAULT_FONT)
+                
                 try:
-                    font = ImageFont.truetype("C:/Windows/Fonts/malgun.ttf", font_size_px)
+                    font = ImageFont.truetype(font_path, font_size_px)
                 except:
-                    font = ImageFont.load_default()
+                    try:
+                        font = ImageFont.truetype(_DEFAULT_FONT, font_size_px)
+                    except:
+                        font = ImageFont.load_default()
                 
                 padding_x = max(8, int((bx2 - bx1) * 0.08))
                 padding_y = max(6, int((by2 - by1) * 0.08))
                 
+                # ── PillowService의 BUBBLE_STYLES 참조 ──
+                from app.services.pillow_service import PillowService
+                _pillow_styles = PillowService.BUBBLE_STYLES
+                
                 if bubble.type == "narration":
-                    # 나레이션: 반투명 배경 바
-                    draw.rectangle([bx1, by1, bx2, by2], fill=(0, 0, 0, 180))
-                    # 텍스트 자동 줄바꿈 + 중앙 배치
+                    # ── 나레이션: 스타일별 배경 ──
+                    narr_style = getattr(bubble, 'narration_style', 'classic') or 'classic'
+                    _NARR_STYLES_PILLOW = {
+                        "classic":   {"bg": (0, 0, 0, 180), "text": "white"},
+                        "light":     {"bg": (255, 255, 255, 216), "text": "#333333"},
+                        "gradient":  {"bg": (20, 20, 60, 200), "text": "white"},
+                        "minimal":   {"bg": (0, 0, 0, 0), "text": "white"},
+                        "cinematic": {"bg": (0, 0, 0, 216), "text": "#e0e0e0"},
+                        "parchment": {"bg": (245, 235, 220, 230), "text": "#4a3728"},
+                    }
+                    ns = _NARR_STYLES_PILLOW.get(narr_style, _NARR_STYLES_PILLOW["classic"])
+                    
+                    if narr_style == 'minimal':
+                        # 미니멀: 테두리만
+                        draw.rectangle([bx1, by1, bx2, by2], fill=None, outline="white", width=1)
+                    else:
+                        draw.rectangle([bx1, by1, bx2, by2], fill=ns["bg"])
+                    
                     _draw_wrapped_text(draw, bubble.text, font,
                                        bx1 + padding_x, by1 + padding_y,
                                        bx2 - bx1 - padding_x * 2,
-                                       fill="white", align="center")
+                                       fill=ns["text"], align="center")
                 else:
-                    # 대사: 둥근 사각형
-                    bg_color = bubble.bg_color or "#FFFFFF"
-                    # hex → RGBA
-                    try:
-                        r, g, b = int(bg_color[1:3], 16), int(bg_color[3:5], 16), int(bg_color[5:7], 16)
-                        fill_color = (r, g, b, int((bubble.opacity or 0.95) * 255))
-                    except:
-                        fill_color = (255, 255, 255, 242)
-                    
+                    # ── 스타일별 렌더링 ──
                     shape = getattr(bubble, 'shape', 'round') or 'round'
-                    radius = 15 if shape in ('round', 'thought') else (4 if shape == 'shout' else 6)
-                    border_w = 3 if shape == 'shout' else 2
+                    style_def = _pillow_styles.get(shape, _pillow_styles.get('round'))
+                    
+                    # 배경색 결정: 스타일 기본 > 개별 설정
+                    if shape == 'dark':
+                        fill_color = style_def["bg_color"]
+                    else:
+                        bg_hex = bubble.bg_color or "#FFFFFF"
+                        try:
+                            r, g, b = int(bg_hex[1:3], 16), int(bg_hex[3:5], 16), int(bg_hex[5:7], 16)
+                            fill_color = (r, g, b, int((bubble.opacity or 0.95) * 255))
+                        except:
+                            fill_color = style_def["bg_color"]
+                    
+                    radius = style_def.get("border_radius", 15)
+                    border_w = style_def.get("border_width", 2)
+                    border_outline = bubble.border_color or "#333333"
+                    
+                    # soft 스타일은 테두리 없음
+                    if shape == 'soft':
+                        border_w = 0
+                        border_outline = None
                     
                     draw.rounded_rectangle(
                         [bx1, by1, bx2, by2],
                         radius=radius,
                         fill=fill_color,
-                        outline=bubble.border_color or "#333333",
+                        outline=border_outline,
                         width=border_w
                     )
+                    
+                    # 텍스트 색상: dark 스타일은 흰색
+                    txt_fill = bubble.text_color or "#000000"
+                    if shape == 'dark':
+                        txt_fill = "#FFFFFF"
+                    
                     _draw_wrapped_text(draw, bubble.text, font,
                                        bx1 + padding_x, by1 + padding_y,
                                        bx2 - bx1 - padding_x * 2,
-                                       fill=bubble.text_color or "#000000")
+                                       fill=txt_fill)
+                    
+                    # ── 꼬리(tail) 그리기 ──
+                    tail_dir = getattr(bubble, 'tail_direction', 'none') or 'none'
+                    if tail_dir != 'none':
+                        tail_size = max(8, int(min(bx2 - bx1, by2 - by1) * 0.12))
+                        tail_offset = int((bx2 - bx1) * 0.2)
+                        
+                        if tail_dir == 'bottom-left':
+                            tp = [(bx1 + tail_offset, by2), (bx1 + tail_offset + tail_size, by2), (bx1 + tail_offset, by2 + tail_size)]
+                        elif tail_dir == 'bottom-right':
+                            tp = [(bx2 - tail_offset - tail_size, by2), (bx2 - tail_offset, by2), (bx2 - tail_offset, by2 + tail_size)]
+                        elif tail_dir == 'top-left':
+                            tp = [(bx1 + tail_offset, by1 - tail_size), (bx1 + tail_offset, by1), (bx1 + tail_offset + tail_size, by1)]
+                        elif tail_dir == 'top-right':
+                            tp = [(bx2 - tail_offset, by1 - tail_size), (bx2 - tail_offset, by1), (bx2 - tail_offset - tail_size, by1)]
+                        else:
+                            tp = None
+                        
+                        if tp:
+                            # 꼬리 배경
+                            draw.polygon(tp, fill=fill_color)
+                            # 꼬리 테두리
+                            if border_outline:
+                                draw.line([tp[0], tp[2]], fill=border_outline, width=max(1, border_w))
+                                if tail_dir.startswith('bottom'):
+                                    draw.line([tp[1], tp[2]], fill=border_outline, width=max(1, border_w))
+                                else:
+                                    draw.line([tp[0], tp[1]], fill=border_outline, width=max(1, border_w))
             
             img = Image.alpha_composite(img, overlay)
         

@@ -157,7 +157,7 @@ class OpenAIGenerator(ImageGeneratorBase):
 class GeminiGenerator(ImageGeneratorBase):
     """Nano Banana / Nano Banana Pro (via Google GenAI)"""
 
-    def __init__(self, api_key: str, model: str = "gemini-2.0-flash-exp"):
+    def __init__(self, api_key: str, model: str = "gemini-3-pro-image-preview"):
         if not genai:
             raise ImportError("Google GenAI library is not installed")
         if not api_key:
@@ -165,23 +165,88 @@ class GeminiGenerator(ImageGeneratorBase):
         self.client = genai.Client(api_key=api_key)
         self.model = model
 
-    async def generate(self, prompt, reference_images=None, size="1024x1024", quality="medium", seed=None):
+    async def generate(self, prompt, reference_images=None, size="1024x1024", quality="medium", seed=None,
+                       method_image=None, style_image=None, prev_scene_image=None, prev_scene_summaries=None,
+                       prev_scene_number=None):
+        """Gemini 이미지 생성 — 3종 레퍼런스 + 이전 씬 체이닝 지원
+        
+        Args:
+            prompt: 이미지 생성 프롬프트
+            reference_images: [bytes] 기존 호환용 (Character CRS 등)
+            method_image: bytes — Method.jpg (구도/연출 레퍼런스)
+            style_image: bytes — Style.jpg (화풍 레퍼런스)
+            prev_scene_image: bytes — 직전 씬 생성 이미지 (체이닝용)
+            prev_scene_summaries: List[str] — 이전 씬 텍스트 요약 목록
+            prev_scene_number: int — 직전 씬 번호 (라벨 텍스트용)
+        """
         t0 = time.time()
         try:
-            contents = [prompt]
+            from PIL import Image
+            import io
+
+            # 프롬프트에 레퍼런스/체이닝 지시문 추가
+            full_prompt = prompt
+
+            # 3종 레퍼런스 안내 텍스트
+            ref_instructions = []
+            has_any_ref = False
+
+            if reference_images and len(reference_images) > 0:
+                ref_instructions.append("- 첨부된 캐릭터 레퍼런스 이미지의 캐릭터 외형(얼굴, 헤어, 의상, 체형)을 정확히 유지하세요.")
+                has_any_ref = True
+            if method_image:
+                ref_instructions.append("- 첨부된 연출(Method) 레퍼런스의 구도, 카메라 앵글, 말풍선 배치를 참고하세요.")
+                has_any_ref = True
+            if style_image:
+                ref_instructions.append("- 첨부된 화풍(Style) 레퍼런스의 색감, 선화 스타일, 질감, 분위기를 반드시 적용하세요.")
+                has_any_ref = True
+
+            if has_any_ref:
+                full_prompt += "\n\n**참조 이미지 지시사항:**\n" + "\n".join(ref_instructions)
+
+            # 이전 씬 체이닝 지시문
+            if prev_scene_summaries and len(prev_scene_summaries) > 0:
+                full_prompt += f"""
+
+---
+위 이미지 프롬프트가 절대적 1순위입니다. 프롬프트에 명시된 장소·배경·구도·상황을 그대로 생성하세요.
+첨부된 직전 장면 이미지는 보조 참고일 뿐입니다. 캐릭터 외형이 현재 프롬프트에도 등장한다면 참고하되, 장소·배경은 현재 프롬프트를 따르세요.
+
+이전 장면 흐름(텍스트 참고만):
+{chr(10).join(prev_scene_summaries)}"""
+
+            # 콘텐츠 구성: 프롬프트 + 레퍼런스 이미지들 + 이전 씬 이미지
+            contents = [full_prompt]
+
+            # 1. Character 레퍼런스
             if reference_images:
-                from PIL import Image
-                import io
                 for ref_bytes in reference_images:
                     img = Image.open(io.BytesIO(ref_bytes))
                     contents.append(img)
+
+            # 2. Method 레퍼런스
+            if method_image:
+                img = Image.open(io.BytesIO(method_image))
+                contents.append(img)
+
+            # 3. Style 레퍼런스
+            if style_image:
+                img = Image.open(io.BytesIO(style_image))
+                contents.append(img)
+
+            # 4. 직전 씬 이미지 (체이닝) — 장면 번호 포함 라벨
+            if prev_scene_image:
+                sn_label = f"(장면 {prev_scene_number})" if prev_scene_number else ""
+                contents.append(f"[보조 참고] 직전 장면{sn_label} 이미지 - 캐릭터 외형 참고용. 장소/배경은 현재 프롬프트를 따를 것")
+                img = Image.open(io.BytesIO(prev_scene_image))
+                contents.append(img)
 
             def _sync_generate():
                 return self.client.models.generate_content(
                     model=self.model,
                     contents=contents,
                     config=types.GenerateContentConfig(
-                        response_modalities=["IMAGE"]
+                        response_modalities=["TEXT", "IMAGE"]
                     )
                 )
 
@@ -189,12 +254,14 @@ class GeminiGenerator(ImageGeneratorBase):
                 asyncio.to_thread(_sync_generate),
                 timeout=IMAGE_GENERATION_TIMEOUT
             )
-            logger.info("Gemini API 응답 %.1f초 (model=%s)", time.time() - t0, self.model)
+            logger.info("Gemini API 응답 %.1f초 (model=%s, refs=%d)", 
+                        time.time() - t0, self.model,
+                        sum(1 for x in [reference_images, method_image, style_image, prev_scene_image] if x))
 
             if response.candidates and response.candidates[0].content.parts:
                 for part in response.candidates[0].content.parts:
                     if part.inline_data:
-                        return part.inline_data.data
+                        return self._extract_image_bytes(part.inline_data.data)
             raise ValueError("No image found in Gemini response")
 
         except asyncio.TimeoutError:
@@ -479,153 +546,26 @@ class FluxKontextGenerator(ImageGeneratorBase):
 
 
 # ────────────────────────────────────────────
-# fal.ai — Flux LoRA (학습된 캐릭터로 생성)
-# ────────────────────────────────────────────
-class FluxLoraGenerator(ImageGeneratorBase):
-    """학습된 LoRA 모델로 이미지 생성 (fal.ai)
-
-    사용 흐름:
-      1. fal_service.py 에서 LoRA 학습 → lora_url 획득
-      2. FluxLoraGenerator(api_key, lora_url=...) 생성
-      3. generate("sks_character in a cafe") → 학습된 캐릭터로 이미지 생성
-    """
-
-    _ENDPOINT = "fal-ai/flux-lora"
-
-    def __init__(self, api_key: str, model: str = "flux-lora",
-                 lora_url: str = "", trigger_word: str = ""):
-        if not fal_client:
-            raise ImportError("fal-client 라이브러리가 설치되지 않았습니다. pip install fal-client")
-        if not api_key:
-            raise ValueError("fal.ai API 키가 설정되지 않았습니다. .env 파일의 FAL_KEY를 확인해주세요.")
-        os.environ["FAL_KEY"] = api_key
-        self.model = model
-        self.lora_url = lora_url
-        self.trigger_word = trigger_word
-
-    async def generate(self, prompt, reference_images=None, size="1024x1536", quality="medium", seed=None):
-        """LoRA 학습 모델로 이미지 생성
-        
-        핵심: fal_client.submit() 후 비동기 폴링으로 타임아웃을 확실히 제어.
-        기존 handler.get()은 동기 무한 폴링이라 asyncio 취소가 불가능했음.
-        """
-        t0 = time.time()
-        w, h = FluxKontextGenerator._parse_size(size)
-
-        # 트리거 워드가 프롬프트에 없으면 앞에 추가
-        if self.trigger_word and self.trigger_word not in prompt:
-            prompt = f"{self.trigger_word}, {prompt}"
-
-        # 한국어 제거 (fal.ai는 영어만)
-        safe_prompt = FluxKontextGenerator._sanitize_prompt(prompt)
-
-        try:
-            from app.services.prompt_rules import get_negative_prompt
-            
-            arguments = {
-                "prompt": safe_prompt,
-                "negative_prompt": get_negative_prompt(),
-                "image_size": {"width": w, "height": h},
-                "num_images": 1,
-                "output_format": "png",
-            }
-            if self.lora_url:
-                arguments["loras"] = [{"path": self.lora_url, "scale": 1.0}]
-            if seed is not None:
-                arguments["seed"] = seed
-
-            # submit은 빠르므로 동기로 호출
-            handler = await asyncio.to_thread(
-                fal_client.submit, self._ENDPOINT, arguments=arguments
-            )
-            request_id = handler.request_id
-            logger.info(f"[LoRA] 요청 제출 완료: request_id={request_id}")
-
-            # 비동기 폴링: 타임아웃 제어 가능
-            timeout = IMAGE_GENERATION_TIMEOUT
-            poll_interval = 1.0
-            elapsed = 0.0
-            
-            while elapsed < timeout:
-                await asyncio.sleep(poll_interval)
-                elapsed = time.time() - t0
-                
-                try:
-                    status = await asyncio.to_thread(
-                        fal_client.status, self._ENDPOINT, request_id, with_logs=False
-                    )
-                except Exception as status_err:
-                    logger.warning(f"[LoRA] 상태 조회 실패: {status_err}")
-                    continue
-                
-                status_name = type(status).__name__
-                
-                if status_name == "Completed" or hasattr(status, 'logs') and status_name != "InProgress":
-                    # 완료됨 — 결과 가져오기
-                    try:
-                        result = await asyncio.to_thread(
-                            fal_client.result, self._ENDPOINT, request_id
-                        )
-                        logger.info("Flux LoRA 이미지 생성 완료 %.1f초 (trigger=%s)",
-                                    time.time() - t0, self.trigger_word)
-                        image_url = result["images"][0]["url"]
-                        return await FluxKontextGenerator._download_image(image_url)
-                    except Exception as result_err:
-                        logger.error(f"[LoRA] 결과 가져오기 실패: {result_err}")
-                        raise
-                
-                if status_name == "Failed":
-                    error_msg = getattr(status, 'error', 'Unknown error')
-                    raise RuntimeError(f"LoRA 이미지 생성 실패: {error_msg}")
-                
-                # InProgress 또는 Queued → 계속 대기
-                if elapsed > 30:
-                    poll_interval = 2.0  # 30초 이후엔 폴링 간격 확대
-            
-            # 타임아웃
-            logger.error("Flux LoRA 이미지 생성 타임아웃 (%.0f초)", time.time() - t0)
-            raise TimeoutError(
-                f"이미지 생성이 {timeout}초 안에 완료되지 않았습니다."
-            )
-
-        except TimeoutError:
-            raise
-        except Exception as e:
-            logger.error("Flux LoRA Image Generation Failed (%.1f초): %s", time.time() - t0, e)
-            raise
-
-    async def edit_with_reference(self, prompt, reference_image, size="1024x1536"):
-        """LoRA 모델은 참조 이미지 편집 미지원 → 일반 생성으로 대체"""
-        return await self.generate(prompt, size=size)
-
-
-# ────────────────────────────────────────────
 # 팩토리
 # ────────────────────────────────────────────
 # UI 에서 선택하는 모델 이름 → 실제 API 모델 이름 매핑
 # 2026-02-11 ListModels 실제 테스트로 검증 완료
 _GEMINI_MODEL_MAP = {
-    "nano-banana": "gemini-2.5-flash-image",        # 빠름, 이미지 생성 확인됨
-    "nano-banana-pro": "nano-banana-pro-preview",    # 고품질, 이미지 생성 확인됨
+    "nano-banana": "gemini-2.5-flash-image",          # Nano Banana (빠름)
+    "nano-banana-pro": "gemini-3-pro-image-preview",  # Nano Banana Pro (고품질 — Gemini 3 Pro Image)
 }
 
 
-def get_generator(model_name: str, api_key: str,
-                  lora_url: str = "", trigger_word: str = "") -> ImageGeneratorBase:
+def get_generator(model_name: str, api_key: str) -> ImageGeneratorBase:
     """model_name 을 기반으로 적절한 Generator 인스턴스를 반환
 
     Args:
         model_name: UI 에서 선택한 모델명
         api_key: 해당 모델의 API 키
-        lora_url: (LoRA 전용) 학습된 LoRA 가중치 URL
-        trigger_word: (LoRA 전용) 학습된 트리거 워드
     """
-    # ── fal.ai Flux 계열 ──
+    # ── fal.ai Flux Kontext ──
     if "flux-kontext" in model_name:
         return FluxKontextGenerator(api_key, model_name)
-    elif "flux-lora" in model_name:
-        return FluxLoraGenerator(api_key, model_name,
-                                 lora_url=lora_url, trigger_word=trigger_word)
 
     # ── OpenAI 계열 ──
     elif "gpt" in model_name or "dall-e" in model_name:

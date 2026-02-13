@@ -411,16 +411,21 @@ Do NOT alter: hair style, hair color, skin tone, glasses (presence/absence), out
 If you are uncertain about any detail, refer back to the [ABSOLUTE CHARACTER CONSISTENCY] section above.
 """)
 
-    # 5. This Scene (★ 씬 설명 정제 — 대사/텍스트/숫자 제거)
+    # 5. This Scene (★ image_prompt 우선 사용, 없으면 scene_description 대체)
     emotions = [d.emotion for d in scene.dialogues if d.emotion]
     dominant_emotion = emotions[0] if emotions else "neutral"
     
-    # 씬 설명에서 대사/텍스트 제거하여 이미지에 글자가 렌더링되지 않도록
-    _cleaned_scene_desc = _clean_scene_desc(scene.scene_description or "")
+    # image_prompt가 있으면 시각 묘사 전용 프롬프트 사용 (더 상세하고 정확)
+    # 없으면 기존처럼 scene_description에서 정제
+    _scene_visual = ""
+    if hasattr(scene, 'image_prompt') and scene.image_prompt:
+        _scene_visual = _clean_scene_desc(scene.image_prompt)
+    else:
+        _scene_visual = _clean_scene_desc(scene.scene_description or "")
 
     parts.append(f"""
 [THIS SCENE]
-Scene: {_cleaned_scene_desc}
+Scene: {_scene_visual}
 Expression: {dominant_emotion}
 """)
 
@@ -766,55 +771,62 @@ def optimize_for_flux_kontext(full_prompt: str, scene_description: str = "",
     return " ".join(parts)
 
 
-def optimize_for_flux_lora(full_prompt: str, trigger_word: str = "", 
-                            characters=None) -> str:
-    """Flux LoRA에 최적화된 짧고 강력한 프롬프트 생성
+# (optimize_for_flux_lora 함수 제거됨 — LoRA 기능 삭제)
 
-    LoRA는 트리거 워드로 캐릭터를 소환하므로:
-    - 텍스트 금지가 맨 앞
-    - 트리거 워드 바로 뒤
-    - 캐릭터 외모 설명 축소 (LoRA가 학습함)
-    - 씬/배경/구도에 집중
+
+# ==========================================
+# 씬 체이닝 유틸리티
+# ==========================================
+
+def build_scene_chaining_context(
+    scenes: list,
+    current_scene_number: int,
+) -> tuple:
+    """이전 씬들의 텍스트 요약을 수집
+    
+    Returns:
+        (prev_summaries: List[str], prev_scene_number: int or None)
+        prev_summaries: 이전 씬들의 요약 텍스트 리스트
+        prev_scene_number: 직전 씬 번호 (이미지 로딩용)
     """
-    from app.services.prompt_rules import MASTER_POSITIVE_SUFFIX, LORA_STYLE_ANCHOR
-    
-    parts = []
-    
-    # ── 1. 텍스트/로고 절대 금지 (맨 앞!) ──
-    parts.append(_FLUX_ANTI_TEXT_PREFIX)
+    prev_summaries = []
+    prev_scene_number = None
 
-    # ── 2. 트리거 워드 ──
-    if trigger_word:
-        parts.append(f"A scene with {trigger_word}.")
+    if current_scene_number <= 1:
+        return prev_summaries, prev_scene_number
 
-    # ── 3. LoRA 스타일 일관성 앵커 ──
-    parts.append(LORA_STYLE_ANCHOR + ".")
+    for scene in scenes:
+        sn = scene.scene_number if hasattr(scene, 'scene_number') else scene.get('scene_number', 0)
+        if sn < current_scene_number:
+            # 일관성 강화: title + image_prompt 둘 다 포함 (잘라내지 않음)
+            title = (scene.scene_description if hasattr(scene, 'scene_description')
+                     else scene.get('scene_description', '')) or ''
+            image_prompt = (scene.image_prompt if hasattr(scene, 'image_prompt')
+                           else scene.get('image_prompt', '')) or ''
+            if image_prompt:
+                prev_summaries.append(f"- 장면 {sn}: {title} / {image_prompt}")
+            else:
+                prev_summaries.append(f"- 장면 {sn}: {title}")
 
-    # ── 4. 아트 스타일 ──
-    style_text = _extract_section(full_prompt, "[GLOBAL ART STYLE")
-    if style_text:
-        parts.append(f"Style: {style_text[:120]}.")
-    
-    # ── 5. 서브스타일 ──
-    sub_text = _extract_section(full_prompt, "[RENDERING STYLE")
-    if sub_text:
-        parts.append(sub_text[:100])
+    prev_scene_number = current_scene_number - 1
+    return prev_summaries, prev_scene_number
 
-    # ── 6. 씬 내용 (★ 정제하여 텍스트/대사 제거) ──
-    scene_text = _extract_section(full_prompt, "[THIS SCENE]")
-    if scene_text:
-        scene_text = _clean_scene_desc(scene_text)
-        parts.append(f"Scene: {scene_text[:150]}.")
 
-    # ── 7. 배경 ──
-    bg_text = _extract_section(full_prompt, "[BACKGROUND STYLE")
-    if bg_text:
-        parts.append(f"Background: {bg_text[:80]}.")
+def build_reference_prompt_instructions(
+    has_character: bool = False,
+    has_method: bool = False,
+    has_style: bool = False,
+) -> str:
+    """3종 레퍼런스 존재 여부에 따른 프롬프트 지시문 생성 (Flux용 텍스트 지시)"""
+    if not any([has_character, has_method, has_style]):
+        return ""
 
-    # ── 8. 레이아웃 ──
-    parts.append(_FLUX_LAYOUT_SUFFIX)
-    
-    # ── 9. 품질 접미사 (마스터 규칙) ──
-    parts.append(MASTER_POSITIVE_SUFFIX)
+    instructions = []
+    if has_character:
+        instructions.append("Maintain character appearances exactly as shown in the character reference image.")
+    if has_method:
+        instructions.append("Follow the composition, camera angles, and framing style from the method reference.")
+    if has_style:
+        instructions.append("Apply the exact art style, color palette, and atmosphere from the style reference image.")
 
-    return " ".join(parts)
+    return "\n".join(instructions)

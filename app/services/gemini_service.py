@@ -12,7 +12,7 @@ import re
 from app.core.config import get_settings, SPECIALIZED_FIELDS, FIELD_HASHTAGS
 from app.models.models import (
     FieldInfo, SpecializedField, Story, Scene, Dialogue,
-    InstagramCaption, CharacterSettings, CharacterProfile
+    InstagramCaption, CharacterSettings, CharacterProfile, RuleSettings
 )
 
 
@@ -163,6 +163,21 @@ class GeminiService:
         logger.error(f"[collect_data] 모든 모델 실패. 마지막 오류: {last_error}")
         return [{"title": keyword, "content": f"정보를 불러오지 못했습니다. ({last_error}) 다시 시도해 주세요."}]
 
+    @staticmethod
+    def _build_character_names_prompt(character_names: str) -> str:
+        """캐릭터 이름 지정 프롬프트 생성"""
+        if not character_names or not character_names.strip():
+            return ""
+        names = [n.strip() for n in character_names.split(",") if n.strip()]
+        if not names:
+            return ""
+        names_str = ", ".join(names)
+        return (
+            "\n[등장인물 이름 지정 - 필수]\n"
+            f"다음 이름을 반드시 사용하세요. 다른 이름을 만들지 마세요: {names_str}\n"
+            "첫 번째 이름이 메인 역할(전문가)이고, 나머지는 보조 역할입니다.\n"
+        )
+
     async def generate_story(
         self,
         keyword: str,
@@ -171,7 +186,8 @@ class GeminiService:
         scene_count: int = 8,
         character_settings: Optional[CharacterSettings] = None,
         rule_settings: Optional[RuleSettings] = None,
-        model: str = "gemini-2.0-flash"
+        model: str = "gemini-2.0-flash",
+        character_names: str = ""
     ) -> Story:
         """규칙 기반 스토리 생성 - 모델 fallback 지원"""
         import logging
@@ -206,6 +222,7 @@ class GeminiService:
 [캐릭터 설정]
 - 질문자 유형: {character_settings.questioner_type}
 - 전문가 유형: {character_settings.expert_type}
+{self._build_character_names_prompt(character_names)}
 
 [중요 지침 - 대화 품질]
 1. **전문가 대사는 충분히 설명해야 합니다!** 
@@ -230,6 +247,29 @@ class GeminiService:
 - 캐릭터들이 실제 대화하는 형식으로 자연스럽게 설명하세요.
 - 각 씬마다 캐릭터의 기분(neutral/happy/sad/surprised/serious/angry)을 지정하세요.
 - 전문적인 내용도 이해하기 쉽게 풀어서 설명하세요.
+
+[이미지 프롬프트 — 매우 중요]
+각 씬마다 "image_prompt" 필드를 반드시 작성하세요. 이것은 AI 이미지 생성 모델에게 전달되는 시각 묘사입니다.
+scene_description은 스토리 설명이고, image_prompt는 그림을 그리기 위한 상세한 시각 지시입니다.
+
+image_prompt 작성 규칙:
+1. **한국어로 작성** (나중에 자동 번역됨)
+2. **대사/텍스트 절대 포함 금지** — 말풍선이나 글자에 대한 언급 없이, 순수하게 그림만 묘사
+3. **구체적 시각 요소만 포함**: 캐릭터 위치, 포즈, 표정, 배경, 조명, 구도, 분위기
+4. **카메라 앵글** 명시: 예) "미디엄 샷", "클로즈업", "전신 샷", "약간 위에서 내려다보는 앵글"
+5. **캐릭터별 포즈/동작** 구체적으로: "팔짱을 끼고 서있다", "책상에 기대어 설명하고 있다"
+6. **표정** 구체적으로: "당황한 표정으로 눈을 크게 뜨고", "자신감 넘치는 미소"
+7. **배경/환경** 상세히: "밝은 형광등이 켜진 사무실", "창밖으로 도시 야경이 보이는"
+8. **조명/분위기**: "따뜻한 조명", "밝지만 캐릭터 그림자가 짙은", "역광으로 실루엣"
+9. **80~150자** 범위로 작성
+
+image_prompt 좋은 예시:
+- "웹툰 스타일. 밝은 사무실 내부. 세무사가 책상 앞에 앉아 서류를 펼치며 설명하고 있다. 맞은편에 젊은 여성이 걱정스러운 표정으로 앉아 있다. 책상 위에 계산기와 서류가 놓여 있다. 형광등 조명, 미디엄 샷."
+- "웹툰 스타일. 카페 내부, 따뜻한 조명. 두 사람이 마주 앉아 대화 중. 전문가는 자신감 있는 미소로 손으로 제스처를 하고, 질문자는 고개를 갸웃하며 궁금해하는 표정. 배경에 커피잔과 창밖 풍경. 미디엄 와이드 샷."
+
+image_prompt 나쁜 예시:
+- "세무사가 설명합니다" (X — 너무 짧고 시각 정보 없음)
+- "세무사: '이자율은 4.6%입니다'" (X — 대사가 포함됨)
 
 [캐릭터 외모 — 매우 중요]
 각 캐릭터에 대해 visual_identity를 반드시 포함하세요.
@@ -276,7 +316,8 @@ class GeminiService:
     "scenes": [
         {{
             "scene_number": 1,
-            "scene_description": "장면 시각적 묘사",
+            "scene_description": "장면 스토리 설명 (어떤 상황인지)",
+            "image_prompt": "AI 이미지 생성용 상세 시각 묘사 (캐릭터 위치/포즈/표정, 배경, 조명, 구도 포함. 대사 절대 금지. 80~150자)",
             "dialogues": [
                 {{"character": "이름", "text": "대사({max_dialogue}자내)", "emotion": "기분"}}
             ],
@@ -299,6 +340,7 @@ class GeminiService:
                     scene = Scene(
                         scene_number=s.get("scene_number"),
                         scene_description=s.get("scene_description"),
+                        image_prompt=s.get("image_prompt"),
                         dialogues=dialogues,
                         narration=s.get("narration")
                     )
