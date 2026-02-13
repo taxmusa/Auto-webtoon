@@ -5213,7 +5213,14 @@
 
         // ── Step 1: 사진 업로드 ──
         function handlePhotoUpload(inputOrEvent) {
-            const files = inputOrEvent.target ? inputOrEvent.target.files : inputOrEvent;
+            let files;
+            if (inputOrEvent.target && inputOrEvent.target.files) {
+                files = inputOrEvent.target.files;   // Event 객체
+            } else if (inputOrEvent.files) {
+                files = inputOrEvent.files;           // Input 엘리먼트 (onchange="handlePhotoUpload(this)")
+            } else {
+                files = inputOrEvent;                 // FileList 직접 전달
+            }
             if (!files || !files.length) return;
             const file = files[0];
             if (!['image/jpeg','image/png','image/webp'].includes(file.type)) {
@@ -5272,15 +5279,29 @@
             selectedAutoStyle = styleId;
             document.querySelectorAll('.wizard-style-card').forEach(c => c.classList.remove('selected'));
             document.querySelector(`.wizard-style-card[data-style="${styleId}"]`)?.classList.add('selected');
+            // 커스텀 스타일 선택 시 프롬프트 입력 영역 표시
+            const customArea = document.getElementById('wizard-custom-prompt-area');
+            if (customArea) customArea.style.display = (styleId === 'custom') ? 'block' : 'none';
         }
 
         async function confirmStyleAndContinue() {
             if (!autoTrainSession) return;
+            // 커스텀 스타일은 프롬프트 필수
+            let customPrompt = null;
+            if (selectedAutoStyle === 'custom') {
+                customPrompt = document.getElementById('wizard-custom-prompt')?.value?.trim();
+                if (!customPrompt) { alert('커스텀 스타일은 프롬프트를 입력해야 합니다.'); return; }
+            }
             try {
                 const resp = await fetch('/api/training/select-style', {
                     method:'POST', headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify({ session_id: autoTrainSession.session_id, style_id: selectedAutoStyle })
+                    body: JSON.stringify({
+                        session_id: autoTrainSession.session_id,
+                        style_id: selectedAutoStyle,
+                        custom_prompt: customPrompt,
+                    })
                 });
+                if (!resp.ok) { const err = await resp.json(); throw new Error(err.detail || '스타일 선택 실패'); }
                 const data = await resp.json();
                 renderCostPreview(data.estimated_cost);
                 showWizardStep(3);
@@ -5548,6 +5569,13 @@
                     <h4 style="margin-bottom:12px;">변환 스타일을 선택하세요</h4>
                     <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:16px;">24컷 이미지를 어떤 스타일로 생성할지 선택합니다.</p>
                     <div id="wizard-style-cards" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:10px; margin-bottom:20px;"></div>
+                    <!-- 커스텀 스타일 프롬프트 입력 영역 -->
+                    <div id="wizard-custom-prompt-area" style="display:none; background:var(--bg-input); border:1px solid var(--border); border-radius:8px; padding:14px; margin-bottom:20px;">
+                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:6px;">🔧 커스텀 스타일 프롬프트</label>
+                        <p style="color:var(--text-muted); font-size:0.8rem; margin-bottom:8px;">원하는 스타일을 영어로 설명하세요. 이 프롬프트가 24컷 생성에 적용됩니다.</p>
+                        <textarea id="wizard-custom-prompt" rows="3" placeholder="예: watercolor painting style, soft pastel colors, dreamy atmosphere, white background"
+                            style="width:100%; padding:10px; border:1px solid var(--border); border-radius:6px; background:var(--bg-card); color:var(--text); font-size:0.9rem; font-family:monospace; resize:vertical;"></textarea>
+                    </div>
                     <div style="display:flex; justify-content:space-between;">
                         <button class="btn btn-secondary" onclick="showWizardStep(1)">← 이전</button>
                         <button class="btn btn-primary" onclick="confirmStyleAndContinue()">다음: 비용 확인 →</button>

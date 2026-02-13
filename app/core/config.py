@@ -130,5 +130,12 @@ COST_PER_IMAGE_GENERATION = 0.02             # $/장
 COST_PER_LORA_TRAINING = 2.00               # $/회
 COST_PER_LORA_INFERENCE = 0.03              # $/장
 
-# MVP에서 활성화할 스타일 목록
-MVP_ACTIVE_STYLES = ["original", "realistic_sketch"]
+# 활성화할 스타일 목록 (Phase 2: 전체 활성화)
+MVP_ACTIVE_STYLES = [
+    "original",            # 원본 스타일 그대로
+    "realistic_sketch",    # 실사 얼굴 + 손그림 몸체
+    "chibi_2head",         # 2등신 치비
+    "kakao_emoticon",      # 카카오 이모티콘풍
+    "simple_lineart",      # 단순 선화
+    "custom",              # 커스텀 (사용자 프롬프트)
+]

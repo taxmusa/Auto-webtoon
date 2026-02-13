@@ -414,11 +414,18 @@ async def select_style(request: SelectStyleRequest):
     if not session:
         raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
 
-    # MVP에서 활성 스타일만 허용
-    if request.style_id not in MVP_ACTIVE_STYLES and request.style_id != "custom":
+    # 활성 스타일만 허용
+    if request.style_id not in MVP_ACTIVE_STYLES:
         raise HTTPException(
             status_code=400,
             detail=f"현재 지원하지 않는 스타일입니다. 지원: {MVP_ACTIVE_STYLES}"
+        )
+
+    # 커스텀 스타일은 프롬프트 필수
+    if request.style_id == "custom" and not request.custom_prompt:
+        raise HTTPException(
+            status_code=400,
+            detail="커스텀 스타일은 프롬프트를 입력해야 합니다."
         )
 
     session["style_id"] = request.style_id
