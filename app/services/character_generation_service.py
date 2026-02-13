@@ -1,51 +1,24 @@
 """
-캐릭터 LoRA 자동 학습 — 24컷 생성 + 테스트 이미지 서비스
+캐릭터 LoRA 자동 학습 — 세션 관리 + 테스트 이미지 서비스
 
-핵심 흐름:
-  1. 사진 1장 업로드 → 저장
-  2. 스타일 선택 (original / realistic_sketch / ...)
-  3. 24컷 자동 생성 (경로 A: Flux Kontext, 경로 B: GPT Image 등)
-  4. 테스트 이미지 3장 생성 (학습 완료 후)
+핵심 흐름 (v2 — Grid 분할 방식):
+  1. 24컷 합본 이미지 업로드
+  2. 자동 분할 (4x6 등)
+  3. 캐릭터 이름 입력 + LoRA 학습 시작
+  4. 학습 완료 후 테스트 이미지 3장 생성
 """
-import asyncio
-import json
 import os
 import logging
 import uuid
-import time
 from typing import List, Optional, Dict
-from pathlib import Path
-
-import httpx
 
 from app.core.config import (
     get_settings,
-    GENERATION_CUTS_COUNT,
     LORA_SCALE_DEFAULT,
-    COST_PER_IMAGE_GENERATION,
-    COST_PER_LORA_TRAINING,
-    COST_PER_LORA_INFERENCE,
 )
-from app.models.models import (
-    LORA_STYLE_PROMPTS,
-    LORA_STYLE_LABELS,
-    GenerationSession,
-)
+from app.models.models import GenerationSession
 
 logger = logging.getLogger(__name__)
-
-# 24컷 프롬프트 로드
-_CUTS_PROMPTS: Optional[List[dict]] = None
-
-def _load_cuts_prompts() -> List[dict]:
-    """24컷 프롬프트 JSON 로드 (캐시)"""
-    global _CUTS_PROMPTS
-    if _CUTS_PROMPTS is None:
-        prompts_path = Path(__file__).parent.parent / "data" / "prompts" / "24cuts_prompts.json"
-        with open(prompts_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        _CUTS_PROMPTS = data["cuts"]
-    return _CUTS_PROMPTS
 
 
 # ─── 인메모리 세션 저장소 ───
@@ -71,315 +44,6 @@ def create_session(photo_url: str, photo_local_path: str = "") -> dict:
     session["created_at"] = str(session["created_at"])
     save_session(session)
     return session
-
-
-def build_generation_prompt(style_id: str, pose_prompt: str, custom_prompt: str = None) -> str:
-    """24컷 각각에 대한 프롬프트를 생성한다.
-
-    ★ 핵심 설계:
-      - Flux Kontext는 프롬프트의 **앞부분**을 가장 강하게 따름
-      - 따라서 포즈/표정 지시를 맨 앞에 배치하고, "same person"은 뒤에 배치
-      - anti-text 는 24컷 학습용이므로 넣지 않음 (웹툰 본편과 달리 텍스트 걱정 없음)
-
-    Args:
-        style_id: 선택된 스타일 ("original", "realistic_sketch", ...)
-        pose_prompt: 해당 컷의 포즈/표정 설명 (영어)
-        custom_prompt: style_id가 "custom"일 때 사용자 입력 스타일
-
-    Returns:
-        완성된 프롬프트 문자열
-    """
-    style_prompts = dict(LORA_STYLE_PROMPTS)
-    if custom_prompt:
-        style_prompts["custom"] = custom_prompt
-
-    style_part = style_prompts.get(style_id, "")
-
-    if style_id == "original":
-        # ★ 원본 스타일: 포즈/표정을 맨 앞에, 얼굴 유지는 보조로
-        # "Change the pose to ..." 형식이 Kontext에서 변형 효과가 가장 좋음
-        prompt = (
-            f"Change the pose and expression: {pose_prompt}. "
-            f"Keep the same person's face and identity. "
-            f"Clean white background, high quality, 1024x1024"
-        )
-    else:
-        # 스타일 변환: 포즈 지시를 앞에, 스타일은 뒤에
-        prompt = (
-            f"{pose_prompt}, "
-            f"{style_part}, "
-            f"same person's face and identity, high quality"
-        )
-
-    return prompt
-
-
-async def _generate_cut_kontext(
-    prompt: str,
-    ref_bytes: bytes,
-    fal_key: str,
-) -> bytes:
-    """24컷 전용 Kontext 호출 — anti-text 없이 순수 프롬프트만 전달
-
-    일반 웹툰 본편 생성(_sanitize_prompt 포함)과 달리,
-    24컷 학습 데이터 생성에서는 텍스트/로고 걱정이 없으므로
-    포즈/표정 지시를 최대한 살려야 한다.
-    """
-    import base64
-
-    try:
-        import fal_client as _fal
-    except ImportError:
-        raise ImportError("fal-client 라이브러리가 필요합니다.")
-
-    os.environ["FAL_KEY"] = fal_key
-
-    # ASCII 안전 처리 (최소한만 — anti-text 없음)
-    import re
-    safe = prompt.encode('ascii', errors='replace').decode('ascii')
-    safe = safe.replace('?', ' ')
-    safe = re.sub(r'\\s+', ' ', safe).strip()
-
-    b64 = base64.b64encode(ref_bytes).decode("utf-8")
-    data_uri = f"data:image/png;base64,{b64}"
-
-    def _sync():
-        args = {
-            "prompt": safe,
-            "image_url": data_uri,
-            "num_images": 1,
-            "output_format": "png",
-            # ★ guidance_scale 4.0: 24컷 학습용 최적
-            #   - 4.0: 참조 이미지의 얼굴을 강하게 유지하면서 포즈/표정 변경
-            #   - 7.0: 본편 웹툰용 (씬 설명 자유도 높음, 얼굴 유지 약함)
-            #   → 24컷은 "동일 인물의 다양한 포즈"가 핵심이므로 4.0이 적절
-            "guidance_scale": 4.0,
-            "num_inference_steps": 28,
-        }
-        handler = _fal.submit("fal-ai/flux-kontext/dev", arguments=args)
-        return handler.get()
-
-    result = await asyncio.wait_for(
-        asyncio.to_thread(_sync),
-        timeout=120,
-    )
-    image_url = result["images"][0]["url"]
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.get(image_url)
-        resp.raise_for_status()
-        return resp.content
-
-
-async def generate_single_cut(
-    photo_url: str,
-    photo_bytes: Optional[bytes],
-    style_id: str,
-    cut_prompt: dict,
-    custom_prompt: str = None,
-) -> Optional[str]:
-    """단일 컷 이미지 생성
-
-    Args:
-        photo_url: 업로드된 원본 사진 URL
-        photo_bytes: 원본 사진 바이트 데이터 (Flux Kontext용)
-        style_id: 스타일 ID
-        cut_prompt: {"id": 1, "category": "expression", "prompt": "...", "label_ko": "..."}
-        custom_prompt: 커스텀 스타일 프롬프트
-
-    Returns:
-        생성된 이미지의 fal.ai URL 또는 None
-    """
-    from app.services.image_generator import get_generator
-
-    settings = get_settings()
-    prompt = build_generation_prompt(style_id, cut_prompt["prompt"], custom_prompt)
-
-    try:
-        if style_id == "original":
-            # ── 경로 A: Flux Kontext (img2img) — 24컷 전용 호출 ──
-            # anti-text 없이, 포즈/표정 지시만 순수하게 전달
-            if not settings.fal_key:
-                raise ValueError("FAL_KEY가 설정되지 않았습니다.")
-            if not photo_bytes:
-                raise ValueError("original 스타일은 사진 바이트 데이터가 필요합니다.")
-
-            result = await _generate_cut_kontext(
-                prompt=prompt,
-                ref_bytes=photo_bytes,
-                fal_key=settings.fal_key,
-            )
-
-        else:
-            # ── 경로 B: 기존 이미지 생성 모델 (스타일 변환) ──
-            if settings.openai_api_key:
-                generator = get_generator("gpt-image-1-mini", settings.openai_api_key)
-            elif settings.gemini_api_key:
-                generator = get_generator("nano-banana", settings.gemini_api_key)
-            else:
-                raise ValueError("이미지 생성 API 키가 설정되지 않았습니다. (OpenAI 또는 Gemini)")
-
-            if photo_bytes:
-                result = await generator.generate(
-                    prompt=prompt,
-                    reference_images=[photo_bytes],
-                    size="1024x1024",
-                )
-            else:
-                result = await generator.generate(
-                    prompt=prompt,
-                    size="1024x1024",
-                )
-
-        # 결과가 bytes이면 로컬에 저장하고 URL 반환
-        if isinstance(result, bytes):
-            return await _save_and_get_url(result, cut_prompt["id"])
-        elif isinstance(result, str):
-            return result
-        else:
-            return None
-
-    except Exception as e:
-        logger.error(f"컷 #{cut_prompt['id']} ({cut_prompt['label_ko']}) 생성 실패: {e}")
-        return None
-
-
-async def _save_and_get_url(image_bytes: bytes, cut_id: int) -> str:
-    """이미지 바이트를 로컬에 저장하고 서빙 URL 반환"""
-    save_dir = os.path.join("trained_characters", "_temp_cuts")
-    os.makedirs(save_dir, exist_ok=True)
-
-    filename = f"cut_{cut_id:02d}_{uuid.uuid4().hex[:8]}.png"
-    filepath = os.path.join(save_dir, filename)
-
-    with open(filepath, "wb") as f:
-        f.write(image_bytes)
-
-    # Cloudinary에 업로드 시도
-    try:
-        from app.services.cloudinary_service import get_cloudinary_service
-        from PIL import Image
-        from io import BytesIO
-
-        service = get_cloudinary_service()
-        if service.cloud_name:
-            img = Image.open(BytesIO(image_bytes))
-            url = await service.upload_image(img, f"cut_{cut_id:02d}")
-            if url:
-                return url
-    except Exception as e:
-        logger.warning(f"Cloudinary 업로드 실패, 로컬 URL 사용: {e}")
-
-    # Cloudinary 실패 시 로컬 서빙 URL
-    return f"/trained_characters/_temp_cuts/{filename}"
-
-
-async def generate_24_cuts(
-    session_id: str,
-    callback=None,
-) -> dict:
-    """24컷 자동 생성 (비동기)
-
-    Args:
-        session_id: 생성 세션 ID
-        callback: 진행 상태 콜백 (optional)
-
-    Returns:
-        {"status": "completed"/"failed", "generated_cuts": [...]}
-    """
-    session = get_session(session_id)
-    if not session:
-        return {"status": "failed", "error": "세션을 찾을 수 없습니다."}
-
-    photo_url = session["photo_url"]
-    style_id = session.get("style_id", "original")
-    custom_prompt = session.get("custom_prompt")
-
-    # 원본 사진 다운로드 (Flux Kontext용)
-    photo_bytes = await _download_photo(photo_url, session.get("photo_local_path", ""))
-
-    cuts_prompts = _load_cuts_prompts()
-    session["status"] = "generating"
-    session["generated_cuts"] = []
-    save_session(session)
-
-    generated = []
-    for i, cut in enumerate(cuts_prompts):
-        try:
-            url = await generate_single_cut(
-                photo_url=photo_url,
-                photo_bytes=photo_bytes,
-                style_id=style_id,
-                cut_prompt=cut,
-                custom_prompt=custom_prompt,
-            )
-
-            cut_result = {
-                "id": cut["id"],
-                "category": cut["category"],
-                "label_ko": cut["label_ko"],
-                "url": url or "",
-                "selected": url is not None,  # 생성 성공하면 기본 선택
-            }
-            generated.append(cut_result)
-
-            # 세션 업데이트
-            session["generated_cuts"] = generated
-            save_session(session)
-
-            logger.info(f"[24컷] {i + 1}/{len(cuts_prompts)} 완료: {cut['label_ko']} {'✓' if url else '✗'}")
-
-        except Exception as e:
-            logger.error(f"[24컷] 컷 #{cut['id']} 생성 중 오류: {e}")
-            generated.append({
-                "id": cut["id"],
-                "category": cut["category"],
-                "label_ko": cut["label_ko"],
-                "url": "",
-                "selected": False,
-            })
-
-    # 완료 처리
-    success_count = sum(1 for c in generated if c["url"])
-    session["status"] = "completed" if success_count > 0 else "failed"
-    session["generated_cuts"] = generated
-    # 성공한 컷만 기본 선택
-    session["selected_cut_ids"] = [c["id"] for c in generated if c["selected"]]
-    save_session(session)
-
-    logger.info(f"[24컷] 생성 완료: {success_count}/{len(cuts_prompts)}장 성공")
-
-    return {
-        "status": session["status"],
-        "generated_cuts": generated,
-        "success_count": success_count,
-        "total_cuts": len(cuts_prompts),
-    }
-
-
-async def _download_photo(photo_url: str, local_path: str = "") -> Optional[bytes]:
-    """사진 다운로드 (URL 또는 로컬 경로)"""
-    # 로컬 경로가 있으면 직접 읽기
-    if local_path and os.path.exists(local_path):
-        with open(local_path, "rb") as f:
-            return f.read()
-
-    # 로컬 서빙 URL이면 로컬 파일 읽기
-    if photo_url.startswith("/"):
-        abs_path = photo_url.lstrip("/")
-        if os.path.exists(abs_path):
-            with open(abs_path, "rb") as f:
-                return f.read()
-
-    # 외부 URL이면 다운로드
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(photo_url)
-            resp.raise_for_status()
-            return resp.content
-    except Exception as e:
-        logger.error(f"사진 다운로드 실패: {e}")
-        return None
 
 
 async def generate_test_images(
@@ -439,28 +103,33 @@ async def generate_test_images(
     return test_urls
 
 
-def estimate_cost(style_id: str, cuts_count: int = 24) -> dict:
-    """비용 추정
+async def _save_and_get_url(image_bytes: bytes, cut_id: int) -> str:
+    """이미지 바이트를 로컬에 저장하고 서빙 URL 반환"""
+    save_dir = os.path.join("trained_characters", "_temp_cuts")
+    os.makedirs(save_dir, exist_ok=True)
 
-    Returns:
-        {
-            "generation_cost": float,  # 24컷 생성 비용
-            "training_cost": float,    # LoRA 학습 비용
-            "test_cost": float,        # 테스트 이미지 비용
-            "total_cost": float,       # 총 비용
-        }
-    """
-    gen_cost = COST_PER_IMAGE_GENERATION * cuts_count
-    train_cost = COST_PER_LORA_TRAINING
-    test_cost = COST_PER_LORA_INFERENCE * 3
+    filename = f"cut_{cut_id:02d}_{uuid.uuid4().hex[:8]}.png"
+    filepath = os.path.join(save_dir, filename)
 
-    return {
-        "generation_cost": round(gen_cost, 2),
-        "training_cost": round(train_cost, 2),
-        "test_cost": round(test_cost, 2),
-        "total_cost": round(gen_cost + train_cost + test_cost, 2),
-        "currency": "USD",
-    }
+    with open(filepath, "wb") as f:
+        f.write(image_bytes)
+
+    # Cloudinary에 업로드 시도
+    try:
+        from app.services.cloudinary_service import get_cloudinary_service
+        from PIL import Image
+        from io import BytesIO
+
+        service = get_cloudinary_service()
+        if service.cloud_name:
+            img = Image.open(BytesIO(image_bytes))
+            url = await service.upload_image(img, f"cut_{cut_id:02d}")
+            if url:
+                return url
+    except Exception as e:
+        logger.warning(f"Cloudinary 업로드 실패, 로컬 URL 사용: {e}")
+
+    return f"/trained_characters/_temp_cuts/{filename}"
 
 
 def generate_trigger_word(name: str, existing_words: List[str] = None) -> str:
@@ -476,13 +145,9 @@ def generate_trigger_word(name: str, existing_words: List[str] = None) -> str:
     if existing_words is None:
         existing_words = []
 
-    # 한글 → 로마자 변환 (간단한 매핑)
     romanized = _romanize_korean(name)
-
-    # sks_ 접두사 추가
     base_word = f"sks_{romanized}"
 
-    # 중복 체크
     word = base_word
     counter = 2
     while word in existing_words:
@@ -493,22 +158,16 @@ def generate_trigger_word(name: str, existing_words: List[str] = None) -> str:
 
 
 def _romanize_korean(text: str) -> str:
-    """간단한 한글 → 영문 변환 (로마자 표기법 간략)
-
-    완벽한 로마자 변환이 아닌, 트리거 워드로 사용 가능한 수준의 변환.
-    """
-    # 한글 자모 초성
+    """간단한 한글 → 영문 변환 (트리거 워드용)"""
     CHOSUNG = [
         'g', 'kk', 'n', 'd', 'tt', 'r', 'm', 'b', 'pp',
         's', 'ss', '', 'j', 'jj', 'ch', 'k', 't', 'p', 'h'
     ]
-    # 한글 자모 중성
     JUNGSUNG = [
         'a', 'ae', 'ya', 'yae', 'eo', 'e', 'yeo', 'ye',
         'o', 'wa', 'wae', 'oe', 'yo', 'u', 'wo', 'we',
         'wi', 'yu', 'eu', 'ui', 'i'
     ]
-    # 한글 자모 종성
     JONGSUNG = [
         '', 'k', 'k', 'k', 'n', 'n', 'n', 't',
         'l', 'l', 'l', 'l', 'l', 'l', 'l', 'l',
@@ -520,7 +179,6 @@ def _romanize_korean(text: str) -> str:
     for char in text:
         code = ord(char)
         if 0xAC00 <= code <= 0xD7A3:
-            # 한글 음절 분리
             offset = code - 0xAC00
             cho = offset // (21 * 28)
             jung = (offset % (21 * 28)) // 28
@@ -530,10 +188,8 @@ def _romanize_korean(text: str) -> str:
             result.append(JONGSUNG[jong])
         elif char.isascii() and char.isalnum():
             result.append(char.lower())
-        # 그 외 문자는 무시
 
     romanized = "".join(result)
-    # 빈 문자열 방지
     if not romanized:
         romanized = "char"
     return romanized

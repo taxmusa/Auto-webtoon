@@ -126,6 +126,7 @@ class GenerateImagesRequest(BaseModel):
     # Style System 2.0
     character_style_id: Optional[str] = None
     background_style_id: Optional[str] = None
+    trained_character_id: Optional[str] = None  # LoRA 학습 캐릭터 ID
     manual_overrides: Optional[dict] = None
 
 
@@ -133,6 +134,7 @@ class GeneratePreviewRequest(BaseModel):
     session_id: str
     character_style_id: Optional[str] = None
     background_style_id: Optional[str] = None
+    trained_character_id: Optional[str] = None  # LoRA 학습 캐릭터 ID
     sub_style: Optional[str] = None # Added for compatibility
     manual_overrides: Optional[dict] = None # ManualPromptOverrides
     model: str = "gpt-image-1-mini"
@@ -312,76 +314,119 @@ async def generate_preview(request: GeneratePreviewRequest):
     """스타일 미리보기 생성 (1장)"""
     session = sessions.get(request.session_id)
     if not session:
-        # If session is invalid, we might want to return 404, 
-        # but since we fixed auto-creation, this should be rare.
-        # But if session exists and story is None, we should proceed.
         raise HTTPException(status_code=404, detail="Session not found")
 
     try:
-        # Load styles
-        char_style = get_character_style(request.character_style_id) if request.character_style_id else None
-        bg_style = get_background_style(request.background_style_id) if request.background_style_id else None
-        
-        # Manual overrides
-        overrides = None
-        if request.manual_overrides:
-            overrides = ManualPromptOverrides(**request.manual_overrides)
+        # ── LoRA 학습 캐릭터 정보 로드 ──
+        lora_url = ""
+        trigger_word = ""
+        trained_char = None
+        if request.trained_character_id:
+            from app.services import fal_service
+            trained_char = fal_service.load_character(request.trained_character_id)
+            if trained_char and trained_char.get("status") == "completed":
+                lora_url = trained_char.get("lora_url", "") or trained_char.get("lora_weights_url", "")
+                trigger_word = trained_char.get("trigger_word", "")
+                logger.info(f"[PREVIEW] LoRA 캐릭터 로드: {trained_char.get('name')}, trigger={trigger_word}")
+            else:
+                logger.warning(f"[PREVIEW] 학습 캐릭터를 찾을 수 없거나 미완료: {request.trained_character_id}")
 
-        # Use first scene or placeholder
-        # Modified: Handle case where session.story is None (e.g. preview before story generation)
-        if session.story and session.story.scenes:
-            target_scene = session.story.scenes[0]
-            characters = session.story.characters
-        else:
-            target_scene = Scene(
-                scene_number=1, 
-                scene_description="A generic scene for style preview. A character standing in a simple background.", 
-                dialogues=[],
-                image_prompt="A character standing in a simple background."
+        # ══════════════════════════════════════════
+        # LoRA 학습 캐릭터 전용 빠른 경로
+        # ══════════════════════════════════════════
+        if lora_url:
+            from app.services.prompt_rules import build_final_prompt
+            
+            # 사용자가 입력한 추가 프롬프트 (style_prompt textarea)
+            user_prompt = ""
+            if request.manual_overrides:
+                user_prompt = request.manual_overrides.get("style_prompt", "").strip()
+            
+            # LoRA 미리보기도 마스터 규칙 적용 (텍스트 금지, 일관성 유지)
+            preview_scene = "character portrait, simple background, clean composition"
+            prompt = build_final_prompt(
+                scene_description=preview_scene,
+                trigger_word=trigger_word,
+                style_prompt=user_prompt,
+                is_lora=True,
             )
-            characters = []
-        
-        # Build Prompt
-        prompt = build_styled_prompt(
-            scene=target_scene,
-            characters=characters,
-            character_style=char_style,
-            background_style=bg_style,
-            manual_overrides=overrides,
-            sub_style_name=request.sub_style
-        )
-        
-        # ★ Flux 모델 선택 시 프롬프트 최적화 적용
-        #   (미리보기에서도 실제 생성과 동일한 최적화를 적용해야 예측 가능)
-        is_flux = "flux" in (request.model or "").lower()
-        if is_flux:
-            from app.services.prompt_builder import optimize_for_flux_kontext
-            prompt = optimize_for_flux_kontext(
-                prompt,
-                scene_description=target_scene.scene_description,
-                is_reference=False,
-                characters=characters
-            )
-            logger.info(f"[PREVIEW] Flux 최적화 적용됨 → {len(prompt)}자")
-        
-        # Select generator — 모델별 API 키 자동 선택
-        api_key = _resolve_api_key(request.model)
-        generator = get_generator(request.model, api_key)
+            
+            api_key = _resolve_api_key("flux-lora")
+            generator = get_generator("flux-lora", api_key,
+                                      lora_url=lora_url, trigger_word="")  # trigger는 이미 prompt에 포함
 
-        # Generate single image
-        print(f"[PREVIEW] model={request.model}, prompt_len={len(prompt)}자, api_key={'SET' if api_key else 'MISSING'}")
-        logger.info(f"미리보기 생성 시작 (model={request.model}, prompt_len={len(prompt)}자)")
-        
-        # Flux 모델은 seed도 적용
-        seed = None
-        if is_flux:
             import random
             seed = random.randint(1, 2**31 - 1)
-        
-        image_data = await asyncio.wait_for(
-            generator.generate(prompt, size="1024x1024", quality="standard", seed=seed),
-            timeout=95.0  # IMAGE_GENERATION_TIMEOUT(90) + 여유
-        )
+
+            logger.info(f"[PREVIEW-LoRA] 빠른 경로: prompt='{prompt}', lora={lora_url[:60]}...")
+            print(f"[PREVIEW-LoRA] prompt='{prompt}', seed={seed}")
+
+            image_data = await asyncio.wait_for(
+                generator.generate(prompt, size="1024x1024", quality="standard", seed=seed),
+                timeout=30.0  # LoRA 생성은 빠름 (5~10초)
+            )
+
+        else:
+            # ══════════════════════════════════════════
+            # 일반 스타일 경로 (기존 로직)
+            # ══════════════════════════════════════════
+            char_style = get_character_style(request.character_style_id) if request.character_style_id else None
+            bg_style = get_background_style(request.background_style_id) if request.background_style_id else None
+
+            overrides_obj = None
+            if request.manual_overrides:
+                overrides_obj = ManualPromptOverrides(**request.manual_overrides)
+
+            # Use first scene or placeholder
+            if session.story and session.story.scenes:
+                target_scene = session.story.scenes[0]
+                characters = session.story.characters
+            else:
+                target_scene = Scene(
+                    scene_number=1, 
+                    scene_description="A generic scene for style preview. A character standing in a simple background.", 
+                    dialogues=[],
+                    image_prompt="A character standing in a simple background."
+                )
+                characters = []
+            
+            # Build Prompt
+            prompt = build_styled_prompt(
+                scene=target_scene,
+                characters=characters,
+                character_style=char_style,
+                background_style=bg_style,
+                manual_overrides=overrides_obj,
+                sub_style_name=request.sub_style
+            )
+            
+            # ★ Flux 모델 선택 시 프롬프트 최적화 적용
+            is_flux = "flux" in (request.model or "").lower()
+            if is_flux:
+                from app.services.prompt_builder import optimize_for_flux_kontext
+                prompt = optimize_for_flux_kontext(
+                    prompt,
+                    scene_description=target_scene.scene_description,
+                    is_reference=False,
+                    characters=characters
+                )
+                logger.info(f"[PREVIEW] Flux 최적화 적용됨 → {len(prompt)}자")
+            
+            api_key = _resolve_api_key(request.model)
+            generator = get_generator(request.model, api_key)
+
+            print(f"[PREVIEW] model={request.model}, prompt_len={len(prompt)}자, api_key={'SET' if api_key else 'MISSING'}")
+            logger.info(f"미리보기 생성 시작 (model={request.model}, prompt_len={len(prompt)}자)")
+            
+            seed = None
+            if is_flux:
+                import random
+                seed = random.randint(1, 2**31 - 1)
+            
+            image_data = await asyncio.wait_for(
+                generator.generate(prompt, size="1024x1024", quality="standard", seed=seed),
+                timeout=95.0
+            )
 
         import base64
         if isinstance(image_data, bytes):
@@ -419,6 +464,164 @@ async def generate_images(request: GenerateImagesRequest):
     session.settings.image.sub_style = request.sub_style
     if request.manual_overrides:
         session.settings.image.manual_overrides = ManualPromptOverrides(**request.manual_overrides)
+
+    import asyncio
+    import random
+
+    # ── LoRA 학습 캐릭터 정보 로드 ──
+    lora_url = ""
+    trigger_word = ""
+    is_lora = False
+    if request.trained_character_id:
+        from app.services import fal_service
+        trained_char = fal_service.load_character(request.trained_character_id)
+        if trained_char and trained_char.get("status") == "completed":
+            lora_url = trained_char.get("lora_url", "") or trained_char.get("lora_weights_url", "")
+            trigger_word = trained_char.get("trigger_word", "")
+            is_lora = bool(lora_url)
+            logger.info(f"[GENERATE] LoRA 캐릭터 로드: {trained_char.get('name')}, "
+                        f"trigger={trigger_word}, lora_url={lora_url[:60]}...")
+        else:
+            logger.warning(f"[GENERATE] 학습 캐릭터를 찾을 수 없거나 미완료: {request.trained_character_id}")
+
+    # ══════════════════════════════════════════════════════
+    # LoRA 전용 경로: LoRA 학습 캐릭터로 이미지 일괄 생성
+    # ══════════════════════════════════════════════════════
+    if is_lora:
+        logger.info(f"[GENERATE-LoRA] LoRA 전용 경로 시작 — trigger_word='{trigger_word}'")
+        
+        # LoRA 전용 제너레이터
+        api_key = _resolve_api_key("flux-lora")
+        generator = get_generator("flux-lora", api_key, lora_url=lora_url, trigger_word="")
+        
+        # 세션 seed
+        if session.settings.image.flux_seed:
+            base_seed = session.settings.image.flux_seed
+        else:
+            base_seed = random.randint(1, 2**31 - 100000)
+            session.settings.image.flux_seed = base_seed
+        
+        # 씬 설명을 영어로 번역
+        if session.story and session.story.scenes:
+            await _translate_scenes_to_english(session.story.scenes)
+
+        # 사용자가 입력한 추가 스타일 프롬프트
+        user_style_prompt = ""
+        bg_prompt = ""
+        if request.manual_overrides:
+            user_style_prompt = request.manual_overrides.get("style_prompt", "")
+            bg_prompt = request.manual_overrides.get("background_style_prompt", "")
+
+        from app.models.models import GeneratedImage
+        session.images = []
+        stop_signals[request.session_id] = False
+
+        # LoRA 캐릭터 앵커 — 모든 씬에 동일한 캐릭터 설명 삽입
+        from app.services.prompt_rules import build_final_prompt, build_character_anchor
+        char_anchor = ""
+        if session.story and hasattr(session.story, 'characters') and session.story.characters:
+            char_anchor = build_character_anchor(session.story.characters)
+        
+        for scene in session.story.scenes:
+            if stop_signals.get(request.session_id, False):
+                logger.info(f"[STOP] 세션 {request.session_id} LoRA 이미지 생성 중단됨 "
+                            f"({len(session.images)}/{len(session.story.scenes)} 완료)")
+                break
+            
+            # seed 간격을 줄여 스타일 일관성 향상 (1000→100)
+            scene_seed = base_seed + scene.scene_number * 100
+            
+            # 씬 설명 가져오기
+            scene_desc = getattr(scene, 'scene_description_en', '') or scene.scene_description
+            
+            # 마스터 규칙이 적용된 최종 프롬프트 생성
+            prompt = build_final_prompt(
+                scene_description=scene_desc,
+                trigger_word=trigger_word,
+                style_prompt=user_style_prompt,
+                bg_prompt=bg_prompt,
+                character_anchor=char_anchor,
+                is_lora=True,
+            )
+            
+            size = "1024x1536" if request.aspect_ratio in ("4:5", "9:16") else "1024x1024"
+            
+            logger.info(f"[GENERATE-LoRA] 씬 {scene.scene_number}/{len(session.story.scenes)} — "
+                         f"seed={scene_seed}, prompt='{prompt[:80]}...'")
+            
+            try:
+                image_data = await asyncio.wait_for(
+                    generator.generate(prompt, size=size, seed=scene_seed),
+                    timeout=60.0
+                )
+                
+                filename = f"scene_{scene.scene_number}_{uuid.uuid4().hex[:6]}.png"
+                filepath = os.path.join("output", filename)
+                os.makedirs("output", exist_ok=True)
+                
+                if isinstance(image_data, bytes):
+                    with open(filepath, "wb") as f:
+                        f.write(image_data)
+                    
+                    try:
+                        from app.services.pillow_service import get_pillow_service
+                        from PIL import Image
+                        from io import BytesIO
+                        pillow = get_pillow_service()
+                        img_pil = Image.open(filepath)
+                        img_pil = pillow.ensure_top_margin(img_pil, margin_ratio=0.25)
+                        img_pil.save(filepath, "PNG")
+                        buf = BytesIO()
+                        img_pil.save(buf, format="PNG")
+                        image_data = buf.getvalue()
+                    except Exception as margin_err:
+                        logger.warning(f"여백 후처리 실패 (씬 {scene.scene_number}): {margin_err}")
+                    
+                    img = GeneratedImage(
+                        scene_number=scene.scene_number,
+                        prompt_used=prompt,
+                        local_path=filepath,
+                        status="generated"
+                    )
+                else:
+                    img = GeneratedImage(
+                        scene_number=scene.scene_number,
+                        prompt_used=prompt,
+                        local_path="",
+                        status="error"
+                    )
+                
+            except asyncio.TimeoutError:
+                logger.error(f"[GENERATE-LoRA] 씬 {scene.scene_number} 시간 초과 (60초)")
+                img = GeneratedImage(
+                    scene_number=scene.scene_number,
+                    prompt_used=prompt,
+                    local_path="",
+                    status="error"
+                )
+            except Exception as e:
+                logger.error(f"[GENERATE-LoRA] 씬 {scene.scene_number} 오류: {e}")
+                img = GeneratedImage(
+                    scene_number=scene.scene_number,
+                    prompt_used=prompt,
+                    local_path="",
+                    status="error"
+                )
+            
+            session.images.append(img)
+        
+        stop_signals.pop(request.session_id, None)
+        session.state = WorkflowState.REVIEWING_IMAGES
+        
+        return {
+            "session_id": session.session_id,
+            "state": session.state.value,
+            "images": [img.model_dump() for img in session.images]
+        }
+
+    # ══════════════════════════════════════════════════════
+    # 일반 스타일 경로 (LoRA가 아닌 경우)
+    # ══════════════════════════════════════════════════════
         
     # Load styles
     char_style = get_character_style(request.character_style_id) if request.character_style_id else None
@@ -434,8 +637,6 @@ async def generate_images(request: GenerateImagesRequest):
     is_flux_kontext = "flux-kontext" in request.model
     
     generated_images = []
-    import asyncio
-    import random
     
     # Flux 모델: 세션당 기본 seed 생성 (캐릭터 일관성 + 씬별 변형)
     is_flux = "flux" in request.model
@@ -532,11 +733,6 @@ async def generate_images(request: GenerateImagesRequest):
                     is_reference=(ref_image_bytes is not None),
                     characters=session.story.characters
                 )
-            elif "flux-lora" in request.model:
-                from app.services.prompt_builder import optimize_for_flux_lora
-                trigger = getattr(request, 'trigger_word', '') or ''
-                prompt = optimize_for_flux_lora(prompt, trigger_word=trigger,
-                                                characters=session.story.characters)
             
             size = "1024x1536" if request.aspect_ratio in ("4:5", "9:16") else "1024x1024"
             
@@ -1730,6 +1926,39 @@ async def update_bubble_layer(session_id: str, scene_num: int, request: UpdateBu
     return {"success": True, "scene_number": scene_num}
 
 
+def _draw_wrapped_text(draw, text, font, x, y, max_width, fill="black", align="left"):
+    """텍스트를 지정 폭에 맞게 자동 줄바꿈하여 그리기"""
+    words = list(text)  # 한글은 글자 단위로 줄바꿈
+    lines = []
+    current_line = ""
+    
+    for char in words:
+        if char == '\n':
+            lines.append(current_line)
+            current_line = ""
+            continue
+        test_line = current_line + char
+        bbox = draw.textbbox((0, 0), test_line, font=font)
+        if bbox[2] - bbox[0] > max_width and current_line:
+            lines.append(current_line)
+            current_line = char
+        else:
+            current_line = test_line
+    if current_line:
+        lines.append(current_line)
+    
+    line_y = y
+    for line in lines:
+        if align == "center":
+            bbox = draw.textbbox((0, 0), line, font=font)
+            line_w = bbox[2] - bbox[0]
+            draw.text((x + (max_width - line_w) // 2, line_y), line, fill=fill, font=font)
+        else:
+            draw.text((x, line_y), line, fill=fill, font=font)
+        bbox = draw.textbbox((0, 0), line, font=font)
+        line_y += (bbox[3] - bbox[1]) + 4
+
+
 @router.post("/bubble-layers/{session_id}/export")
 async def export_with_bubbles(session_id: str):
     """말풍선이 합성된 최종 이미지 내보내기 (Pillow 기반)
@@ -1770,70 +1999,91 @@ async def export_with_bubbles(session_id: str):
                 break
         
         if layer and layer.show_all:
-            # Pillow로 말풍선 합성
+            # Pillow로 말풍선 합성 (자유 위치 x,y,w,h 퍼센트 기반)
             overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
             draw = ImageDraw.Draw(overlay)
             
-            # 9-Grid 위치 → 픽셀 좌표 변환
-            w, h = img.size
-            pos_map = {
-                "top-left":      (int(w*0.05), int(h*0.03)),
-                "top-center":    (int(w*0.30), int(h*0.03)),
-                "top-right":     (int(w*0.55), int(h*0.03)),
-                "middle-left":   (int(w*0.05), int(h*0.35)),
-                "middle-center": (int(w*0.30), int(h*0.35)),
-                "middle-right":  (int(w*0.55), int(h*0.35)),
-                "bottom-left":   (int(w*0.05), int(h*0.70)),
-                "bottom-center": (int(w*0.20), int(h*0.78)),
-                "bottom-right":  (int(w*0.55), int(h*0.70)),
+            img_w, img_h = img.size
+            
+            # 9-Grid → 퍼센트 변환 (호환용)
+            pos_to_pct = {
+                "top-left": (5, 3), "top-center": (25, 3), "top-right": (55, 3),
+                "middle-left": (5, 35), "middle-center": (25, 35), "middle-right": (55, 35),
+                "bottom-left": (5, 65), "bottom-center": (15, 78), "bottom-right": (55, 65),
             }
             
             for bubble in layer.bubbles:
                 if not bubble.visible or not bubble.text:
                     continue
                 
-                xy = pos_map.get(bubble.position, (int(w*0.3), int(h*0.03)))
+                # 자유 위치 (퍼센트) → 픽셀
+                bx_pct = getattr(bubble, 'x', None)
+                by_pct = getattr(bubble, 'y', None)
+                bw_pct = getattr(bubble, 'w', None)
+                bh_pct = getattr(bubble, 'h', None)
                 
-                # 폰트 로드
+                # 기존 9-Grid 데이터 호환
+                if bx_pct is None or by_pct is None:
+                    fallback = pos_to_pct.get(bubble.position, (25, 10))
+                    bx_pct = fallback[0]
+                    by_pct = fallback[1]
+                if bw_pct is None:
+                    bw_pct = 90 if bubble.type == "narration" else 40
+                if bh_pct is None:
+                    bh_pct = 10 if bubble.type == "narration" else 16
+                
+                bx1 = int(img_w * bx_pct / 100)
+                by1 = int(img_h * by_pct / 100)
+                bx2 = int(img_w * (bx_pct + bw_pct) / 100)
+                by2 = int(img_h * (by_pct + bh_pct) / 100)
+                
+                # 범위 보정
+                bx2 = min(bx2, img_w - 2)
+                by2 = min(by2, img_h - 2)
+                
+                # 폰트 로드 (이미지 해상도 대비 적절한 크기)
+                font_size_px = max(12, int(bubble.font_size * img_w / 480))
                 try:
-                    font = ImageFont.truetype("C:/Windows/Fonts/malgun.ttf", bubble.font_size * 2)
+                    font = ImageFont.truetype("C:/Windows/Fonts/malgun.ttf", font_size_px)
                 except:
                     font = ImageFont.load_default()
                 
-                # 텍스트 영역 계산
-                bbox = draw.textbbox((0, 0), bubble.text, font=font)
-                tw = bbox[2] - bbox[0]
-                th = bbox[3] - bbox[1]
-                padding = 20
-                
-                # 말풍선 배경
-                bx1, by1 = xy[0], xy[1]
-                bx2 = min(bx1 + tw + padding*2, w - 10)
-                by2 = by1 + th + padding*2
+                padding_x = max(8, int((bx2 - bx1) * 0.08))
+                padding_y = max(6, int((by2 - by1) * 0.08))
                 
                 if bubble.type == "narration":
-                    # 나레이션: 하단 전체 폭 반투명 바
-                    bx1 = 0
-                    bx2 = w
-                    by1 = int(h * 0.85)
-                    by2 = h
+                    # 나레이션: 반투명 배경 바
                     draw.rectangle([bx1, by1, bx2, by2], fill=(0, 0, 0, 180))
-                    draw.text((bx1 + 20, by1 + 10), bubble.text, fill="white", font=font)
+                    # 텍스트 자동 줄바꿈 + 중앙 배치
+                    _draw_wrapped_text(draw, bubble.text, font,
+                                       bx1 + padding_x, by1 + padding_y,
+                                       bx2 - bx1 - padding_x * 2,
+                                       fill="white", align="center")
                 else:
-                    # 대사: 둥근 사각형 말풍선
+                    # 대사: 둥근 사각형
+                    bg_color = bubble.bg_color or "#FFFFFF"
+                    # hex → RGBA
+                    try:
+                        r, g, b = int(bg_color[1:3], 16), int(bg_color[3:5], 16), int(bg_color[5:7], 16)
+                        fill_color = (r, g, b, int((bubble.opacity or 0.95) * 255))
+                    except:
+                        fill_color = (255, 255, 255, 242)
+                    
+                    shape = getattr(bubble, 'shape', 'round') or 'round'
+                    radius = 15 if shape in ('round', 'thought') else (4 if shape == 'shout' else 6)
+                    border_w = 3 if shape == 'shout' else 2
+                    
                     draw.rounded_rectangle(
                         [bx1, by1, bx2, by2],
-                        radius=15,
-                        fill="white",
-                        outline=bubble.border_color,
-                        width=2
+                        radius=radius,
+                        fill=fill_color,
+                        outline=bubble.border_color or "#333333",
+                        width=border_w
                     )
-                    draw.text(
-                        (bx1 + padding, by1 + padding),
-                        bubble.text,
-                        fill=bubble.text_color,
-                        font=font
-                    )
+                    _draw_wrapped_text(draw, bubble.text, font,
+                                       bx1 + padding_x, by1 + padding_y,
+                                       bx2 - bx1 - padding_x * 2,
+                                       fill=bubble.text_color or "#000000")
             
             img = Image.alpha_composite(img, overlay)
         

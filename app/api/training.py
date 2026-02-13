@@ -4,10 +4,10 @@ LoRA 학습 API 라우터
 - 학습 이미지 업로드
 - LoRA 학습 시작/상태 확인
 - 학습된 캐릭터 목록/삭제
-- ★ 자동 학습: 사진 1장 → 스타일 선택 → 24컷 생성 → 선별 → 학습
+- ★ 자동 학습: Grid 이미지 업로드 → 자동 분할 → 이름 입력 → 학습 → 완료
 """
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, HTTPException, UploadFile, File
+from pydantic import BaseModel
 from typing import Optional, List
 import uuid
 import os
@@ -16,12 +16,9 @@ from datetime import datetime
 
 from app.services import fal_service
 from app.services import character_generation_service as char_gen
-from app.models.models import TrainingStatus, LORA_STYLE_LABELS, LORA_STYLE_PROMPTS
+from app.models.models import TrainingStatus
 from app.core.config import (
-    MVP_ACTIVE_STYLES,
     LORA_SCALE_DEFAULT,
-    MIN_SELECTED_CUTS,
-    GENERATION_CUTS_COUNT,
 )
 
 router = APIRouter(prefix="/api/training", tags=["training"])
@@ -29,9 +26,6 @@ logger = logging.getLogger(__name__)
 
 # 진행 중인 학습 작업 추적: character_id → job_info
 active_jobs: dict[str, dict] = {}
-
-# 백그라운드 24컷 생성 작업 추적: session_id → task
-_generation_tasks: dict[str, dict] = {}
 
 TRAINED_DIR = "trained_characters"
 
@@ -56,15 +50,10 @@ class CheckStatusRequest(BaseModel):
     character_id: str
 
 
-class SelectStyleRequest(BaseModel):
+class SplitGridRequest(BaseModel):
     session_id: str
-    style_id: str = "original"
-    custom_prompt: Optional[str] = None
-
-
-class SelectCutsRequest(BaseModel):
-    session_id: str
-    selected_cut_ids: List[int]
+    cols: int = 4
+    rows: int = 6
 
 
 class PrepareAndTrainRequest(BaseModel):
@@ -336,12 +325,15 @@ async def check_status(request: CheckStatusRequest):
 # ★ 자동 학습 워크플로우 (사진 1장 → 24컷 → 학습)
 # ============================================
 
-@router.post("/upload-photo")
-async def upload_photo(file: UploadFile = File(...)):
-    """Step 1: 사진 1장 업로드 → 생성 세션 시작
+@router.post("/upload-grid")
+async def upload_grid(file: UploadFile = File(...)):
+    """Step 1: 24컷 합본 이미지 업로드
+
+    사용자가 나노바나나 등에서 직접 만든 24컷 grid 이미지를 업로드합니다.
+    이후 split-grid API로 자동 분할합니다.
 
     Returns:
-        session_id, photo_url, 스타일 목록, 비용 추정
+        session_id, photo_url, 이미지 크기 정보
     """
     # 파일 유효성 검사
     allowed_types = {"image/jpeg", "image/png", "image/webp"}
@@ -349,13 +341,19 @@ async def upload_photo(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="JPG, PNG, WEBP 파일만 지원합니다.")
 
     content = await file.read()
-    if len(content) > 10 * 1024 * 1024:  # 10MB
-        raise HTTPException(status_code=400, detail="파일 크기가 10MB를 초과합니다.")
+    if len(content) > 20 * 1024 * 1024:  # 20MB (합본 이미지는 크기가 클 수 있음)
+        raise HTTPException(status_code=400, detail="파일 크기가 20MB를 초과합니다.")
+
+    # 이미지 크기 확인
+    from PIL import Image
+    from io import BytesIO
+    img = Image.open(BytesIO(content))
+    img_width, img_height = img.size
 
     # 로컬 저장
     save_dir = os.path.join(TRAINED_DIR, "_uploads")
     os.makedirs(save_dir, exist_ok=True)
-    ext = os.path.splitext(file.filename or "photo.png")[1] or ".png"
+    ext = os.path.splitext(file.filename or "grid.png")[1] or ".png"
     filename = f"{uuid.uuid4().hex[:12]}{ext}"
     filepath = os.path.join(save_dir, filename)
     with open(filepath, "wb") as f:
@@ -363,199 +361,141 @@ async def upload_photo(file: UploadFile = File(...)):
 
     local_url = f"/trained_characters/_uploads/{filename}"
 
-    # Cloudinary 업로드 (공개 URL 확보 - Flux Kontext용)
-    public_url = local_url
-    try:
-        from app.services.cloudinary_service import get_cloudinary_service
-        from PIL import Image
-        from io import BytesIO
-
-        service = get_cloudinary_service()
-        if service.cloud_name:
-            img = Image.open(BytesIO(content))
-            url = await service.upload_image(img, "character_photo")
-            if url:
-                public_url = url
-    except Exception as e:
-        logger.warning(f"Cloudinary 업로드 실패, 로컬 URL 사용: {e}")
-
     # 세션 생성
     session = char_gen.create_session(
-        photo_url=public_url,
+        photo_url=local_url,
         photo_local_path=filepath,
     )
+    session["grid_image_path"] = filepath
+    session["grid_image_url"] = local_url
+    session["image_width"] = img_width
+    session["image_height"] = img_height
+    char_gen.save_session(session)
 
-    # 스타일 목록 + 비용 추정
-    styles = []
-    for sid, label in LORA_STYLE_LABELS.items():
-        styles.append({
-            "id": sid,
-            "label": label,
-            "active": sid in MVP_ACTIVE_STYLES,
-        })
+    # grid 크기 추천 (24 = 4x6, 6x4, 3x8, 8x3)
+    aspect = img_width / img_height
+    if aspect > 1.2:
+        # 가로가 긴 이미지 → 6열 x 4행
+        recommended = {"cols": 6, "rows": 4}
+    elif aspect < 0.8:
+        # 세로가 긴 이미지 → 4열 x 6행
+        recommended = {"cols": 4, "rows": 6}
+    else:
+        # 정사각형에 가까움 → 5열 x 5행 (25컷) 또는 4x6
+        recommended = {"cols": 4, "rows": 6}
 
-    cost = char_gen.estimate_cost("original")
-
-    logger.info(f"[AutoTrain] 사진 업로드 완료: session={session['session_id']}")
+    logger.info(f"[AutoTrain] Grid 이미지 업로드: session={session['session_id']}, size={img_width}x{img_height}")
 
     return {
         "session_id": session["session_id"],
-        "photo_url": public_url,
-        "photo_local_url": local_url,
-        "styles": styles,
-        "estimated_cost": cost,
+        "grid_image_url": local_url,
+        "image_width": img_width,
+        "image_height": img_height,
+        "recommended_grid": recommended,
     }
 
 
-@router.post("/select-style")
-async def select_style(request: SelectStyleRequest):
-    """Step 2: 스타일 선택"""
+@router.post("/split-grid")
+async def split_grid(request: SplitGridRequest):
+    """Step 2: Grid 이미지를 자동 분할하여 개별 컷으로 저장
+
+    Args:
+        session_id: 세션 ID
+        cols: 열 수 (기본 4)
+        rows: 행 수 (기본 6)
+
+    Returns:
+        분할된 각 컷의 URL 목록
+    """
+    from PIL import Image
+    from io import BytesIO
+
     session = char_gen.get_session(request.session_id)
     if not session:
         raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
 
-    # 활성 스타일만 허용
-    if request.style_id not in MVP_ACTIVE_STYLES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"현재 지원하지 않는 스타일입니다. 지원: {MVP_ACTIVE_STYLES}"
-        )
+    grid_path = session.get("grid_image_path")
+    if not grid_path or not os.path.exists(grid_path):
+        raise HTTPException(status_code=400, detail="Grid 이미지를 찾을 수 없습니다. 먼저 이미지를 업로드해주세요.")
 
-    # 커스텀 스타일은 프롬프트 필수
-    if request.style_id == "custom" and not request.custom_prompt:
-        raise HTTPException(
-            status_code=400,
-            detail="커스텀 스타일은 프롬프트를 입력해야 합니다."
-        )
+    cols = request.cols
+    rows = request.rows
+    total_cuts = cols * rows
 
-    session["style_id"] = request.style_id
-    session["custom_prompt"] = request.custom_prompt
+    # 이미지 열기
+    img = Image.open(grid_path)
+    img_w, img_h = img.size
+    cut_w = img_w // cols
+    cut_h = img_h // rows
+
+    # 분할 저장 디렉토리
+    save_dir = os.path.join(TRAINED_DIR, "_temp_cuts", request.session_id[:12])
+    os.makedirs(save_dir, exist_ok=True)
+
+    cuts = []
+    cut_urls = []
+    for r in range(rows):
+        for c in range(cols):
+            idx = r * cols + c + 1
+            box = (c * cut_w, r * cut_h, (c + 1) * cut_w, (r + 1) * cut_h)
+            cut_img = img.crop(box)
+
+            # 학습에 적합한 크기로 리사이즈 (512x512 이상 권장)
+            if cut_w < 512 or cut_h < 512:
+                cut_img = cut_img.resize((max(cut_w, 512), max(cut_h, 512)), Image.LANCZOS)
+
+            cut_filename = f"cut_{idx:02d}.png"
+            cut_filepath = os.path.join(save_dir, cut_filename)
+            cut_img.save(cut_filepath, "PNG")
+
+            cut_url = f"/trained_characters/_temp_cuts/{request.session_id[:12]}/{cut_filename}"
+            cuts.append({
+                "id": idx,
+                "url": cut_url,
+                "selected": True,  # 기본 전체 선택
+            })
+            cut_urls.append(cut_url)
+
+    # 세션 업데이트
+    session["generated_cuts"] = cuts
+    session["selected_cut_ids"] = list(range(1, total_cuts + 1))
+    session["grid_cols"] = cols
+    session["grid_rows"] = rows
+    session["total_cuts"] = total_cuts
+    session["status"] = "split_completed"
     char_gen.save_session(session)
 
-    cost = char_gen.estimate_cost(request.style_id)
+    logger.info(f"[AutoTrain] Grid 분할 완료: {cols}x{rows}={total_cuts}컷, session={request.session_id}")
 
     return {
         "session_id": request.session_id,
-        "selected_style": request.style_id,
-        "style_label": LORA_STYLE_LABELS.get(request.style_id, ""),
-        "estimated_cost": cost,
-    }
-
-
-@router.post("/generate-24-cuts")
-async def generate_24_cuts(
-    session_id: str = Form(...),
-    background_tasks: BackgroundTasks = None,
-):
-    """Step 3: 24컷 자동 생성 시작 (백그라운드)"""
-    session = char_gen.get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
-
-    if session.get("status") == "generating":
-        return {
-            "session_id": session_id,
-            "status": "already_generating",
-            "message": "이미 생성 중입니다.",
-        }
-
-    # 백그라운드에서 생성 시작
-    import asyncio
-
-    async def _bg_generate():
-        try:
-            await char_gen.generate_24_cuts(session_id)
-        except Exception as e:
-            logger.error(f"[AutoTrain] 24컷 생성 실패: {e}")
-            s = char_gen.get_session(session_id)
-            if s:
-                s["status"] = "failed"
-                char_gen.save_session(s)
-
-    task = asyncio.create_task(_bg_generate())
-    _generation_tasks[session_id] = {"task": task, "started_at": datetime.now().isoformat()}
-
-    session["status"] = "generating"
-    char_gen.save_session(session)
-
-    logger.info(f"[AutoTrain] 24컷 생성 시작: session={session_id}")
-
-    return {
-        "session_id": session_id,
-        "status": "generating",
-        "total_cuts": GENERATION_CUTS_COUNT,
-        "message": "24컷 생성이 시작되었습니다.",
-    }
-
-
-@router.get("/generation-status/{session_id}")
-async def get_generation_status(session_id: str):
-    """Step 3: 24컷 생성 진행 상태 (polling)"""
-    session = char_gen.get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
-
-    generated = session.get("generated_cuts", [])
-    total = session.get("total_cuts", GENERATION_CUTS_COUNT)
-    completed = len([c for c in generated if c.get("url")])
-
-    return {
-        "session_id": session_id,
-        "status": session.get("status", "idle"),
-        "completed_cuts": completed,
-        "total_cuts": total,
-        "generated_cuts": generated,
-    }
-
-
-@router.post("/select-cuts")
-async def select_cuts(request: SelectCutsRequest):
-    """Step 4: 이미지 선별 (사용자가 체크박스로 선택)"""
-    session = char_gen.get_session(request.session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
-
-    # 선택된 컷 업데이트
-    session["selected_cut_ids"] = request.selected_cut_ids
-
-    # 생성된 컷의 selected 상태 업데이트
-    for cut in session.get("generated_cuts", []):
-        cut["selected"] = cut["id"] in request.selected_cut_ids
-
-    char_gen.save_session(session)
-
-    selected_count = len(request.selected_cut_ids)
-    meets_minimum = selected_count >= MIN_SELECTED_CUTS
-
-    return {
-        "session_id": request.session_id,
-        "selected_count": selected_count,
-        "meets_minimum": meets_minimum,
-        "min_required": MIN_SELECTED_CUTS,
-        "message": "" if meets_minimum else f"최소 {MIN_SELECTED_CUTS}장 이상을 권장합니다.",
+        "total_cuts": total_cuts,
+        "cols": cols,
+        "rows": rows,
+        "cut_size": f"{cut_w}x{cut_h}",
+        "cuts": cuts,
     }
 
 
 @router.post("/prepare-and-train")
 async def prepare_and_train(request: PrepareAndTrainRequest):
-    """Step 5+6: 학습 데이터 패키징 + LoRA 학습 시작 (통합)"""
+    """Step 3: 이름 입력 + LoRA 학습 시작 (통합)
+
+    Grid 분할 완료된 세션에서 분할 이미지들을 수집하여 LoRA 학습을 시작합니다.
+    """
     session = char_gen.get_session(request.session_id)
     if not session:
         raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
 
-    selected_ids = session.get("selected_cut_ids", [])
     generated_cuts = session.get("generated_cuts", [])
 
-    # 선택된 컷의 URL 수집
-    selected_urls = []
-    for cut in generated_cuts:
-        if cut["id"] in selected_ids and cut.get("url"):
-            selected_urls.append(cut["url"])
+    # 분할된 컷의 URL 수집 (전체 사용)
+    cut_urls = [cut["url"] for cut in generated_cuts if cut.get("url")]
 
-    if len(selected_urls) < 5:
+    if len(cut_urls) < 5:
         raise HTTPException(
             status_code=400,
-            detail=f"학습에 최소 5장의 이미지가 필요합니다. (현재 {len(selected_urls)}장)"
+            detail=f"학습에 최소 5장의 이미지가 필요합니다. (현재 {len(cut_urls)}장)"
         )
 
     # 트리거 워드 생성
@@ -566,8 +506,6 @@ async def prepare_and_train(request: PrepareAndTrainRequest):
     if not trigger_word:
         trigger_word = char_gen.generate_trigger_word(request.character_name, existing_words)
 
-    style_id = session.get("style_id", "original")
-
     # 캐릭터 슬롯 생성
     char_id = str(uuid.uuid4())[:12]
     character = {
@@ -575,21 +513,18 @@ async def prepare_and_train(request: PrepareAndTrainRequest):
         "name": request.character_name,
         "trigger_word": trigger_word,
         "lora_url": "",
-        "training_images": selected_urls,
-        "training_count": len(selected_urls),
+        "training_images": cut_urls,
+        "training_count": len(cut_urls),
         "training_rounds": 1,
         "status": TrainingStatus.UPLOADING.value,
-        "preview_image": selected_urls[0] if selected_urls else None,
-        "description": f"자동 학습 ({LORA_STYLE_LABELS.get(style_id, style_id)})",
-        "style_tags": [style_id],
+        "preview_image": session.get("grid_image_url", cut_urls[0] if cut_urls else ""),
+        "description": f"Grid 분할 학습 ({len(cut_urls)}컷)",
+        "style_tags": [],
         "created_at": datetime.now().isoformat(),
         "updated_at": datetime.now().isoformat(),
         "error_message": None,
-        # 명세서 추가 필드
-        "style_id": style_id,
-        "style_label": LORA_STYLE_LABELS.get(style_id, ""),
         "lora_scale_default": LORA_SCALE_DEFAULT,
-        "original_photo_url": session.get("photo_url", ""),
+        "original_photo_url": session.get("grid_image_url", ""),
         "sample_images": [],
         "training_steps": 1500,
     }
@@ -602,9 +537,8 @@ async def prepare_and_train(request: PrepareAndTrainRequest):
     try:
         result = await fal_service.start_training(
             character_id=char_id,
-            image_urls=selected_urls,
+            image_urls=cut_urls,
             trigger_word=trigger_word,
-            style_id=style_id,
         )
 
         # 상태 업데이트
@@ -629,7 +563,7 @@ async def prepare_and_train(request: PrepareAndTrainRequest):
             "character_id": char_id,
             "job_id": result["job_id"],
             "trigger_word": trigger_word,
-            "image_count": len(selected_urls),
+            "image_count": len(cut_urls),
             "character": character,
         }
 
@@ -764,21 +698,28 @@ async def test_generate(character_id: str, request: TestGenerateRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/auto-styles")
-async def get_available_styles():
-    """사용 가능한 학습 스타일 목록 반환"""
-    styles = []
-    for sid, label in LORA_STYLE_LABELS.items():
-        styles.append({
-            "id": sid,
-            "label": label,
-            "prompt": LORA_STYLE_PROMPTS.get(sid, ""),
-            "active": sid in MVP_ACTIVE_STYLES,
-        })
-    return {"styles": styles}
-
-
-@router.get("/cost-estimate")
-async def get_cost_estimate(style_id: str = "original", cuts_count: int = 24):
-    """비용 추정"""
-    return char_gen.estimate_cost(style_id, cuts_count)
+@router.get("/grid-guide")
+async def get_grid_guide():
+    """24컷 정형 가이드 반환 — 사용자가 grid 이미지를 만들 때 참고"""
+    return {
+        "total_cuts": 24,
+        "recommended_layout": "4x6",
+        "categories": [
+            {"name": "표정", "count": 10, "items": [
+                "정면 미소", "활짝 웃음", "놀람", "화남", "슬픔",
+                "당황", "자신감", "생각 중", "무표정", "윙크"
+            ]},
+            {"name": "각도", "count": 4, "items": [
+                "좌측 45도", "우측 45도", "좌측 프로필", "우측 프로필"
+            ]},
+            {"name": "상반신 포즈", "count": 6, "items": [
+                "팔짱", "손 흔들기", "엄지 척", "한 손 가리키기", "양손 위로", "설명하는 포즈"
+            ]},
+            {"name": "전신", "count": 2, "items": [
+                "서있는 정면", "앉은 포즈"
+            ]},
+            {"name": "장면", "count": 2, "items": [
+                "일상 배경", "걷는 포즈"
+            ]},
+        ],
+    }

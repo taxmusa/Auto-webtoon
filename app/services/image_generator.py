@@ -350,27 +350,29 @@ class FluxKontextGenerator(ImageGeneratorBase):
         return ascii_safe
 
     async def _generate_text2img(self, prompt: str, size: str, seed=None) -> bytes:
-        """text2img: 텍스트→이미지 (Flux Dev)"""
+        """text2img: 텍스트→이미지 (Flux Dev) — 비동기 폴링으로 타임아웃 제어"""
         w, h = self._parse_size(size)
         safe_prompt = self._sanitize_prompt(prompt)
+        t0 = time.time()
 
-        def _sync():
-            args = {
-                "prompt": safe_prompt,
-                "image_size": {"width": w, "height": h},
-                "num_images": 1,
-                "output_format": "png",
-                "num_inference_steps": 35,  # ★ 품질 향상 (기본 28 → 35)
-            }
-            if seed is not None:
-                args["seed"] = seed
-            handler = fal_client.submit(self._TEXT2IMG_MODEL, arguments=args)
-            return handler.get()
+        from app.services.prompt_rules import get_negative_prompt
+        args = {
+            "prompt": safe_prompt,
+            "negative_prompt": get_negative_prompt(),
+            "image_size": {"width": w, "height": h},
+            "num_images": 1,
+            "output_format": "png",
+            "num_inference_steps": 35,
+        }
+        if seed is not None:
+            args["seed"] = seed
 
-        result = await asyncio.wait_for(
-            asyncio.to_thread(_sync),
-            timeout=IMAGE_GENERATION_TIMEOUT
+        handler = await asyncio.to_thread(
+            fal_client.submit, self._TEXT2IMG_MODEL, arguments=args
         )
+        request_id = handler.request_id
+
+        result = await self._async_poll(self._TEXT2IMG_MODEL, request_id, t0)
         image_url = result["images"][0]["url"]
         return await self._download_image(image_url)
 
@@ -392,38 +394,71 @@ class FluxKontextGenerator(ImageGeneratorBase):
         b64 = base64.b64encode(ref_bytes).decode("utf-8")
         data_uri = f"data:image/png;base64,{b64}"
 
-        def _sync():
-            args = {
-                "prompt": safe_prompt,
-                "image_url": data_uri,
-                "num_images": 1,
-                "output_format": "png",
-                # ★ guidance_scale 7.0: CRS 참조 방식에 최적화
-                #   - 4.5~5.0: 참조 이미지의 포즈/구도까지 복사됨 (나쁨!)
-                #   - 7.0: 씬 설명대로 새 장면 그리되, 캐릭터 외모는 CRS에서 유지
-                #   - 9.0+: 참조를 완전 무시 (일관성 깨짐)
-                "guidance_scale": 7.0,
-                # ★ num_inference_steps 35: 품질 향상 (28 → 35)
-                #   - 28: 빠르지만 디테일 부족
-                #   - 35: 최적 품질 (속도 대비 품질 균형)
-                #   - 50: 높은 품질이지만 속도 2배
-                "num_inference_steps": 35,
-            }
-            if seed is not None:
-                args["seed"] = seed
-            handler = fal_client.submit(self.endpoint, arguments=args)
-            return handler.get()
+        t0 = time.time()
+        from app.services.prompt_rules import get_negative_prompt
+        args = {
+            "prompt": safe_prompt,
+            "negative_prompt": get_negative_prompt(),
+            "image_url": data_uri,
+            "num_images": 1,
+            "output_format": "png",
+            "guidance_scale": 7.0,
+            "num_inference_steps": 35,
+        }
+        if seed is not None:
+            args["seed"] = seed
 
-        result = await asyncio.wait_for(
-            asyncio.to_thread(_sync),
-            timeout=IMAGE_GENERATION_TIMEOUT
+        handler = await asyncio.to_thread(
+            fal_client.submit, self.endpoint, arguments=args
         )
+        request_id = handler.request_id
+
+        result = await self._async_poll(self.endpoint, request_id, t0)
         image_url = result["images"][0]["url"]
         return await self._download_image(image_url)
 
     async def edit_with_reference(self, prompt, reference_image, size="1024x1536"):
         """참조 이미지로 편집 (Kontext 핵심 기능)"""
         return await self.generate(prompt, reference_images=[reference_image], size=size)
+
+    async def _async_poll(self, endpoint, request_id, t0, timeout=None):
+        """fal.ai 요청을 비동기 폴링으로 대기 (타임아웃 제어 가능)
+        
+        기존 handler.get()은 동기 무한 폴링이라 asyncio 취소/타임아웃 불가.
+        이 메서드는 asyncio.sleep() 기반이라 취소 가능.
+        """
+        if timeout is None:
+            timeout = IMAGE_GENERATION_TIMEOUT
+        poll_interval = 1.0
+        
+        while (time.time() - t0) < timeout:
+            await asyncio.sleep(poll_interval)
+            elapsed = time.time() - t0
+            
+            try:
+                status = await asyncio.to_thread(
+                    fal_client.status, endpoint, request_id, with_logs=False
+                )
+            except Exception:
+                continue
+            
+            status_name = type(status).__name__
+            
+            if status_name == "Completed":
+                result = await asyncio.to_thread(
+                    fal_client.result, endpoint, request_id
+                )
+                return result
+            
+            if status_name == "Failed":
+                error_msg = getattr(status, 'error', 'Unknown error')
+                raise RuntimeError(f"fal.ai 이미지 생성 실패: {error_msg}")
+            
+            # InProgress / Queued → 계속 대기
+            if elapsed > 30:
+                poll_interval = 2.0
+        
+        raise TimeoutError(f"이미지 생성이 {timeout}초 안에 완료되지 않았습니다.")
 
     @staticmethod
     def _parse_size(size: str) -> tuple:
@@ -469,7 +504,11 @@ class FluxLoraGenerator(ImageGeneratorBase):
         self.trigger_word = trigger_word
 
     async def generate(self, prompt, reference_images=None, size="1024x1536", quality="medium", seed=None):
-        """LoRA 학습 모델로 이미지 생성"""
+        """LoRA 학습 모델로 이미지 생성
+        
+        핵심: fal_client.submit() 후 비동기 폴링으로 타임아웃을 확실히 제어.
+        기존 handler.get()은 동기 무한 폴링이라 asyncio 취소가 불가능했음.
+        """
         t0 = time.time()
         w, h = FluxKontextGenerator._parse_size(size)
 
@@ -481,38 +520,76 @@ class FluxLoraGenerator(ImageGeneratorBase):
         safe_prompt = FluxKontextGenerator._sanitize_prompt(prompt)
 
         try:
-            def _sync():
-                arguments = {
-                    "prompt": safe_prompt,
-                    "image_size": {"width": w, "height": h},
-                    "num_images": 1,
-                    "output_format": "png",
-                }
-                # LoRA 가중치가 있으면 적용
-                if self.lora_url:
-                    arguments["loras"] = [{"path": self.lora_url, "scale": 1.0}]
-                # Seed 고정 (캐릭터 일관성)
-                if seed is not None:
-                    arguments["seed"] = seed
+            from app.services.prompt_rules import get_negative_prompt
+            
+            arguments = {
+                "prompt": safe_prompt,
+                "negative_prompt": get_negative_prompt(),
+                "image_size": {"width": w, "height": h},
+                "num_images": 1,
+                "output_format": "png",
+            }
+            if self.lora_url:
+                arguments["loras"] = [{"path": self.lora_url, "scale": 1.0}]
+            if seed is not None:
+                arguments["seed"] = seed
 
-                handler = fal_client.submit(self._ENDPOINT, arguments=arguments)
-                return handler.get()
-
-            result = await asyncio.wait_for(
-                asyncio.to_thread(_sync),
-                timeout=IMAGE_GENERATION_TIMEOUT
+            # submit은 빠르므로 동기로 호출
+            handler = await asyncio.to_thread(
+                fal_client.submit, self._ENDPOINT, arguments=arguments
             )
-            logger.info("Flux LoRA 이미지 생성 완료 %.1f초 (trigger=%s)",
-                        time.time() - t0, self.trigger_word)
+            request_id = handler.request_id
+            logger.info(f"[LoRA] 요청 제출 완료: request_id={request_id}")
 
-            image_url = result["images"][0]["url"]
-            return await FluxKontextGenerator._download_image(image_url)
-
-        except asyncio.TimeoutError:
+            # 비동기 폴링: 타임아웃 제어 가능
+            timeout = IMAGE_GENERATION_TIMEOUT
+            poll_interval = 1.0
+            elapsed = 0.0
+            
+            while elapsed < timeout:
+                await asyncio.sleep(poll_interval)
+                elapsed = time.time() - t0
+                
+                try:
+                    status = await asyncio.to_thread(
+                        fal_client.status, self._ENDPOINT, request_id, with_logs=False
+                    )
+                except Exception as status_err:
+                    logger.warning(f"[LoRA] 상태 조회 실패: {status_err}")
+                    continue
+                
+                status_name = type(status).__name__
+                
+                if status_name == "Completed" or hasattr(status, 'logs') and status_name != "InProgress":
+                    # 완료됨 — 결과 가져오기
+                    try:
+                        result = await asyncio.to_thread(
+                            fal_client.result, self._ENDPOINT, request_id
+                        )
+                        logger.info("Flux LoRA 이미지 생성 완료 %.1f초 (trigger=%s)",
+                                    time.time() - t0, self.trigger_word)
+                        image_url = result["images"][0]["url"]
+                        return await FluxKontextGenerator._download_image(image_url)
+                    except Exception as result_err:
+                        logger.error(f"[LoRA] 결과 가져오기 실패: {result_err}")
+                        raise
+                
+                if status_name == "Failed":
+                    error_msg = getattr(status, 'error', 'Unknown error')
+                    raise RuntimeError(f"LoRA 이미지 생성 실패: {error_msg}")
+                
+                # InProgress 또는 Queued → 계속 대기
+                if elapsed > 30:
+                    poll_interval = 2.0  # 30초 이후엔 폴링 간격 확대
+            
+            # 타임아웃
             logger.error("Flux LoRA 이미지 생성 타임아웃 (%.0f초)", time.time() - t0)
             raise TimeoutError(
-                f"이미지 생성이 {IMAGE_GENERATION_TIMEOUT}초 안에 완료되지 않았습니다."
+                f"이미지 생성이 {timeout}초 안에 완료되지 않았습니다."
             )
+
+        except TimeoutError:
+            raise
         except Exception as e:
             logger.error("Flux LoRA Image Generation Failed (%.1f초): %s", time.time() - t0, e)
             raise

@@ -145,11 +145,22 @@ async def start_training(
             async with httpx.AsyncClient(timeout=30.0) as client:
                 for i, url in enumerate(image_urls):
                     try:
-                        resp = await client.get(url)
-                        resp.raise_for_status()
+                        # 로컬 URL ("/trained_characters/..." 등) 은 파일에서 직접 읽기
+                        if url.startswith("/"):
+                            local_path = url.lstrip("/")
+                            if os.path.exists(local_path):
+                                with open(local_path, "rb") as lf:
+                                    raw_bytes = lf.read()
+                            else:
+                                logger.warning(f"로컬 파일 없음: {local_path}")
+                                continue
+                        else:
+                            resp = await client.get(url)
+                            resp.raise_for_status()
+                            raw_bytes = resp.content
 
                         # 이미지 리사이즈 (1024x1024) + JPG 변환
-                        img_data = _resize_for_training(resp.content)
+                        img_data = _resize_for_training(raw_bytes)
                         filename = f"{i + 1:02d}.jpg"
                         zf.writestr(filename, img_data)
 
@@ -161,7 +172,7 @@ async def start_training(
                         zf.writestr(f"{i + 1:02d}.txt", caption_text)
 
                     except Exception as e:
-                        logger.warning(f"이미지 다운로드 실패 ({url}): {e}")
+                        logger.warning(f"이미지 처리 실패 ({url}): {e}")
 
     logger.info(f"[LoRA Training] zip 생성 완료 ({time.time() - t0:.1f}초, 캡셔닝 포함)")
 
@@ -221,26 +232,14 @@ def _resize_for_training(image_bytes: bytes, target_size: int = 1024) -> bytes:
 
 
 def _auto_caption(trigger_word: str, style_id: str, index: int) -> str:
-    """자동 캡션 생성 (학습 품질 향상용)"""
-    from app.models.models import LORA_STYLE_PROMPTS
+    """자동 캡션 생성 (학습 품질 향상용)
 
-    style_desc = LORA_STYLE_PROMPTS.get(style_id, "")
+    Grid 분할 방식에서는 이미지의 정확한 포즈/표정을 알 수 없으므로
+    트리거 워드 + 일반적인 설명으로 캡션을 생성합니다.
+    """
+    pose_desc = "character portrait, various pose and expression"
 
-    # 24컷 프롬프트에서 해당 인덱스의 설명 가져오기
-    try:
-        from app.services.character_generation_service import _load_cuts_prompts
-        cuts = _load_cuts_prompts()
-        if index < len(cuts):
-            pose_desc = cuts[index]["prompt"]
-        else:
-            pose_desc = "character portrait, various pose"
-    except Exception:
-        pose_desc = "character portrait, various pose"
-
-    parts = [trigger_word]
-    if style_desc:
-        parts.append(style_desc)
-    parts.append(pose_desc)
+    parts = [trigger_word, pose_desc]
 
     return ", ".join(parts)
 

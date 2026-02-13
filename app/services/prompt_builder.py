@@ -411,15 +411,17 @@ Do NOT alter: hair style, hair color, skin tone, glasses (presence/absence), out
 If you are uncertain about any detail, refer back to the [ABSOLUTE CHARACTER CONSISTENCY] section above.
 """)
 
-    # 5. This Scene
+    # 5. This Scene (★ 씬 설명 정제 — 대사/텍스트/숫자 제거)
     emotions = [d.emotion for d in scene.dialogues if d.emotion]
     dominant_emotion = emotions[0] if emotions else "neutral"
+    
+    # 씬 설명에서 대사/텍스트 제거하여 이미지에 글자가 렌더링되지 않도록
+    _cleaned_scene_desc = _clean_scene_desc(scene.scene_description or "")
 
     parts.append(f"""
 [THIS SCENE]
-Scene: {scene.scene_description}
+Scene: {_cleaned_scene_desc}
 Expression: {dominant_emotion}
-Narration: {scene.narration or 'None'}
 """)
 
     # 5.5 Composition & Layout (인스타툰 말풍선/나레이션 공간 확보)
@@ -574,6 +576,9 @@ _FLUX_ANTI_TEXT_PREFIX = (
     "Pure illustration only. "
 )
 
+# 마스터 규칙 import (씬 설명 정제)
+from app.services.prompt_rules import clean_scene_description as _clean_scene_desc
+
 # 레이아웃 지시 (간결)
 _FLUX_LAYOUT_SUFFIX = (
     "Leave top 25% of image empty for text overlay. "
@@ -682,6 +687,9 @@ def optimize_for_flux_kontext(full_prompt: str, scene_description: str = "",
     """
     parts = []
     
+    # ★ 씬 설명 정제 — 대사/텍스트/숫자 제거 (마스터 규칙)
+    scene_description = _clean_scene_desc(scene_description) if scene_description else ""
+    
     # 공통: 아트 스타일 추출
     style_text = _extract_section(full_prompt, "[GLOBAL ART STYLE")
     sub_text = _extract_section(full_prompt, "[RENDERING STYLE")
@@ -689,8 +697,6 @@ def optimize_for_flux_kontext(full_prompt: str, scene_description: str = "",
     char_anchor = _build_character_anchor(characters) if characters else ""
     
     # ── 배경 일관성 강제 ──
-    # 배경 스타일이 지정되지 않았으면 기본 배경 부여
-    # → "배경이 있다가 없다가" 하는 문제 해결
     _DEFAULT_BG = "Clean, well-lit modern indoor room background with neutral warm tones"
     effective_bg = bg_text if bg_text else _DEFAULT_BG
     
@@ -770,6 +776,8 @@ def optimize_for_flux_lora(full_prompt: str, trigger_word: str = "",
     - 캐릭터 외모 설명 축소 (LoRA가 학습함)
     - 씬/배경/구도에 집중
     """
+    from app.services.prompt_rules import MASTER_POSITIVE_SUFFIX, LORA_STYLE_ANCHOR
+    
     parts = []
     
     # ── 1. 텍스트/로고 절대 금지 (맨 앞!) ──
@@ -779,27 +787,34 @@ def optimize_for_flux_lora(full_prompt: str, trigger_word: str = "",
     if trigger_word:
         parts.append(f"A scene with {trigger_word}.")
 
-    # ── 3. 아트 스타일 ──
+    # ── 3. LoRA 스타일 일관성 앵커 ──
+    parts.append(LORA_STYLE_ANCHOR + ".")
+
+    # ── 4. 아트 스타일 ──
     style_text = _extract_section(full_prompt, "[GLOBAL ART STYLE")
     if style_text:
         parts.append(f"Style: {style_text[:120]}.")
     
-    # ── 4. 서브스타일 ──
+    # ── 5. 서브스타일 ──
     sub_text = _extract_section(full_prompt, "[RENDERING STYLE")
     if sub_text:
         parts.append(sub_text[:100])
 
-    # ── 5. 씬 내용 ──
+    # ── 6. 씬 내용 (★ 정제하여 텍스트/대사 제거) ──
     scene_text = _extract_section(full_prompt, "[THIS SCENE]")
     if scene_text:
+        scene_text = _clean_scene_desc(scene_text)
         parts.append(f"Scene: {scene_text[:150]}.")
 
-    # ── 6. 배경 ──
+    # ── 7. 배경 ──
     bg_text = _extract_section(full_prompt, "[BACKGROUND STYLE")
     if bg_text:
         parts.append(f"Background: {bg_text[:80]}.")
 
-    # ── 7. 레이아웃 ──
+    # ── 8. 레이아웃 ──
     parts.append(_FLUX_LAYOUT_SUFFIX)
+    
+    # ── 9. 품질 접미사 (마스터 규칙) ──
+    parts.append(MASTER_POSITIVE_SUFFIX)
 
     return " ".join(parts)

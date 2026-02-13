@@ -276,6 +276,11 @@ class BubbleOverlay(BaseModel):
     font_size: int = 15                              # px
     visible: bool = True                             # 표시/숨기기 토글
     opacity: float = 0.95                            # 투명도 (0~1)
+    # 자유 위치/크기 (퍼센트, 0~100)
+    x: Optional[float] = None                        # 왼쪽 위치 %
+    y: Optional[float] = None                        # 위쪽 위치 %
+    w: Optional[float] = None                        # 폭 %
+    h: Optional[float] = None                        # 높이 %
 
 
 class BubbleLayer(BaseModel):
