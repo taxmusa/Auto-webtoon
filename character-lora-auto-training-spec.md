@@ -1,0 +1,1318 @@
+# 캐릭터 LoRA 자동 학습 기능 — 기술 명세서
+
+> **문서 목적**: 코딩 AI(Cursor 등)가 이 기능을 정확하게 구현할 수 있도록, 모든 요구사항·워크플로우·API·데이터구조·UI 동작을 빠짐없이 기술한다.
+> **작성일**: 2026-02-13
+> **대상 프로젝트**: 한국 세금 웹툰 자동 생성 프로그램 (FastAPI 백엔드)
+
+---
+
+## 1. 기능 개요
+
+### 1.1 핵심 컨셉
+사용자가 **사진 1장만 업로드**하면, 시스템이 자동으로:
+1. 24컷 이상의 다양한 표정·포즈 이미지를 생성하고
+2. 사용자가 선별한 이미지로 LoRA 학습을 실행하고
+3. 학습 완료된 캐릭터를 저장하여 이후 웹툰 제작에 자동 적용한다.
+
+### 1.2 차별점
+- 다른 웹툰 자동화 도구: "프롬프트로 알아서 일관성 맞춰봐" → 일관성 60~70%
+- **우리 프로그램**: "사진 한 장이면 끝" → LoRA 학습으로 일관성 95%+
+
+### 1.3 이 기능이 필요한 이유
+현재 설계는 "프롬프트 고정 + 레퍼런스 이미지 첨부" 방식인데, 이것만으로는:
+- 안경 프레임 모양이 씬마다 달라짐
+- 선 굵기가 미묘하게 변함
+- 옷 색상이 약간씩 바뀜 (navy → dark blue → black)
+- 머리 길이/스타일이 흔들림
+- 2인 등장 시 캐릭터가 뒤바뀜
+
+**핵심 원인**: GPT Image, Nano Banana 등은 범용 모델이라 "이 캐릭터"를 진짜로 학습한 게 아님. 매번 프롬프트를 해석해서 새로 그리는 것. LoRA는 모델 자체에 캐릭터를 학습시키므로 근본적으로 해결됨.
+
+---
+
+## 2. 전체 워크플로우 (단계별 상세)
+
+```
+[Step 1] 사진 1장 업로드
+    ↓
+[Step 2] 스타일 선택 (6가지 옵션)
+    ↓
+[Step 3] 24컷 자동 생성 (~$0.50, 2~3분)
+    ↓
+[Step 4] 미리보기 + 선별 (사용자가 체크박스로 선택)
+    ↓
+[Step 5] 자동 분할 + ZIP 패키징
+    ↓
+[Step 6] LoRA 학습 실행 (~$2, 15~30분, 백그라운드)
+    ↓
+[Step 7] 완료 알림 + 테스트 이미지 자동 생성
+    ↓
+[Step 8] 내 캐릭터 탭에 자동 저장
+    ↓
+[이후] 웹툰 제작 시 캐릭터 선택하면 자동 적용
+```
+
+---
+
+## 3. 각 Step 상세 구현 명세
+
+### Step 1: 사진 업로드
+
+**입력**: 사용자가 캐릭터로 만들 사진 1장 업로드
+- 지원 포맷: JPG, PNG, WEBP
+- 최소 해상도: 512×512 권장 (그 이하도 가능하나 품질 저하)
+- 최대 파일 크기: 10MB
+
+**처리**:
+- 업로드된 이미지를 임시 저장
+- 이미지 유효성 검사 (포맷, 크기, 해상도)
+- 얼굴 감지 확인 (선택사항 — 얼굴이 없는 캐릭터도 허용하되 경고 표시)
+
+**API 엔드포인트**:
+```
+POST /api/character/upload-photo
+Request: multipart/form-data { photo: File }
+Response: {
+  "photo_id": "uuid",
+  "photo_url": "임시 저장 URL",
+  "resolution": "1024x1024",
+  "face_detected": true
+}
+```
+
+---
+
+### Step 2: 스타일 선택
+
+**UI**: 사진 업로드 직후, 24컷 생성 전에 변환 스타일을 선택하는 화면을 표시한다.
+
+**스타일 옵션 (총 6가지)**:
+
+| 순서 | 스타일 ID | 이름 | 설명 | 프롬프트 키워드 |
+|------|-----------|------|------|----------------|
+| 0 | `original` | **📷 원본 스타일 그대로** | 업로드한 사진의 스타일을 최대한 유지하면서 표정/포즈만 변경. 사진이 실사면 실사로, 그림이면 그림으로 생성. | `same style as the reference photo, maintaining original art style` |
+| 1 | `realistic_sketch` | 🎨 실사 얼굴 + 손그림 몸체 | 실사 느낌의 얼굴에 잉크 스케치 스타일 몸체. 카카오톡 이모티콘 감성. | `realistic face with hand-drawn ink sketch body, simple stick figure body, white background` |
+| 2 | `chibi_2head` | 🧸 2등신 치비 | 머리가 몸의 절반인 귀여운 2등신 캐릭터. | `chibi style, 2-head tall proportion, cute large head, small body, simple colored` |
+| 3 | `kakao_emoticon` | 💬 카카오 이모티콘풍 | 카카오톡 이모티콘 스타일. 둥글둥글한 라인, 밝은 색감. | `Korean KakaoTalk emoticon style, round soft lines, bright pastel colors, cute expression` |
+| 4 | `simple_lineart` | ✏️ 단순 선화 | 최소한의 흑백 선화. 깔끔한 아웃라인만. | `minimal black line art, clean outline, no shading, white background, monochrome` |
+| 5 | `custom` | 🔧 커스텀 | 사용자가 직접 스타일 프롬프트를 입력. | (사용자 입력) |
+
+**⚠️ 중요: "원본 스타일 그대로" 옵션 (순서 0)**
+- 이 옵션이 **디폴트(기본값)**으로 선택되어 있어야 한다.
+- 동작 원리: 업로드된 사진을 Flux Kontext의 이미지-to-이미지 방식으로 사용하여, 원본 사진의 화풍·색감·질감을 최대한 보존하면서 표정과 포즈만 다양하게 변환한다.
+- 실사 사진을 올리면 → 실사 스타일로 24컷 생성
+- 그림/일러스트를 올리면 → 해당 그림체로 24컷 생성
+- 이미 캐릭터 시트나 이모티콘 이미지를 올리는 경우 → 그 스타일 유지
+- 기술적 차이: `original` 스타일은 다른 스타일들과 달리 스타일 변환 프롬프트를 추가하지 않고, 순수하게 "same person/character, different pose/expression" 계열 프롬프트만 사용한다.
+
+**커스텀 스타일 입력 UI**:
+- `custom` 선택 시 텍스트 입력란이 나타남
+- 플레이스홀더: "원하는 스타일을 설명해주세요 (예: 지브리풍 수채화, 픽사 3D 스타일...)"
+- 최대 200자
+
+**API 엔드포인트**:
+```
+POST /api/character/select-style
+Request: {
+  "photo_id": "uuid",
+  "style_id": "realistic_sketch",  // 기본값: "original"
+  "custom_prompt": null  // style_id가 "custom"일 때만 사용
+}
+Response: {
+  "session_id": "uuid",
+  "selected_style": "realistic_sketch",
+  "estimated_cost": 0.50,
+  "estimated_time_seconds": 180
+}
+```
+
+---
+
+### Step 3: 24컷 자동 생성
+
+**목적**: LoRA 학습에 필요한 다양한 표정·포즈·각도 이미지를 자동으로 생성한다.
+
+**생성할 24컷의 구성**:
+
+총 24컷을 아래 카테고리로 나누어 생성한다. 각 카테고리에 해당하는 프롬프트 변형을 자동으로 조합한다.
+
+```
+[표정 8컷]
+1. 정면 미소 (neutral smile, front view)
+2. 활짝 웃음 (big laugh, slightly tilted head)
+3. 놀람 (surprised, wide eyes, open mouth)
+4. 화남 (angry, furrowed brows)
+5. 슬픔 (sad, downcast eyes)
+6. 당황 (embarrassed, sweating)
+7. 자신감 (confident, smirk)
+8. 생각 중 (thinking, hand on chin)
+
+[각도 4컷]
+9. 좌측 45도 (3/4 view from left)
+10. 우측 45도 (3/4 view from right)
+11. 좌측 프로필 (left profile)
+12. 우측 프로필 (right profile)
+
+[상반신 포즈 6컷]
+13. 팔짱 (arms crossed)
+14. 손 흔들기 (waving hand)
+15. 양손 위로 (both hands raised, celebrating)
+16. 한 손 가리키기 (pointing with one hand)
+17. 엄지 척 (thumbs up)
+18. 설명하는 포즈 (explaining gesture, one hand open)
+
+[전신 포즈 4컷]
+19. 서있는 정면 (standing front)
+20. 걷는 포즈 (walking pose)
+21. 앉은 포즈 (sitting pose)
+22. 뒤돌아보기 (looking back over shoulder)
+
+[씬 맥락 2컷]
+23. 사무실 배경에서 (in office setting)
+24. 책상 앞에서 (at desk with documents)
+```
+
+**프롬프트 조합 로직**:
+
+```python
+def build_generation_prompt(style_id: str, pose_prompt: str, custom_prompt: str = None) -> str:
+    """
+    24컷 각각에 대한 프롬프트를 생성한다.
+    
+    Args:
+        style_id: 선택된 스타일 ("original", "realistic_sketch", "chibi_2head", ...)
+        pose_prompt: 24컷 중 해당 컷의 포즈/표정 설명 (영어)
+        custom_prompt: style_id가 "custom"일 때 사용자 입력 스타일
+    
+    Returns:
+        완성된 프롬프트 문자열
+    """
+    
+    STYLE_PROMPTS = {
+        "original": "",  # 스타일 변환 없음 — 원본 유지
+        "realistic_sketch": "realistic face with hand-drawn ink sketch body, simple stick figure body, white background",
+        "chibi_2head": "chibi style, 2-head tall proportion, cute large head, small body, simple colored, white background",
+        "kakao_emoticon": "Korean KakaoTalk emoticon style, round soft lines, bright pastel colors, cute expression, white background",
+        "simple_lineart": "minimal black line art, clean outline, no shading, white background, monochrome",
+        "custom": custom_prompt or ""
+    }
+    
+    style_part = STYLE_PROMPTS.get(style_id, "")
+    
+    if style_id == "original":
+        # 원본 스타일: 스타일 변환 프롬프트 없이 포즈/표정만 지시
+        prompt = f"same person, same style as the input image, {pose_prompt}, clean background"
+    else:
+        # 스타일 변환: 스타일 프롬프트 + 포즈/표정
+        prompt = f"{style_part}, {pose_prompt}"
+    
+    return prompt
+```
+
+**이미지 생성 방식 — 2가지 경로**:
+
+경로 A: `original` 스타일 선택 시
+- **Flux Kontext (이미지→이미지)** 사용
+- 업로드한 원본 사진을 input_image로 넣고, 포즈/표정 변경 프롬프트만 전달
+- 원본 스타일이 자연스럽게 유지됨
+- API: `fal-ai/flux-kontext`
+
+```python
+# original 스타일: Flux Kontext 사용
+result = fal_client.subscribe("fal-ai/flux-kontext", arguments={
+    "prompt": "same person, different expression: big laugh, slightly tilted head, clean background",
+    "image_url": uploaded_photo_url,  # 원본 사진
+})
+```
+
+경로 B: 다른 스타일 선택 시 (`realistic_sketch`, `chibi_2head`, `kakao_emoticon`, `simple_lineart`, `custom`)
+- **GPT Image 또는 Flux 2** 사용 (기존 이미지 생성 파이프라인)
+- 원본 사진을 레퍼런스로 첨부 + 스타일 프롬프트 + 포즈 프롬프트 조합
+- 스타일 변환이 적용됨
+
+```python
+# 스타일 변환: 기존 이미지 생성 모델 사용
+result = generate_image(
+    prompt=build_generation_prompt("realistic_sketch", "big laugh, slightly tilted head"),
+    reference_image=uploaded_photo_url,  # 레퍼런스로 첨부
+    model="gpt-image"  # 또는 다른 모델
+)
+```
+
+**생성 결과**:
+- 24장의 이미지가 하나의 그리드(시트)가 아닌, **개별 이미지**로 생성된다.
+- 각 이미지의 해상도: 1024×1024 (정사각형)
+- 배경: 가능하면 깨끗한 흰 배경 (LoRA 학습에 유리)
+
+**비용**: 이미지 1장당 ~$0.02 × 24장 = ~$0.50
+
+**API 엔드포인트**:
+```
+POST /api/character/generate-24-cuts
+Request: {
+  "session_id": "uuid"
+}
+Response: {
+  "task_id": "uuid",
+  "status": "generating",
+  "total_cuts": 24,
+  "estimated_time_seconds": 180
+}
+
+# 진행 상태 확인 (polling 또는 WebSocket)
+GET /api/character/generation-status/{task_id}
+Response: {
+  "status": "generating",  // "generating" | "completed" | "failed"
+  "completed_cuts": 15,
+  "total_cuts": 24,
+  "preview_urls": ["url1", "url2", ...]  // 완료된 것부터 순차적으로 채워짐
+}
+```
+
+---
+
+### Step 4: 미리보기 + 선별
+
+**목적**: 생성된 24컷 중 품질이 좋은 것만 선택하여 LoRA 학습 데이터로 사용한다. 품질이 나쁜 이미지가 학습에 포함되면 결과물 품질이 떨어지므로, 이 단계가 중요하다.
+
+**UI 구성**:
+
+```
+┌─────────────────────────────────────────────────┐
+│  캐릭터 학습 이미지 선별                              │
+│  ───────────────────────────────────────────────  │
+│  ✅ 선택: 20/24장  (최소 15장 이상 필요)              │
+│                                                   │
+│  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐            │
+│  │ ☑ 1  │ │ ☑ 2  │ │ ☑ 3  │ │ ☐ 4  │            │
+│  │[img1] │ │[img2] │ │[img3] │ │[img4] │            │
+│  │정면미소│ │활짝웃음│ │놀람   │ │화남   │            │
+│  └──────┘ └──────┘ └──────┘ └──────┘            │
+│  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐            │
+│  │ ☑ 5  │ │ ☑ 6  │ │ ☑ 7  │ │ ☑ 8  │            │
+│  │ ...  │ │ ...  │ │ ...  │ │ ...  │             │
+│  └──────┘ └──────┘ └──────┘ └──────┘            │
+│  ... (6×4 그리드)                                  │
+│                                                   │
+│  [전체 선택]  [전체 해제]  [추가 생성 (4컷)]          │
+│                                                   │
+│  ⚠️ 선택한 이미지가 15장 미만이면 학습 품질이 낮아질 수   │
+│     있습니다. 최소 15장 이상을 권장합니다.               │
+│                                                   │
+│              [다음 단계: LoRA 학습 →]               │
+└─────────────────────────────────────────────────┘
+```
+
+**동작 규칙**:
+1. 기본적으로 24장 전체가 체크되어 있음
+2. 사용자가 마음에 안 드는 컷을 해제
+3. 최소 선택 수: **15장** (미만이면 경고 표시, 진행은 가능하나 권장하지 않음)
+4. 최소 권장: **20장 이상**
+5. 이미지 클릭 시 확대 모달로 상세 확인 가능
+
+**추가 생성 기능**:
+- "추가 생성 (4컷)" 버튼을 누르면 부족한 카테고리의 이미지 4장을 추가 생성
+- 추가 비용: ~$0.08
+- 특정 카테고리 지정 가능 (예: "표정 추가", "각도 추가")
+
+**API 엔드포인트**:
+```
+POST /api/character/select-cuts
+Request: {
+  "session_id": "uuid",
+  "selected_cut_ids": [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 22]
+}
+Response: {
+  "selected_count": 20,
+  "meets_minimum": true,  // 15장 이상인지
+  "estimated_training_cost": 2.00,
+  "estimated_training_time_seconds": 1200
+}
+
+# 추가 생성
+POST /api/character/generate-additional
+Request: {
+  "session_id": "uuid",
+  "count": 4,
+  "category": "expression"  // "expression" | "angle" | "pose" | "scene" | null(자동)
+}
+```
+
+---
+
+### Step 5: 자동 분할 + ZIP 패키징
+
+**목적**: 선별된 이미지들을 LoRA 학습에 적합한 형태로 패키징한다.
+
+**처리 과정**:
+1. 선별된 이미지들을 1024×1024로 리사이즈 (이미 이 크기면 패스)
+2. JPG 포맷으로 통일 (fal.ai 학습 API 요구사항)
+3. 파일명을 순차적으로 정리: `01.jpg`, `02.jpg`, ...
+4. ZIP 파일로 압축
+5. ZIP 파일을 fal.ai에 업로드할 수 있는 URL로 호스팅
+
+**캡셔닝 (자동 캡션 생성)**:
+- LoRA 학습 품질을 높이기 위해 각 이미지에 대한 캡션 텍스트를 자동 생성
+- 캡션 포맷: `{trigger_word}, {스타일 설명}, {포즈/표정 설명}`
+- 예: `sks_parkboss, realistic face with hand-drawn body, smiling, front view, white background`
+- 캡션 파일: 각 이미지와 같은 이름의 .txt 파일 (예: `01.txt`, `02.txt`)
+- ZIP에 이미지와 캡션을 함께 포함
+
+**트리거 워드 생성 규칙**:
+- 형식: `sks_{캐릭터이름}` (영문 소문자, 밑줄만 사용)
+- 사용자가 캐릭터 이름을 한글로 입력하면 자동 로마자 변환
+- 예: "박사장" → `sks_parkboss`, "김세무사" → `sks_kimtax`
+- 사용자가 원하면 트리거 워드를 직접 수정할 수 있음
+
+**API 엔드포인트**:
+```
+POST /api/character/prepare-training-data
+Request: {
+  "session_id": "uuid",
+  "character_name": "박사장",
+  "trigger_word": null  // null이면 자동 생성, 직접 입력도 가능
+}
+Response: {
+  "training_data_url": "https://storage.../training_data_parkboss.zip",
+  "trigger_word": "sks_parkboss",
+  "image_count": 20,
+  "total_size_mb": 15.2,
+  "captions_included": true
+}
+```
+
+---
+
+### Step 6: LoRA 학습 실행
+
+**목적**: fal.ai API를 통해 Flux 2 기반 LoRA 학습을 실행한다.
+
+**사용 API**: `fal-ai/flux-lora-portrait-trainer` (또는 최신 동급 엔드포인트)
+
+**학습 파라미터**:
+
+```python
+import fal_client
+import os
+
+os.environ["FAL_KEY"] = "fal_sk_여기에_키_입력"
+
+train_result = fal_client.subscribe(
+    "fal-ai/flux-lora-portrait-trainer",
+    arguments={
+        "images_data_url": training_data_zip_url,  # Step 5에서 만든 ZIP URL
+        "trigger_word": "sks_parkboss",
+        "steps": 1500,              # 학습 스텝 수 (1000~2000 범위, 기본 1500)
+        "create_masks": True,        # 얼굴 자동 마스킹 (학습 품질 향상)
+        "learning_rate": 1e-4,       # 학습률 (기본값 사용 권장)
+        "resolution": 1024,          # 학습 해상도
+    }
+)
+
+# 학습 결과
+lora_url = train_result["diffusers_lora_file"]["url"]
+# 예: "https://fal.media/files/abc123/lora_weights.safetensors"
+```
+
+**중요 사항**:
+- 학습은 **백그라운드**에서 실행된다. 사용자는 학습 중에 다른 작업을 할 수 있다.
+- 학습 시간: 15~30분 (이미지 수와 스텝 수에 따라 변동)
+- 학습 비용: ~$2.00
+- fal.ai의 `subscribe` 메서드는 완료까지 polling을 자동으로 한다. 서버에서는 비동기로 처리.
+
+**진행 상태 표시 (UI)**:
+
+```
+┌─────────────────────────────────────────────────┐
+│  🔄 캐릭터 학습 중... (박사장)                       │
+│  ───────────────────────────────────────────────  │
+│                                                   │
+│  ████████████████░░░░░░░░░░░░░░  53%             │
+│                                                   │
+│  ⏱️ 예상 남은 시간: 약 12분                         │
+│  💰 비용: $2.00 (₩2,800)                          │
+│                                                   │
+│  ℹ️ 학습 중에도 다른 작업을 하실 수 있습니다.           │
+│     완료되면 알림을 보내드리겠습니다.                    │
+│                                                   │
+│              [백그라운드로 보내기]                     │
+└─────────────────────────────────────────────────┘
+```
+
+**진행 상태 API**:
+```
+GET /api/character/training-status/{task_id}
+Response: {
+  "status": "training",  // "preparing" | "training" | "completed" | "failed"
+  "progress_percent": 53,
+  "estimated_remaining_seconds": 720,
+  "current_step": 795,
+  "total_steps": 1500,
+  "elapsed_seconds": 810
+}
+```
+
+**학습 완료 시 처리**:
+1. LoRA 파일 URL을 저장
+2. 자동으로 테스트 이미지 3장 생성 (Step 7)
+3. 사용자에게 완료 알림 전송
+4. 캐릭터 데이터를 DB에 저장 (Step 8)
+
+**에러 처리**:
+- 학습 실패 시: 에러 메시지 표시 + 재시도 버튼 제공
+- 타임아웃 (60분 초과): 자동 실패 처리 + 환불 안내
+- fal.ai 서버 에러: 최대 2회 자동 재시도
+
+---
+
+### Step 7: 완료 알림 + 테스트 이미지 자동 생성
+
+**목적**: 학습이 잘 되었는지 사용자가 바로 확인할 수 있도록 테스트 이미지를 자동 생성한다.
+
+**테스트 이미지 생성** (3장):
+
+```python
+# 테스트 이미지 생성 (학습 완료 후 자동 실행)
+test_prompts = [
+    f"{trigger_word}, front view, confident smile, white background",
+    f"{trigger_word}, sitting at desk, explaining something, office background",
+    f"{trigger_word}, full body, standing, waving hand, simple background"
+]
+
+for prompt in test_prompts:
+    result = fal_client.subscribe("fal-ai/flux-lora", arguments={
+        "prompt": prompt,
+        "loras": [{"path": lora_url, "scale": 0.8}],
+        "image_size": "square",
+        "num_inference_steps": 28,
+    })
+    # 결과 이미지 저장
+```
+
+**LoRA scale 값 설명**:
+- `scale: 0.8` = 기본 추천값 (캐릭터 특징 80% 반영)
+- `scale: 1.0` = 캐릭터 특징 최대 반영 (과적합될 수 있음)
+- `scale: 0.5` = 약하게 반영 (스타일이 더 자유로움)
+- 사용자가 이후 생성 시 scale 값을 조절할 수 있도록 UI 제공
+
+**완료 알림 UI**:
+
+```
+┌─────────────────────────────────────────────────┐
+│  ✅ 캐릭터 학습 완료! — 박사장                       │
+│  ───────────────────────────────────────────────  │
+│                                                   │
+│  테스트 생성 결과:                                   │
+│  ┌──────┐ ┌──────┐ ┌──────┐                     │
+│  │[img1] │ │[img2] │ │[img3] │                     │
+│  │정면   │ │사무실  │ │전신   │                     │
+│  └──────┘ └──────┘ └──────┘                     │
+│                                                   │
+│  트리거 워드: sks_parkboss                          │
+│  학습 이미지: 20장                                   │
+│  학습 시간: 18분 32초                                │
+│  비용: $2.52 (생성 $0.50 + 학습 $2.00 + 테스트 $0.02) │
+│                                                   │
+│  [캐릭터 관리로 이동]  [바로 웹툰 만들기]               │
+└─────────────────────────────────────────────────┘
+```
+
+---
+
+### Step 8: 내 캐릭터 탭에 자동 저장
+
+**목적**: 학습된 캐릭터를 영구 저장하여 이후 웹툰 제작에서 재사용한다.
+
+→ 자세한 내용은 [5. 캐릭터 관리 탭 (My Characters)](#5-캐릭터-관리-탭-my-characters) 참조.
+
+---
+
+## 4. 비용 안내 (투명성)
+
+**학습 전 반드시 비용 안내를 표시**한다. 사용자가 [확인] 버튼을 눌러야 학습이 시작된다.
+
+```
+┌─────────────────────────────────────────────────┐
+│  ⚠️ LoRA 학습 비용 안내                             │
+│  ───────────────────────────────────────────────  │
+│                                                   │
+│  📸 24컷 생성:          ~$0.50  (₩700)            │
+│  🧠 LoRA 학습:          ~$2.00  (₩2,800)         │
+│  🧪 테스트 이미지 3장:    ~$0.06  (₩80)            │
+│  ─────────────────────────────────────            │
+│  💰 총 예상 비용:         ~$2.56  (₩3,580)         │
+│                                                   │
+│  📌 이후 이 캐릭터 사용 시: 장당 ₩30~60             │
+│     (웹툰 1편 10컷 기준: ₩300~600)                 │
+│                                                   │
+│  ℹ️ 한번 학습하면 이 캐릭터를 영구적으로 사용할 수      │
+│     있습니다. 추가 학습 비용은 없습니다.               │
+│                                                   │
+│         [취소]            [학습 시작 →]              │
+└─────────────────────────────────────────────────┘
+```
+
+**비용 상세 breakdown**:
+
+| 항목 | API | 단가 | 수량 | 소계 |
+|------|-----|------|------|------|
+| 24컷 이미지 생성 | GPT Image / Flux Kontext | ~$0.02/장 | 24장 | ~$0.50 |
+| LoRA 학습 | fal-ai/flux-lora-portrait-trainer | ~$2.00/회 | 1회 | ~$2.00 |
+| 테스트 이미지 | fal-ai/flux-lora | ~$0.02/장 | 3장 | ~$0.06 |
+| **총계** | | | | **~$2.56** |
+| 이후 사용 (캐릭터 생성) | fal-ai/flux-lora | ~$0.02~0.04/장 | - | 장당 |
+
+---
+
+## 5. 캐릭터 관리 탭 (My Characters)
+
+### 5.1 UI 구조
+
+```
+┌─────────────────────────────────────────────────┐
+│  📁 내 캐릭터 (학습됨)                              │
+│  ───────────────────────────────────────────────  │
+│                                                   │
+│  ┌─ 🧑 박사장 ─────────────────────────────────┐  │
+│  │ 스타일: 원본 스타일 그대로                        │  │
+│  │ 학습일: 2026.02.12                             │  │
+│  │ 트리거 워드: sks_parkboss                       │  │
+│  │ 학습 이미지: 20/24장 사용                        │  │
+│  │ LoRA Scale 기본값: 0.8                          │  │
+│  │                                                │  │
+│  │ [미리보기]                                      │  │
+│  │ ┌────┐ ┌────┐ ┌────┐                          │  │
+│  │ │샘플1│ │샘플2│ │샘플3│                          │  │
+│  │ └────┘ └────┘ └────┘                          │  │
+│  │                                                │  │
+│  │ [테스트 생성]  [재학습]  [다운로드]  [삭제]        │  │
+│  └────────────────────────────────────────────┘  │
+│                                                   │
+│  ┌─ 👩 김세무사 ───────────────────────────────┐  │
+│  │ 스타일: 2등신 치비                              │  │
+│  │ 학습일: 2026.02.13                             │  │
+│  │ 트리거 워드: sks_kimtax                         │  │
+│  │ ...                                            │  │
+│  └────────────────────────────────────────────┘  │
+│                                                   │
+│          [+ 새 캐릭터 학습]                         │
+└─────────────────────────────────────────────────┘
+```
+
+### 5.2 캐릭터 데이터 모델
+
+```python
+# DB 모델 (SQLAlchemy 또는 동급)
+class TrainedCharacter:
+    id: str                    # UUID
+    name: str                  # 캐릭터 이름 (한글, 예: "박사장")
+    trigger_word: str          # LoRA 트리거 워드 (예: "sks_parkboss")
+    style_id: str              # 학습에 사용된 스타일 ("original", "realistic_sketch", ...)
+    style_label: str           # 스타일 표시명 ("원본 스타일 그대로", "실사+손그림", ...)
+    lora_url: str              # fal.ai LoRA 파일 URL
+    lora_scale_default: float  # 기본 LoRA scale (0.8)
+    training_images_count: int # 학습에 사용된 이미지 수
+    training_steps: int        # 학습 스텝 수
+    reference_sheet_url: str   # 24컷 시트 원본 URL (미리보기용)
+    sample_images: list[str]   # 테스트 생성 샘플 이미지 URLs
+    original_photo_url: str    # 최초 업로드한 사진 URL
+    created_at: datetime       # 학습 완료 시각
+    status: str                # "active" | "training" | "failed" | "deleted"
+    
+    # 로컬 백업 정보
+    local_backup_path: str     # 로컬 백업 경로 (있으면)
+    lora_file_backed_up: bool  # safetensors 파일 백업 여부
+```
+
+### 5.3 캐릭터 관리 기능
+
+**테스트 생성**:
+- 사용자가 직접 프롬프트를 입력하여 캐릭터로 이미지를 생성해볼 수 있음
+- 프롬프트 입력란에 트리거 워드가 자동 삽입됨
+- LoRA scale 슬라이더 제공 (0.1~1.5, 기본 0.8)
+
+**재학습**:
+- 기존 학습 데이터 + 추가 이미지로 재학습
+- 이전 LoRA를 덮어쓰기 또는 새 버전으로 저장 선택 가능
+- 비용: ~$2.00 추가
+
+**다운로드 (로컬 백업)**:
+- LoRA 파일(.safetensors)과 메타데이터를 ZIP으로 다운로드
+- fal.ai URL 만료 대비
+- 다운로드 내용:
+```
+parkboss_backup.zip
+├── lora_weights.safetensors    ← LoRA 모델 파일
+├── reference_sheet/            ← 학습에 사용된 이미지들
+│   ├── 01.jpg
+│   ├── 02.jpg
+│   └── ...
+├── samples/                    ← 테스트 생성 샘플
+│   ├── test_01.jpg
+│   ├── test_02.jpg
+│   └── test_03.jpg
+├── metadata.json               ← 아래 참조
+└── original_photo.jpg          ← 최초 업로드 사진
+```
+
+**metadata.json 구조**:
+```json
+{
+  "character_name": "박사장",
+  "trigger_word": "sks_parkboss",
+  "style_id": "original",
+  "style_label": "원본 스타일 그대로",
+  "lora_url": "https://fal.media/files/.../lora_weights.safetensors",
+  "lora_scale_default": 0.8,
+  "training_images_count": 20,
+  "training_steps": 1500,
+  "learning_rate": 0.0001,
+  "resolution": 1024,
+  "created_at": "2026-02-12T15:30:00Z",
+  "fal_model_used": "fal-ai/flux-lora-portrait-trainer",
+  "program_version": "1.0.0"
+}
+```
+
+**삭제**:
+- 확인 다이얼로그 2회 (실수 방지)
+- "정말 삭제하시겠습니까? 삭제하면 이 캐릭터를 다시 사용할 수 없습니다."
+- 삭제 전 로컬 백업 권장 안내
+- 소프트 삭제 (status를 "deleted"로 변경, 30일 후 실제 삭제)
+
+**복원 (로컬 백업에서)**:
+- 다운로드한 ZIP을 다시 업로드하여 캐릭터 복원
+- fal.ai URL이 만료된 경우, safetensors 파일을 다시 fal.ai에 업로드
+- 업로드 API 엔드포인트 필요
+
+---
+
+## 6. 웹툰 제작 시 캐릭터 적용
+
+### 6.1 단일 캐릭터 적용
+
+웹툰 씬 생성 시, 학습된 캐릭터를 선택하면 자동으로 LoRA가 적용된다.
+
+**씬 생성 설정 UI에 추가할 요소**:
+
+```
+┌─ 씬 설정 ──────────────────────────────┐
+│                                         │
+│ 캐릭터: [박사장 (학습됨) ▼]              │
+│         ├ 📷 박사장 (원본 스타일)         │
+│         ├ 🧸 김세무사 (2등신)            │
+│         ├ ─────────────────            │
+│         ├ 학습 안 됨 (프롬프트 모드)       │
+│         └ + 새 캐릭터 학습               │
+│                                         │
+│ LoRA 강도: [████████░░] 0.8             │
+│                                         │
+│ 표정: [자신감 있는 미소 ▼]               │
+│ 장소: [사무실 ▼]                         │
+│ 상황: 세금 신고 설명 중                    │
+│                                         │
+└─────────────────────────────────────────┘
+```
+
+**프롬프트 자동 생성 로직**:
+
+```python
+def build_scene_prompt(character: TrainedCharacter, scene_config: dict) -> dict:
+    """
+    학습된 캐릭터가 적용된 씬 생성 프롬프트와 LoRA 설정을 반환한다.
+    """
+    prompt = (
+        f"{character.trigger_word}, "
+        f"{scene_config['expression']}, "
+        f"{scene_config['location']}, "
+        f"{scene_config['situation']}"
+    )
+    
+    return {
+        "prompt": prompt,
+        "loras": [{
+            "path": character.lora_url,
+            "scale": scene_config.get("lora_scale", character.lora_scale_default)
+        }],
+        "image_size": scene_config.get("image_size", "portrait_4_3"),
+        "num_inference_steps": 28,
+    }
+```
+
+**이미지 생성 API 호출**:
+
+```python
+# 학습된 캐릭터로 씬 이미지 생성
+result = fal_client.subscribe("fal-ai/flux-lora", arguments={
+    "prompt": "sks_parkboss, confident smile, office background, explaining tax report, professional setting",
+    "loras": [{"path": lora_url, "scale": 0.8}],
+    "image_size": "portrait_4_3",  # 웹툰 세로형
+    "num_inference_steps": 28,
+})
+scene_image_url = result["images"][0]["url"]
+```
+
+### 6.2 2인 캐릭터 씬
+
+학습된 캐릭터 2명을 한 씬에 배치하는 기능이다.
+
+**UI**:
+
+```
+┌─ 2인 씬 설정 ──────────────────────────┐
+│                                         │
+│ 캐릭터 A: [박사장 (학습됨) ▼]            │
+│ 캐릭터 B: [김세무사 (학습됨) ▼]           │
+│                                         │
+│ 장소: [사무실 ▼]                         │
+│ 상황: A가 B에게 질문하는                   │
+│                                         │
+│ A 표정: [궁금한 표정 ▼]                  │
+│ B 표정: [설명하는 표정 ▼]                 │
+│                                         │
+│ LoRA A 강도: [████████░░] 0.8           │
+│ LoRA B 강도: [████████░░] 0.7           │
+│                                         │
+└─────────────────────────────────────────┘
+```
+
+**프롬프트 자동 조합**:
+
+```python
+def build_two_character_prompt(char_a: TrainedCharacter, char_b: TrainedCharacter, scene_config: dict) -> dict:
+    """
+    2인 캐릭터 씬의 프롬프트와 LoRA 설정을 반환한다.
+    """
+    prompt = (
+        f"{char_a.trigger_word} and {char_b.trigger_word}, "
+        f"two people in {scene_config['location']}, "
+        f"{char_a.trigger_word} is {scene_config['a_action']}, "
+        f"{char_b.trigger_word} is {scene_config['b_action']}"
+    )
+    
+    return {
+        "prompt": prompt,
+        "loras": [
+            {"path": char_a.lora_url, "scale": scene_config.get("a_scale", 0.8)},
+            {"path": char_b.lora_url, "scale": scene_config.get("b_scale", 0.7)},
+        ],
+        "image_size": "landscape_16_9",  # 2인 씬은 가로형이 유리
+        "num_inference_steps": 30,  # 2인은 스텝 약간 높임
+    }
+```
+
+**⚠️ 2인 씬 제한사항 (반드시 안내)**:
+- 2개의 LoRA를 동시에 적용하면 각 캐릭터의 특징이 약해질 수 있음
+- 권장: 각 LoRA의 scale을 0.6~0.8로 낮추기 (합이 1.5를 넘지 않도록)
+- 두 캐릭터가 비슷한 스타일이면 혼동될 수 있음 → 의상/머리색 등으로 구분 필요
+- 3인 이상은 현재 지원하지 않음 (품질 보장 어려움)
+
+---
+
+## 7. 오프라인/재사용 대비 로컬 백업 시스템
+
+### 7.1 로컬 저장 구조
+
+```
+{앱 데이터 폴더}/characters/
+├── parkboss/
+│   ├── lora_weights.safetensors    ← LoRA 모델 파일 (핵심!)
+│   ├── reference_images/           ← 학습에 사용된 이미지
+│   │   ├── 01.jpg
+│   │   ├── 02.jpg
+│   │   └── ...
+│   ├── samples/                    ← 테스트 생성 샘플
+│   │   ├── test_01.jpg
+│   │   ├── test_02.jpg
+│   │   └── test_03.jpg
+│   ├── original_photo.jpg          ← 최초 업로드 사진
+│   └── metadata.json               ← 모든 설정과 정보
+│
+├── kimtax/
+│   └── ...
+│
+└── characters_index.json           ← 캐릭터 목록 인덱스
+```
+
+### 7.2 자동 백업 정책
+
+- **학습 완료 시**: LoRA 파일(.safetensors)을 자동으로 로컬에 다운로드 시도
+- **실패 시**: "로컬 백업에 실패했습니다. 수동으로 다운로드해주세요." 경고
+- **fal.ai URL 만료 대비**: safetensors 파일을 로컬에 보관하면, 만료 후에도 재업로드하여 사용 가능
+
+### 7.3 복원 워크플로우
+
+```
+[사용자가 백업 ZIP 업로드]
+    ↓
+[metadata.json에서 설정 읽기]
+    ↓
+[lora_weights.safetensors를 fal.ai에 재업로드]
+    ↓
+[새 LoRA URL 발급]
+    ↓
+[캐릭터 DB에 재등록]
+    ↓
+[사용 가능 상태로 복원]
+```
+
+---
+
+## 8. API 엔드포인트 전체 목록
+
+### 8.1 캐릭터 학습 관련
+
+| Method | Endpoint | 설명 |
+|--------|----------|------|
+| POST | `/api/character/upload-photo` | 사진 업로드 |
+| POST | `/api/character/select-style` | 스타일 선택 |
+| POST | `/api/character/generate-24-cuts` | 24컷 자동 생성 시작 |
+| GET | `/api/character/generation-status/{task_id}` | 24컷 생성 진행 상태 |
+| POST | `/api/character/select-cuts` | 이미지 선별 |
+| POST | `/api/character/generate-additional` | 추가 이미지 생성 |
+| POST | `/api/character/prepare-training-data` | 학습 데이터 패키징 |
+| POST | `/api/character/start-training` | LoRA 학습 시작 |
+| GET | `/api/character/training-status/{task_id}` | 학습 진행 상태 |
+
+### 8.2 캐릭터 관리 관련
+
+| Method | Endpoint | 설명 |
+|--------|----------|------|
+| GET | `/api/character/list` | 학습된 캐릭터 목록 |
+| GET | `/api/character/{id}` | 캐릭터 상세 정보 |
+| POST | `/api/character/{id}/test-generate` | 테스트 이미지 생성 |
+| POST | `/api/character/{id}/retrain` | 재학습 |
+| GET | `/api/character/{id}/download-backup` | 로컬 백업 ZIP 다운로드 |
+| POST | `/api/character/restore-from-backup` | 백업에서 복원 |
+| DELETE | `/api/character/{id}` | 캐릭터 삭제 (소프트) |
+| PATCH | `/api/character/{id}` | 캐릭터 정보 수정 (이름, scale 기본값 등) |
+
+### 8.3 씬 생성 시 캐릭터 적용
+
+| Method | Endpoint | 설명 |
+|--------|----------|------|
+| POST | `/api/scene/generate-with-character` | 학습된 캐릭터로 씬 생성 |
+| POST | `/api/scene/generate-two-characters` | 2인 캐릭터 씬 생성 |
+
+---
+
+## 9. 외부 API 의존성
+
+### 9.1 fal.ai (필수)
+
+**필요한 API 키**: `FAL_KEY` (1개)
+**등록**: https://fal.ai → Sign Up → Dashboard → Keys → Create Key
+**결제**: Pay-as-you-go (종량제, 카드 등록 필요)
+**무료 크레딧**: 소량 제공 (테스트용)
+
+**사용 모델**:
+
+| 모델 | 엔드포인트 | 용도 | 단가 |
+|------|-----------|------|------|
+| Flux Kontext | `fal-ai/flux-kontext` | 원본 스타일 24컷 생성 (Step 3, 경로 A) | ~$0.03/장 |
+| Flux LoRA Trainer | `fal-ai/flux-lora-portrait-trainer` | LoRA 학습 (Step 6) | ~$2.00/회 |
+| Flux + LoRA 추론 | `fal-ai/flux-lora` | 학습된 캐릭터로 이미지 생성 | ~$0.02~0.04/장 |
+
+**Python SDK 설치**:
+```bash
+pip install fal-client
+```
+
+**환경 변수 설정**:
+```
+FAL_KEY=fal_sk_xxxxxxxxxxxx
+```
+
+### 9.2 기존 이미지 생성 모델 (GPT Image 등)
+
+- 스타일 변환 시 (경로 B) 기존 프로젝트의 이미지 생성 파이프라인을 그대로 사용
+- 추가 API 키 불필요 (기존 키 활용)
+
+---
+
+## 10. 구현 우선순위 및 페이즈 계획
+
+### Phase 1 (MVP — 먼저 구현)
+
+**목표**: 핵심 워크플로우가 동작하는 최소 기능
+
+1. ✅ 사진 업로드 (Step 1)
+2. ✅ 스타일 선택 — `original`과 `realistic_sketch` 2가지만 우선 (Step 2)
+3. ✅ 24컷 생성 (Step 3)
+4. ✅ 미리보기 + 선별 (Step 4)
+5. ✅ ZIP 패키징 (Step 5)
+6. ✅ LoRA 학습 실행 (Step 6)
+7. ✅ 완료 + 테스트 이미지 (Step 7)
+8. ✅ 캐릭터 목록 + 기본 관리 (Step 8)
+9. ✅ 웹툰 씬 생성 시 캐릭터 적용 (6.1)
+10. ✅ 비용 안내 (4)
+
+### Phase 2 (확장)
+
+11. 나머지 스타일 4종 추가 (`chibi_2head`, `kakao_emoticon`, `simple_lineart`, `custom`)
+12. 2인 캐릭터 씬 (6.2)
+13. 로컬 백업/복원 (7)
+14. 캐릭터 재학습 기능
+15. LoRA scale 미세 조절 UI
+
+### Phase 3 (고도화)
+
+16. 추가 생성 기능 (카테고리별)
+17. 캐릭터 버전 관리 (v1, v2, ...)
+18. 캐릭터 공유/내보내기
+19. 배치 학습 (여러 캐릭터 한꺼번에)
+
+---
+
+## 11. 추가 보완 사항 — 구현 시 주의점
+
+### 11.1 원본 스타일(`original`) 옵션의 기술적 차이
+
+이 옵션은 다른 스타일과 이미지 생성 경로가 다르므로 반드시 분기 처리해야 한다:
+
+```python
+if style_id == "original":
+    # Flux Kontext (img2img) 사용
+    # → 원본 이미지를 input으로 넣고, 포즈/표정만 변경
+    # → 스타일 프롬프트 추가 안 함
+    api_endpoint = "fal-ai/flux-kontext"
+    arguments = {
+        "prompt": pose_prompt_only,
+        "image_url": original_photo_url,
+    }
+else:
+    # 기존 이미지 생성 모델 (text2img + reference)
+    # → 스타일 프롬프트 + 포즈 프롬프트 조합
+    # → 원본 사진은 레퍼런스로 첨부
+    api_endpoint = "기존 모델"
+    arguments = {
+        "prompt": style_prompt + pose_prompt,
+        "reference_image": original_photo_url,
+    }
+```
+
+### 11.2 트리거 워드 충돌 방지
+
+- 트리거 워드는 전체 시스템에서 고유해야 함
+- 같은 이름의 캐릭터를 여러 번 학습하면 → `sks_parkboss`, `sks_parkboss2`, `sks_parkboss3`
+- DB에서 중복 체크 필수
+
+### 11.3 fal.ai URL 만료 대응
+
+- fal.ai에서 생성된 파일 URL은 **일정 기간 후 만료**될 수 있음
+- 학습 완료 즉시 LoRA 파일을 우리 서버(또는 로컬)에 백업하는 것이 안전
+- 만료된 URL을 사용하려고 하면 에러 → 재업로드 안내
+
+### 11.4 동시 학습 제한
+
+- 한 사용자가 동시에 여러 캐릭터를 학습하는 것은 허용하되, **최대 2개까지**로 제한 권장
+- fal.ai 동시 요청 제한이 있을 수 있음
+- 큐 시스템 도입 검토 (Redis Queue 등)
+
+### 11.5 학습 실패 복구
+
+- fal.ai 학습이 중간에 실패하는 경우:
+  - 자동 재시도 최대 2회
+  - 3회 모두 실패 시: "학습에 실패했습니다. 다른 이미지로 다시 시도해주세요." + 비용 미청구 안내
+  - 실패 원인을 로그에 기록 (디버깅용)
+
+### 11.6 이미지 품질 검증
+
+- 24컷 생성 후, 자동 품질 검증 고려:
+  - 얼굴이 제대로 생성되었는지 (face detection)
+  - 배경이 깨끗한지
+  - 심한 왜곡이 없는지
+- 품질이 낮은 이미지는 자동으로 체크 해제 + 경고 표시
+- Phase 2에서 구현 가능
+
+### 11.7 캐릭터 학습 탭과 기존 스타일 탭의 관계
+
+현재 프로그램에는 "스타일 탭"이 있을 수 있다. 학습된 캐릭터는:
+- **스타일 탭과 별도**로 "내 캐릭터" 탭에서 관리
+- 씬 생성 시 "캐릭터 선택" 드롭다운에 학습된 캐릭터가 표시
+- 스타일 탭의 프리셋 스타일 + 캐릭터 LoRA를 동시에 적용할 수도 있음 (고급 기능)
+
+### 11.8 에러 상태 관리
+
+전체 워크플로우에서 발생할 수 있는 에러 상태:
+
+| 단계 | 에러 | 대응 |
+|------|------|------|
+| 사진 업로드 | 파일 형식 오류 | "JPG, PNG, WEBP만 지원합니다" |
+| 사진 업로드 | 해상도 너무 낮음 | "최소 512×512 이상 권장합니다" (경고, 진행 허용) |
+| 24컷 생성 | API 호출 실패 | 개별 컷 재시도 (최대 3회), 실패 컷은 빈칸 표시 |
+| 24컷 생성 | 시간 초과 (10분) | "생성이 지연되고 있습니다. 잠시 후 다시 시도해주세요." |
+| 이미지 선별 | 15장 미만 선택 | 경고 표시, 진행 허용 (사용자 판단) |
+| LoRA 학습 | 학습 실패 | 자동 재시도 2회 → 실패 안내 |
+| LoRA 학습 | 타임아웃 (60분) | 실패 처리 + 안내 |
+| 테스트 생성 | 이미지 품질 저하 | "학습 결과가 만족스럽지 않으면 재학습을 시도해보세요" |
+| LoRA URL 만료 | 생성 시 404 | "LoRA 파일이 만료되었습니다. 백업에서 복원해주세요." |
+
+---
+
+## 12. 환경 설정 (Config)
+
+```python
+# config.py 또는 .env에 추가할 설정들
+
+# fal.ai
+FAL_KEY = "fal_sk_xxxxxxxxxxxx"
+
+# 캐릭터 학습 기본값
+CHARACTER_TRAINING_STEPS = 1500          # 학습 스텝 수
+CHARACTER_TRAINING_LEARNING_RATE = 1e-4  # 학습률
+CHARACTER_TRAINING_RESOLUTION = 1024     # 학습 해상도
+CHARACTER_TRAINING_CREATE_MASKS = True   # 얼굴 마스킹
+
+# 24컷 생성
+GENERATION_CUTS_COUNT = 24               # 기본 생성 컷 수
+GENERATION_ADDITIONAL_COUNT = 4          # 추가 생성 시 컷 수
+MIN_SELECTED_CUTS = 15                   # 최소 선택 컷 수
+RECOMMENDED_SELECTED_CUTS = 20           # 권장 선택 컷 수
+
+# LoRA 추론 기본값
+LORA_SCALE_DEFAULT = 0.8                 # 기본 LoRA 강도
+LORA_SCALE_MIN = 0.1                     # 최소
+LORA_SCALE_MAX = 1.5                     # 최대
+INFERENCE_STEPS = 28                     # 추론 스텝
+
+# 캐릭터 관리
+MAX_CONCURRENT_TRAINING = 2             # 동시 학습 최대 수
+TRAINING_TIMEOUT_SECONDS = 3600         # 학습 타임아웃 (60분)
+TRAINING_MAX_RETRIES = 2                # 학습 실패 시 재시도
+SOFT_DELETE_DAYS = 30                   # 소프트 삭제 후 실제 삭제까지 일수
+
+# 로컬 백업
+LOCAL_BACKUP_PATH = "{APP_DATA}/characters/"
+AUTO_BACKUP_ENABLED = True              # 학습 완료 시 자동 로컬 백업
+
+# 비용 (표시용, 실제 비용은 fal.ai에서 청구)
+COST_PER_IMAGE_GENERATION = 0.02        # $/장
+COST_PER_LORA_TRAINING = 2.00           # $/회
+COST_PER_LORA_INFERENCE = 0.03          # $/장
+```
+
+---
+
+## 13. 파일/디렉토리 구조 (프로젝트 내)
+
+이 기능을 위해 프로젝트에 추가해야 할 파일들:
+
+```
+project/
+├── api/
+│   └── character/
+│       ├── __init__.py
+│       ├── router.py              ← FastAPI 라우터 (모든 엔드포인트)
+│       ├── schemas.py             ← Pydantic 모델 (Request/Response)
+│       ├── service.py             ← 비즈니스 로직
+│       ├── training_service.py    ← fal.ai LoRA 학습 로직
+│       ├── generation_service.py  ← 24컷 생성 로직
+│       └── backup_service.py      ← 로컬 백업/복원 로직
+│
+├── models/
+│   └── trained_character.py       ← DB 모델
+│
+├── config/
+│   └── character_config.py        ← 캐릭터 관련 설정
+│
+├── data/
+│   └── prompts/
+│       └── 24cuts_prompts.json    ← 24컷 프롬프트 템플릿
+│
+└── templates/
+    └── character/
+        ├── upload.html            ← (웹 UI가 있는 경우)
+        ├── style_select.html
+        ├── preview_select.html
+        ├── training_progress.html
+        └── my_characters.html
+```
+
+---
+
+## 부록 A: 24컷 프롬프트 템플릿 (JSON)
+
+```json
+{
+  "cuts": [
+    {"id": 1, "category": "expression", "prompt": "neutral smile, front view, looking at camera", "label_ko": "정면 미소"},
+    {"id": 2, "category": "expression", "prompt": "big laugh, slightly tilted head, eyes squinted", "label_ko": "활짝 웃음"},
+    {"id": 3, "category": "expression", "prompt": "surprised expression, wide eyes, open mouth", "label_ko": "놀람"},
+    {"id": 4, "category": "expression", "prompt": "angry expression, furrowed brows, tight lips", "label_ko": "화남"},
+    {"id": 5, "category": "expression", "prompt": "sad expression, downcast eyes, slight frown", "label_ko": "슬픔"},
+    {"id": 6, "category": "expression", "prompt": "embarrassed expression, sweating, nervous smile", "label_ko": "당황"},
+    {"id": 7, "category": "expression", "prompt": "confident expression, smirk, one eyebrow raised", "label_ko": "자신감"},
+    {"id": 8, "category": "expression", "prompt": "thinking expression, hand on chin, eyes looking up", "label_ko": "생각 중"},
+    {"id": 9, "category": "angle", "prompt": "3/4 view from left side, slight smile", "label_ko": "좌측 45도"},
+    {"id": 10, "category": "angle", "prompt": "3/4 view from right side, slight smile", "label_ko": "우측 45도"},
+    {"id": 11, "category": "angle", "prompt": "left profile view, looking to the side", "label_ko": "좌측 프로필"},
+    {"id": 12, "category": "angle", "prompt": "right profile view, looking to the side", "label_ko": "우측 프로필"},
+    {"id": 13, "category": "upper_body", "prompt": "arms crossed, confident stance, upper body", "label_ko": "팔짱"},
+    {"id": 14, "category": "upper_body", "prompt": "waving hand, friendly gesture, upper body", "label_ko": "손 흔들기"},
+    {"id": 15, "category": "upper_body", "prompt": "both hands raised, celebrating, upper body", "label_ko": "양손 위로"},
+    {"id": 16, "category": "upper_body", "prompt": "pointing with one hand, directing, upper body", "label_ko": "한 손 가리키기"},
+    {"id": 17, "category": "upper_body", "prompt": "thumbs up, positive gesture, upper body", "label_ko": "엄지 척"},
+    {"id": 18, "category": "upper_body", "prompt": "explaining gesture, one hand open palm, upper body", "label_ko": "설명하는 포즈"},
+    {"id": 19, "category": "full_body", "prompt": "standing front view, full body, relaxed pose", "label_ko": "서있는 정면"},
+    {"id": 20, "category": "full_body", "prompt": "walking pose, mid-stride, full body", "label_ko": "걷는 포즈"},
+    {"id": 21, "category": "full_body", "prompt": "sitting in chair, legs crossed, full body", "label_ko": "앉은 포즈"},
+    {"id": 22, "category": "full_body", "prompt": "looking back over shoulder, full body", "label_ko": "뒤돌아보기"},
+    {"id": 23, "category": "scene", "prompt": "in office setting, standing near desk, professional", "label_ko": "사무실"},
+    {"id": 24, "category": "scene", "prompt": "at desk with documents, working, focused", "label_ko": "책상 앞"}
+  ]
+}
+```
+
+---
+
+## 부록 B: fal.ai API 호출 예시 코드 (전체)
+
+```python
+"""
+character_training_service.py
+캐릭터 LoRA 학습 전체 파이프라인
+"""
+import fal_client
+import os
+import json
+import zipfile
+from datetime import datetime
+
+os.environ["FAL_KEY"] = "fal_sk_여기에_키_입력"
+
+
+# ─── Step 3: 24컷 생성 (original 스타일) ───
+
+async def generate_24_cuts_original(photo_url: str, cuts_prompts: list[dict]) -> list[str]:
+    """원본 스타일: Flux Kontext로 24컷 생성"""
+    image_urls = []
+    for cut in cuts_prompts:
+        result = fal_client.subscribe("fal-ai/flux-kontext", arguments={
+            "prompt": f"same person, same style, {cut['prompt']}, clean background",
+            "image_url": photo_url,
+        })
+        image_urls.append(result["images"][0]["url"])
+    return image_urls
+
+
+async def generate_24_cuts_styled(photo_url: str, style_prompt: str, cuts_prompts: list[dict]) -> list[str]:
+    """스타일 변환: 기존 모델로 24컷 생성"""
+    image_urls = []
+    for cut in cuts_prompts:
+        # 여기서는 기존 프로젝트의 이미지 생성 함수를 호출
+        # GPT Image, Nano Banana 등 기존 모델 사용
+        result = await existing_image_generation(
+            prompt=f"{style_prompt}, {cut['prompt']}",
+            reference_image=photo_url
+        )
+        image_urls.append(result["url"])
+    return image_urls
+
+
+# ─── Step 5: ZIP 패키징 ───
+
+def package_training_data(image_urls: list[str], trigger_word: str) -> str:
+    """선별된 이미지를 ZIP으로 패키징하여 업로드 가능한 URL 반환"""
+    zip_path = f"/tmp/training_{trigger_word}.zip"
+    
+    with zipfile.ZipFile(zip_path, 'w') as zf:
+        for i, url in enumerate(image_urls):
+            # 이미지 다운로드
+            image_data = download_image(url)
+            filename = f"{i+1:02d}.jpg"
+            zf.writestr(filename, image_data)
+            
+            # 캡션 파일 생성
+            caption = f"{trigger_word}, character portrait, various pose and expression"
+            zf.writestr(f"{i+1:02d}.txt", caption)
+    
+    # ZIP을 클라우드 스토리지에 업로드하고 URL 반환
+    upload_url = upload_to_storage(zip_path)
+    return upload_url
+
+
+# ─── Step 6: LoRA 학습 ───
+
+async def train_lora(training_data_url: str, trigger_word: str) -> dict:
+    """fal.ai에서 LoRA 학습 실행"""
+    result = fal_client.subscribe(
+        "fal-ai/flux-lora-portrait-trainer",
+        arguments={
+            "images_data_url": training_data_url,
+            "trigger_word": trigger_word,
+            "steps": 1500,
+            "create_masks": True,
+            "learning_rate": 1e-4,
+            "resolution": 1024,
+        }
+    )
+    
+    return {
+        "lora_url": result["diffusers_lora_file"]["url"],
+        "training_time": result.get("training_time"),
+    }
+
+
+# ─── Step 7: 테스트 이미지 생성 ───
+
+async def generate_test_images(trigger_word: str, lora_url: str) -> list[str]:
+    """학습된 LoRA로 테스트 이미지 3장 생성"""
+    test_prompts = [
+        f"{trigger_word}, front view, confident smile, white background",
+        f"{trigger_word}, sitting at desk, explaining, office background",
+        f"{trigger_word}, full body, standing, waving hand, simple background"
+    ]
+    
+    test_urls = []
+    for prompt in test_prompts:
+        result = fal_client.subscribe("fal-ai/flux-lora", arguments={
+            "prompt": prompt,
+            "loras": [{"path": lora_url, "scale": 0.8}],
+            "image_size": "square",
+            "num_inference_steps": 28,
+        })
+        test_urls.append(result["images"][0]["url"])
+    
+    return test_urls
+
+
+# ─── 웹툰 씬 생성 (이후 사용) ───
+
+async def generate_scene_with_character(
+    trigger_word: str,
+    lora_url: str,
+    scene_prompt: str,
+    lora_scale: float = 0.8
+) -> str:
+    """학습된 캐릭터로 웹툰 씬 이미지 생성"""
+    result = fal_client.subscribe("fal-ai/flux-lora", arguments={
+        "prompt": f"{trigger_word}, {scene_prompt}",
+        "loras": [{"path": lora_url, "scale": lora_scale}],
+        "image_size": "portrait_4_3",
+        "num_inference_steps": 28,
+    })
+    return result["images"][0]["url"]
+
+
+async def generate_two_character_scene(
+    char_a_trigger: str, char_a_lora: str, char_a_scale: float,
+    char_b_trigger: str, char_b_lora: str, char_b_scale: float,
+    scene_prompt: str
+) -> str:
+    """2인 캐릭터 씬 이미지 생성"""
+    result = fal_client.subscribe("fal-ai/flux-lora", arguments={
+        "prompt": f"{char_a_trigger} and {char_b_trigger}, {scene_prompt}",
+        "loras": [
+            {"path": char_a_lora, "scale": char_a_scale},
+            {"path": char_b_lora, "scale": char_b_scale},
+        ],
+        "image_size": "landscape_16_9",
+        "num_inference_steps": 30,
+    })
+    return result["images"][0]["url"]
+```
+
+---
+
+*끝. 이 문서의 모든 내용을 빠짐없이 구현하면, "사진 1장 → 캐릭터 학습 → 일관성 있는 웹툰 생성"이 완성된다.*

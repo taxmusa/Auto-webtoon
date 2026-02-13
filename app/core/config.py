@@ -95,3 +95,40 @@ SUB_STYLE_PROMPTS = {
     "romance": "soft pastel colors, warm lighting, emotional, gentle atmosphere",
     "business": "professional, corporate style, clean, modern office setting"
 }
+
+
+# ============================================
+# 캐릭터 LoRA 자동 학습 설정
+# ============================================
+
+# 학습 파라미터
+CHARACTER_TRAINING_STEPS = 1500              # 학습 스텝 수 (1000~2000)
+CHARACTER_TRAINING_LEARNING_RATE = 1e-4      # 학습률
+CHARACTER_TRAINING_RESOLUTION = 1024         # 학습 해상도
+CHARACTER_TRAINING_CREATE_MASKS = True       # 얼굴 자동 마스킹
+
+# 24컷 생성
+GENERATION_CUTS_COUNT = 24                   # 기본 생성 컷 수
+GENERATION_ADDITIONAL_COUNT = 4              # 추가 생성 시 컷 수
+MIN_SELECTED_CUTS = 15                       # 최소 선택 컷 수
+RECOMMENDED_SELECTED_CUTS = 20               # 권장 선택 컷 수
+
+# LoRA 추론 기본값
+LORA_SCALE_DEFAULT = 0.8                     # 기본 LoRA 강도
+LORA_SCALE_MIN = 0.1                         # 최소
+LORA_SCALE_MAX = 1.5                         # 최대
+INFERENCE_STEPS = 28                         # 추론 스텝
+
+# 캐릭터 관리
+MAX_CONCURRENT_TRAINING = 2                  # 동시 학습 최대 수
+TRAINING_TIMEOUT_SECONDS = 3600              # 학습 타임아웃 (60분)
+TRAINING_MAX_RETRIES = 2                     # 학습 실패 시 재시도
+SOFT_DELETE_DAYS = 30                        # 소프트 삭제 후 실제 삭제까지 일수
+
+# 비용 (표시용, 실제 비용은 fal.ai에서 청구)
+COST_PER_IMAGE_GENERATION = 0.02             # $/장
+COST_PER_LORA_TRAINING = 2.00               # $/회
+COST_PER_LORA_INFERENCE = 0.03              # $/장
+
+# MVP에서 활성화할 스타일 목록
+MVP_ACTIVE_STYLES = ["original", "realistic_sketch"]

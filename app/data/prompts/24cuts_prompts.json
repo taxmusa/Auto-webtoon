@@ -1,0 +1,28 @@
+{
+  "cuts": [
+    {"id": 1, "category": "expression", "prompt": "neutral smile, front view, looking at camera", "label_ko": "정면 미소"},
+    {"id": 2, "category": "expression", "prompt": "big laugh, slightly tilted head, eyes squinted", "label_ko": "활짝 웃음"},
+    {"id": 3, "category": "expression", "prompt": "surprised expression, wide eyes, open mouth", "label_ko": "놀람"},
+    {"id": 4, "category": "expression", "prompt": "angry expression, furrowed brows, tight lips", "label_ko": "화남"},
+    {"id": 5, "category": "expression", "prompt": "sad expression, downcast eyes, slight frown", "label_ko": "슬픔"},
+    {"id": 6, "category": "expression", "prompt": "embarrassed expression, sweating, nervous smile", "label_ko": "당황"},
+    {"id": 7, "category": "expression", "prompt": "confident expression, smirk, one eyebrow raised", "label_ko": "자신감"},
+    {"id": 8, "category": "expression", "prompt": "thinking expression, hand on chin, eyes looking up", "label_ko": "생각 중"},
+    {"id": 9, "category": "angle", "prompt": "3/4 view from left side, slight smile", "label_ko": "좌측 45도"},
+    {"id": 10, "category": "angle", "prompt": "3/4 view from right side, slight smile", "label_ko": "우측 45도"},
+    {"id": 11, "category": "angle", "prompt": "left profile view, looking to the side", "label_ko": "좌측 프로필"},
+    {"id": 12, "category": "angle", "prompt": "right profile view, looking to the side", "label_ko": "우측 프로필"},
+    {"id": 13, "category": "upper_body", "prompt": "arms crossed, confident stance, upper body", "label_ko": "팔짱"},
+    {"id": 14, "category": "upper_body", "prompt": "waving hand, friendly gesture, upper body", "label_ko": "손 흔들기"},
+    {"id": 15, "category": "upper_body", "prompt": "both hands raised, celebrating, upper body", "label_ko": "양손 위로"},
+    {"id": 16, "category": "upper_body", "prompt": "pointing with one hand, directing, upper body", "label_ko": "한 손 가리키기"},
+    {"id": 17, "category": "upper_body", "prompt": "thumbs up, positive gesture, upper body", "label_ko": "엄지 척"},
+    {"id": 18, "category": "upper_body", "prompt": "explaining gesture, one hand open palm, upper body", "label_ko": "설명하는 포즈"},
+    {"id": 19, "category": "full_body", "prompt": "standing front view, full body, relaxed pose", "label_ko": "서있는 정면"},
+    {"id": 20, "category": "full_body", "prompt": "walking pose, mid-stride, full body", "label_ko": "걷는 포즈"},
+    {"id": 21, "category": "full_body", "prompt": "sitting in chair, legs crossed, full body", "label_ko": "앉은 포즈"},
+    {"id": 22, "category": "full_body", "prompt": "looking back over shoulder, full body", "label_ko": "뒤돌아보기"},
+    {"id": 23, "category": "scene", "prompt": "in office setting, standing near desk, professional", "label_ko": "사무실"},
+    {"id": 24, "category": "scene", "prompt": "at desk with documents, working, focused", "label_ko": "책상 앞"}
+  ]
+}

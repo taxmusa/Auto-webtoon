@@ -456,6 +456,37 @@ class TrainingStatus(str, Enum):
     FAILED = "failed"             # 실패
 
 
+class LoraStyleId(str, Enum):
+    """LoRA 학습용 스타일 ID (24컷 생성 시 적용)"""
+    ORIGINAL = "original"                   # 원본 스타일 그대로
+    REALISTIC_SKETCH = "realistic_sketch"   # 실사 얼굴 + 손그림 몸체
+    CHIBI_2HEAD = "chibi_2head"             # 2등신 치비 (Phase 2)
+    KAKAO_EMOTICON = "kakao_emoticon"       # 카카오 이모티콘풍 (Phase 2)
+    SIMPLE_LINEART = "simple_lineart"       # 단순 선화 (Phase 2)
+    CUSTOM = "custom"                       # 커스텀 (Phase 2)
+
+
+# 스타일별 표시 이름
+LORA_STYLE_LABELS = {
+    "original": "📷 원본 스타일 그대로",
+    "realistic_sketch": "🎨 실사 얼굴 + 손그림 몸체",
+    "chibi_2head": "🧸 2등신 치비",
+    "kakao_emoticon": "💬 카카오 이모티콘풍",
+    "simple_lineart": "✏️ 단순 선화",
+    "custom": "🔧 커스텀",
+}
+
+# 스타일별 프롬프트 키워드
+LORA_STYLE_PROMPTS = {
+    "original": "",  # 스타일 변환 없음 — 원본 유지
+    "realistic_sketch": "realistic face with hand-drawn ink sketch body, simple stick figure body, white background",
+    "chibi_2head": "chibi style, 2-head tall proportion, cute large head, small body, simple colored, white background",
+    "kakao_emoticon": "Korean KakaoTalk emoticon style, round soft lines, bright pastel colors, cute expression, white background",
+    "simple_lineart": "minimal black line art, clean outline, no shading, white background, monochrome",
+    "custom": "",
+}
+
+
 class TrainedCharacter(BaseModel):
     """학습된 캐릭터 (LoRA)"""
     id: str                                     # 고유 ID (uuid)
@@ -472,6 +503,13 @@ class TrainedCharacter(BaseModel):
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
     error_message: Optional[str] = None         # 학습 실패 시 오류 메시지
+    # ── 명세서 추가 필드 (캐릭터 LoRA 자동 학습) ──
+    style_id: str = "original"                  # 학습에 사용된 스타일 (LoraStyleId)
+    style_label: str = "📷 원본 스타일 그대로"    # 스타일 표시명
+    lora_scale_default: float = 0.8             # 기본 LoRA scale
+    original_photo_url: Optional[str] = None    # 최초 업로드한 사진 URL
+    sample_images: List[str] = Field(default_factory=list)  # 테스트 생성 샘플 이미지 URLs
+    training_steps: int = 1500                  # 학습 스텝 수
 
 
 class TrainingJob(BaseModel):
@@ -484,3 +522,25 @@ class TrainingJob(BaseModel):
     completed_at: Optional[datetime] = None
     result_url: Optional[str] = None            # 완료 시 LoRA 가중치 URL
     error_message: Optional[str] = None
+
+
+class GenerationSession(BaseModel):
+    """24컷 생성 세션 — 사진 업로드부터 학습 시작까지의 상태 관리"""
+    session_id: str                             # 고유 세션 ID (uuid)
+    photo_url: str = ""                         # 업로드된 원본 사진 URL
+    photo_local_path: str = ""                  # 로컬 저장 경로
+    style_id: str = "original"                  # 선택된 스타일
+    custom_prompt: Optional[str] = None         # 커스텀 스타일 프롬프트
+    character_name: str = ""                    # 캐릭터 이름
+    trigger_word: str = ""                      # 트리거 워드
+    # 24컷 생성 상태
+    status: str = "idle"                        # idle | generating | completed | failed
+    total_cuts: int = 24
+    generated_cuts: List[dict] = Field(default_factory=list)  # [{id, url, label_ko, selected}]
+    selected_cut_ids: List[int] = Field(default_factory=list)  # 사용자가 선택한 컷 ID 목록
+    # 학습 연결
+    character_id: Optional[str] = None          # 학습 시작 후 TrainedCharacter.id
+    training_job_id: Optional[str] = None       # fal.ai 학습 작업 ID
+    # 메타데이터
+    created_at: datetime = Field(default_factory=datetime.now)
+    estimated_cost: float = 0.0

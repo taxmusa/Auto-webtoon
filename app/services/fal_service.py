@@ -2,6 +2,7 @@
 fal.ai LoRA 학습 서비스
 - Flux LoRA Fast Training API 호출
 - 학습 이미지 업로드 → 학습 시작 → 상태 폴링 → 완료 시 lora_url 반환
+- 캐릭터 학습 자동화: 캡셔닝 + 리사이즈 + ZIP 패키징
 """
 import asyncio
 import os
@@ -11,6 +12,13 @@ import time
 import logging
 from typing import List, Optional
 from datetime import datetime
+
+from app.core.config import (
+    CHARACTER_TRAINING_STEPS,
+    CHARACTER_TRAINING_LEARNING_RATE,
+    CHARACTER_TRAINING_RESOLUTION,
+    CHARACTER_TRAINING_CREATE_MASKS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +94,9 @@ async def start_training(
     character_id: str,
     image_urls: List[str],
     trigger_word: str = "",
-    steps: int = 1000,
+    steps: int = None,
+    captions: Optional[List[str]] = None,
+    style_id: str = "original",
 ) -> dict:
     """LoRA 학습 시작
 
@@ -94,7 +104,9 @@ async def start_training(
         character_id: TrainedCharacter.id
         image_urls: 학습 이미지 URL 목록 (fal.ai가 접근 가능해야 함)
         trigger_word: 트리거 워드
-        steps: 학습 스텝 수 (기본 1000)
+        steps: 학습 스텝 수 (None이면 config 기본값 사용)
+        captions: 각 이미지에 대한 캡션 리스트 (None이면 자동 생성)
+        style_id: 학습 스타일 ID (자동 캡셔닝에 사용)
 
     Returns:
         {"job_id": str, "status": "training"} 또는 에러
@@ -107,24 +119,18 @@ async def start_training(
         raise ValueError("FAL_KEY 환경변수가 설정되지 않았습니다.")
     os.environ["FAL_KEY"] = fal_key
 
-    # 이미지 URL 을 fal.ai 학습 포맷으로 변환
-    # fal.ai 는 images_data_url (zip) 또는 images 리스트를 받음
-    training_images = []
-    for url in image_urls:
-        training_images.append({"url": url})
+    # 학습 스텝 수: 인자 > config 기본값
+    actual_steps = steps if steps is not None else CHARACTER_TRAINING_STEPS
+    actual_trigger = trigger_word or f"sks_{character_id[:8]}"
 
     arguments = {
-        "images_data_url": None,  # zip 대신 개별 이미지 사용 시 None
-        "trigger_word": trigger_word or f"sks_{character_id[:8]}",
-        "steps": steps,
-        "create_masks": True,   # 자동 마스크 생성 (배경 제거)
-        "is_style": False,      # 캐릭터 학습 (스타일이 아님)
+        "images_data_url": None,
+        "trigger_word": actual_trigger,
+        "steps": actual_steps,
+        "create_masks": CHARACTER_TRAINING_CREATE_MASKS,
+        "is_style": False,
     }
 
-    # 이미지 URL 리스트를 전달하는 방식 결정
-    # fal.ai flux-lora-fast-training 은 images_data_url (zip URL) 을 받음
-    # 개별 이미지는 zip 으로 묶어서 업로드하거나, data URI 변환 필요
-    # → fal_client.upload 을 사용하여 zip 생성 후 URL 획득
     import tempfile
     import zipfile
     import httpx
@@ -132,7 +138,7 @@ async def start_training(
     t0 = time.time()
     logger.info(f"[LoRA Training] 이미지 {len(image_urls)}장 다운로드 시작")
 
-    # 이미지 다운로드 + zip 생성
+    # 이미지 다운로드 + 캡셔닝 + zip 생성
     with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
         zip_path = tmp.name
         with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -141,14 +147,23 @@ async def start_training(
                     try:
                         resp = await client.get(url)
                         resp.raise_for_status()
-                        ext = "png"  # 기본 확장자
-                        if "jpeg" in resp.headers.get("content-type", ""):
-                            ext = "jpg"
-                        zf.writestr(f"image_{i:03d}.{ext}", resp.content)
+
+                        # 이미지 리사이즈 (1024x1024) + JPG 변환
+                        img_data = _resize_for_training(resp.content)
+                        filename = f"{i + 1:02d}.jpg"
+                        zf.writestr(filename, img_data)
+
+                        # 캡션 파일 생성
+                        if captions and i < len(captions):
+                            caption_text = captions[i]
+                        else:
+                            caption_text = _auto_caption(actual_trigger, style_id, i)
+                        zf.writestr(f"{i + 1:02d}.txt", caption_text)
+
                     except Exception as e:
                         logger.warning(f"이미지 다운로드 실패 ({url}): {e}")
 
-    logger.info(f"[LoRA Training] zip 생성 완료 ({time.time() - t0:.1f}초)")
+    logger.info(f"[LoRA Training] zip 생성 완료 ({time.time() - t0:.1f}초, 캡셔닝 포함)")
 
     # zip 파일을 fal.ai 에 업로드
     try:
@@ -160,7 +175,6 @@ async def start_training(
 
         arguments["images_data_url"] = zip_url
     finally:
-        # 임시 zip 파일 삭제
         try:
             os.unlink(zip_path)
         except OSError:
@@ -179,6 +193,56 @@ async def start_training(
         "status": "training",
         "trigger_word": arguments["trigger_word"],
     }
+
+
+def _resize_for_training(image_bytes: bytes, target_size: int = 1024) -> bytes:
+    """학습용 이미지 리사이즈 (1024x1024 정사각형, JPG)"""
+    try:
+        from PIL import Image
+        from io import BytesIO
+
+        img = Image.open(BytesIO(image_bytes))
+        img = img.convert("RGB")
+
+        # 정사각형 크롭 후 리사이즈
+        w, h = img.size
+        min_dim = min(w, h)
+        left = (w - min_dim) // 2
+        top = (h - min_dim) // 2
+        img = img.crop((left, top, left + min_dim, top + min_dim))
+        img = img.resize((target_size, target_size), Image.LANCZOS)
+
+        buf = BytesIO()
+        img.save(buf, format="JPEG", quality=95)
+        return buf.getvalue()
+    except Exception as e:
+        logger.warning(f"이미지 리사이즈 실패, 원본 사용: {e}")
+        return image_bytes
+
+
+def _auto_caption(trigger_word: str, style_id: str, index: int) -> str:
+    """자동 캡션 생성 (학습 품질 향상용)"""
+    from app.models.models import LORA_STYLE_PROMPTS
+
+    style_desc = LORA_STYLE_PROMPTS.get(style_id, "")
+
+    # 24컷 프롬프트에서 해당 인덱스의 설명 가져오기
+    try:
+        from app.services.character_generation_service import _load_cuts_prompts
+        cuts = _load_cuts_prompts()
+        if index < len(cuts):
+            pose_desc = cuts[index]["prompt"]
+        else:
+            pose_desc = "character portrait, various pose"
+    except Exception:
+        pose_desc = "character portrait, various pose"
+
+    parts = [trigger_word]
+    if style_desc:
+        parts.append(style_desc)
+    parts.append(pose_desc)
+
+    return ", ".join(parts)
 
 
 async def check_training_status(job_id: str) -> dict:

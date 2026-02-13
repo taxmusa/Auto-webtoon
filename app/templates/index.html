@@ -1047,7 +1047,10 @@
                                     <h4 style="font-weight: 700; font-size: 1rem; margin-bottom: 0.25rem;">🎓 학습 캐릭터 관리</h4>
                                     <p style="color: var(--text-muted); font-size: 0.8rem;">LoRA 파인튜닝으로 캐릭터를 학습하면 95%+ 일관성을 달성합니다.</p>
                                 </div>
-                                <button class="btn btn-sm btn-primary" onclick="openCreateTrainedCharModal()">＋ 새 캐릭터 학습</button>
+                                <div style="display:flex; gap:6px;">
+                                    <button class="btn btn-sm btn-primary" onclick="openAutoTrainWizard()">📸 사진 1장으로 학습</button>
+                                    <button class="btn btn-sm btn-outline" onclick="openCreateTrainedCharModal()" title="수동 이미지 업로드">＋ 수동</button>
+                                </div>
                             </div>
 
                             <!-- 학습 캐릭터 목록 -->
@@ -4877,10 +4880,17 @@
                     'failed': '실패'
                 }[statusClass] || statusClass;
 
-                const previewImg = c.preview_image
-                    ? `<img src="/${c.preview_image}" style="width:100%; height:80px; object-fit:cover; border-radius:6px; margin-bottom:8px;" onerror="this.parentElement.querySelector('.no-thumb-fallback').style.display='flex'; this.style.display='none'">
+                // 미리보기: sample_images가 있으면 첫번째 사용, 아니면 기존 preview_image
+                const sampleUrl = (c.sample_images && c.sample_images.length > 0) ? c.sample_images[0] : null;
+                const previewSrc = sampleUrl || (c.preview_image ? `/${c.preview_image}` : '');
+                const previewImg = previewSrc
+                    ? `<img src="${previewSrc}" style="width:100%; height:80px; object-fit:cover; border-radius:6px; margin-bottom:8px;" onerror="this.parentElement.querySelector('.no-thumb-fallback').style.display='flex'; this.style.display='none'">
                        <div class="no-thumb-fallback" style="display:none; width:100%;height:80px;align-items:center;justify-content:center;background:var(--bg-input);border-radius:6px;margin-bottom:8px;font-size:2rem;">🎓</div>`
                     : `<div style="width:100%;height:80px;display:flex;align-items:center;justify-content:center;background:var(--bg-input);border-radius:6px;margin-bottom:8px;font-size:2rem;">🎓</div>`;
+
+                // 스타일 라벨 표시 (명세서 추가)
+                const styleLabel = c.style_label || '';
+                const loraScale = c.lora_scale_default || 0.8;
 
                 // ── 상태별 버튼 구성 ──
                 let actionButtons = '';
@@ -4917,6 +4927,7 @@
                         <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;">
                             트리거: <code>${c.trigger_word || '-'}</code>
                         </div>
+                        ${styleLabel ? `<div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:4px;">${styleLabel} · LoRA ${loraScale}</div>` : ''}
                         <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
                             <span class="training-status-badge ${statusClass}">${statusText}</span>
                             <span style="font-size:0.7rem; color:var(--text-muted);">${imgCount}장 ${imgCount < 5 ? '<span style="color:#ef4444;">(최소 5장)</span>' : ''}</span>
@@ -5162,7 +5173,515 @@
         // (workflow.py의 generate-images 엔드포인트에 lora 정보 전달)
         const _origGetImageModel = () => document.getElementById('image-model')?.value || 'flux-kontext-dev';
 
+
+        // ════════════════════════════════════════════════
+        // ★ 자동 학습 위자드 (사진 1장 → 24컷 → LoRA 학습)
+        // ════════════════════════════════════════════════
+
+        let autoTrainSession = null;     // 현재 자동학습 세션
+        let autoTrainWizardStep = 0;     // 위자드 현재 스텝
+        let genPollTimer = null;         // 24컷 생성 폴링 타이머
+        let trainPollTimer = null;       // 학습 상태 폴링 타이머
+
+        function openAutoTrainWizard() {
+            autoTrainSession = null;
+            autoTrainWizardStep = 0;
+            const modal = document.getElementById('auto-train-wizard');
+            modal.style.display = 'flex';
+            showWizardStep(1);
+        }
+
+        function closeAutoTrainWizard() {
+            document.getElementById('auto-train-wizard').style.display = 'none';
+            if (genPollTimer) { clearInterval(genPollTimer); genPollTimer = null; }
+            if (trainPollTimer) { clearInterval(trainPollTimer); trainPollTimer = null; }
+        }
+
+        function showWizardStep(step) {
+            autoTrainWizardStep = step;
+            document.querySelectorAll('.wizard-step-panel').forEach(p => p.style.display = 'none');
+            const panel = document.getElementById(`wizard-step-${step}`);
+            if (panel) panel.style.display = 'block';
+            // 프로그레스 업데이트
+            const dots = document.querySelectorAll('.wizard-progress-dot');
+            dots.forEach((d, i) => {
+                d.classList.remove('active', 'done');
+                if (i + 1 < step) d.classList.add('done');
+                if (i + 1 === step) d.classList.add('active');
+            });
+        }
+
+        // ── Step 1: 사진 업로드 ──
+        function handlePhotoUpload(inputOrEvent) {
+            const files = inputOrEvent.target ? inputOrEvent.target.files : inputOrEvent;
+            if (!files || !files.length) return;
+            const file = files[0];
+            if (!['image/jpeg','image/png','image/webp'].includes(file.type)) {
+                alert('JPG, PNG, WEBP 파일만 지원합니다.'); return;
+            }
+            if (file.size > 10*1024*1024) { alert('10MB 이하 파일만 가능합니다.'); return; }
+
+            // 미리보기
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                document.getElementById('wizard-photo-preview').innerHTML =
+                    `<img src="${e.target.result}" style="max-height:200px; border-radius:8px; border:2px solid var(--primary);">`;
+                document.getElementById('wizard-upload-btn').style.display = 'inline-flex';
+            };
+            reader.readAsDataURL(file);
+            document.getElementById('wizard-photo-file').dataset.file = 'ready';
+        }
+
+        async function uploadPhotoAndContinue() {
+            const input = document.getElementById('wizard-photo-file');
+            if (!input.files.length) { alert('사진을 선택해주세요.'); return; }
+            const btn = document.getElementById('wizard-upload-btn');
+            btn.disabled = true; btn.textContent = '업로드 중...';
+            try {
+                const formData = new FormData();
+                formData.append('file', input.files[0]);
+                const resp = await fetch('/api/training/upload-photo', { method:'POST', body:formData });
+                if (!resp.ok) { const err = await resp.json(); throw new Error(err.detail || '업로드 실패'); }
+                const data = await resp.json();
+                autoTrainSession = data;
+                // 스타일 카드 렌더
+                renderStyleCards(data.styles);
+                // 비용 표시
+                renderCostPreview(data.estimated_cost);
+                showWizardStep(2);
+            } catch(e) { alert('사진 업로드 실패: ' + e.message);
+            } finally { btn.disabled = false; btn.textContent = '다음: 스타일 선택 →'; }
+        }
+
+        // ── Step 2: 스타일 선택 ──
+        let selectedAutoStyle = 'original';
+
+        function renderStyleCards(styles) {
+            const container = document.getElementById('wizard-style-cards');
+            container.innerHTML = styles.map(s => `
+                <div class="wizard-style-card ${s.id === 'original' ? 'selected' : ''} ${!s.active ? 'disabled' : ''}"
+                     data-style="${s.id}" onclick="${s.active ? `selectAutoStyle('${s.id}')` : ''}">
+                    <div style="font-size:1.5rem; margin-bottom:6px;">${s.label.split(' ')[0]}</div>
+                    <div style="font-size:0.85rem; font-weight:600;">${s.label.substring(s.label.indexOf(' ')+1)}</div>
+                    ${!s.active ? '<div style="font-size:0.7rem; color:var(--warning); margin-top:4px;">Phase 2 예정</div>' : ''}
+                </div>
+            `).join('');
+        }
+
+        function selectAutoStyle(styleId) {
+            selectedAutoStyle = styleId;
+            document.querySelectorAll('.wizard-style-card').forEach(c => c.classList.remove('selected'));
+            document.querySelector(`.wizard-style-card[data-style="${styleId}"]`)?.classList.add('selected');
+        }
+
+        async function confirmStyleAndContinue() {
+            if (!autoTrainSession) return;
+            try {
+                const resp = await fetch('/api/training/select-style', {
+                    method:'POST', headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({ session_id: autoTrainSession.session_id, style_id: selectedAutoStyle })
+                });
+                const data = await resp.json();
+                renderCostPreview(data.estimated_cost);
+                showWizardStep(3);
+            } catch(e) { alert('스타일 선택 실패: ' + e.message); }
+        }
+
+        // ── Step 3: 비용 안내 ──
+        function renderCostPreview(cost) {
+            const el = document.getElementById('wizard-cost-breakdown');
+            if (!el || !cost) return;
+            const krw = (usd) => `₩${Math.round(usd * 1400).toLocaleString()}`;
+            el.innerHTML = `
+                <table style="width:100%; font-size:0.9rem; border-collapse:collapse;">
+                    <tr><td style="padding:6px 0;">📸 24컷 생성</td><td style="text-align:right;">~$${cost.generation_cost} (${krw(cost.generation_cost)})</td></tr>
+                    <tr><td style="padding:6px 0;">🧠 LoRA 학습</td><td style="text-align:right;">~$${cost.training_cost} (${krw(cost.training_cost)})</td></tr>
+                    <tr><td style="padding:6px 0;">🧪 테스트 이미지 3장</td><td style="text-align:right;">~$${cost.test_cost} (${krw(cost.test_cost)})</td></tr>
+                    <tr style="border-top:1px solid var(--border); font-weight:700;">
+                        <td style="padding:8px 0;">💰 총 예상 비용</td>
+                        <td style="text-align:right;">~$${cost.total_cost} (${krw(cost.total_cost)})</td>
+                    </tr>
+                </table>
+                <p style="color:var(--text-muted); font-size:0.8rem; margin-top:12px;">
+                    한번 학습하면 이 캐릭터를 영구적으로 사용할 수 있습니다. 추가 학습 비용은 없습니다.
+                </p>`;
+        }
+
+        async function startGenerating24Cuts() {
+            if (!autoTrainSession) return;
+            showWizardStep(4);
+            document.getElementById('wizard-gen-status').textContent = '생성 준비 중...';
+            document.getElementById('wizard-gen-progress-fill').style.width = '0%';
+            document.getElementById('wizard-gen-grid').innerHTML = '';
+            try {
+                const formData = new FormData();
+                formData.append('session_id', autoTrainSession.session_id);
+                await fetch('/api/training/generate-24-cuts', { method:'POST', body:formData });
+                // 폴링 시작
+                genPollTimer = setInterval(pollGenerationStatus, 4000);
+            } catch(e) { alert('생성 시작 실패: ' + e.message); }
+        }
+
+        // ── Step 4: 생성 진행 ──
+        async function pollGenerationStatus() {
+            if (!autoTrainSession) return;
+            try {
+                const resp = await fetch(`/api/training/generation-status/${autoTrainSession.session_id}`);
+                const data = await resp.json();
+                const completed = data.completed_cuts || 0;
+                const total = data.total_cuts || 24;
+                const pct = Math.round((completed / total) * 100);
+                document.getElementById('wizard-gen-progress-fill').style.width = pct + '%';
+                document.getElementById('wizard-gen-status').textContent = `${completed}/${total}컷 생성 완료 (${pct}%)`;
+
+                // 생성된 이미지 미리보기
+                const grid = document.getElementById('wizard-gen-grid');
+                if (data.generated_cuts) {
+                    grid.innerHTML = data.generated_cuts.filter(c => c.url).map(c => `
+                        <div style="border-radius:6px; overflow:hidden; border:1px solid var(--border);">
+                            <img src="${c.url}" style="width:100%; height:80px; object-fit:cover; display:block;" onerror="this.style.display='none'">
+                            <div style="font-size:0.65rem; padding:2px 4px; text-align:center; color:var(--text-muted);">${c.label_ko}</div>
+                        </div>
+                    `).join('');
+                }
+
+                if (data.status === 'completed') {
+                    clearInterval(genPollTimer); genPollTimer = null;
+                    autoTrainSession.generated_cuts = data.generated_cuts;
+                    renderSelectionGrid(data.generated_cuts);
+                    showWizardStep(5);
+                } else if (data.status === 'failed') {
+                    clearInterval(genPollTimer); genPollTimer = null;
+                    alert('24컷 생성에 실패했습니다. 다시 시도해주세요.');
+                }
+            } catch(e) { console.error('폴링 오류:', e); }
+        }
+
+        // ── Step 5: 이미지 선별 ──
+        function renderSelectionGrid(cuts) {
+            const grid = document.getElementById('wizard-select-grid');
+            grid.innerHTML = cuts.map(c => `
+                <div class="wizard-cut-item ${c.url ? '' : 'failed'}" data-cut-id="${c.id}">
+                    <input type="checkbox" class="wizard-cut-checkbox" data-id="${c.id}" ${c.selected && c.url ? 'checked' : ''} ${!c.url ? 'disabled' : ''}
+                           onchange="updateSelectionCount()" style="position:absolute; top:4px; right:4px; z-index:2; width:18px; height:18px; cursor:pointer;">
+                    ${c.url
+                        ? `<img src="${c.url}" style="width:100%; height:100px; object-fit:cover; display:block; cursor:pointer;" onclick="previewCutImage(this.src)">`
+                        : `<div style="width:100%; height:100px; display:flex; align-items:center; justify-content:center; background:var(--bg-input); color:var(--danger); font-size:0.8rem;">생성 실패</div>`}
+                    <div style="font-size:0.7rem; padding:3px 6px; text-align:center; color:var(--text-muted);">${c.label_ko}</div>
+                </div>
+            `).join('');
+            updateSelectionCount();
+        }
+
+        function updateSelectionCount() {
+            const checked = document.querySelectorAll('.wizard-cut-checkbox:checked').length;
+            const total = document.querySelectorAll('.wizard-cut-checkbox:not(:disabled)').length;
+            const el = document.getElementById('wizard-select-count');
+            el.textContent = `선택: ${checked}/${total}장`;
+            el.style.color = checked < 15 ? 'var(--warning)' : 'var(--success)';
+            const warn = document.getElementById('wizard-select-warning');
+            warn.style.display = checked < 15 ? 'block' : 'none';
+        }
+
+        function toggleSelectAll(selectAll) {
+            document.querySelectorAll('.wizard-cut-checkbox:not(:disabled)').forEach(cb => cb.checked = selectAll);
+            updateSelectionCount();
+        }
+
+        function previewCutImage(src) {
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:10001;display:flex;align-items:center;justify-content:center;cursor:pointer;';
+            overlay.onclick = () => overlay.remove();
+            overlay.innerHTML = `<img src="${src}" style="max-width:90%;max-height:90%;border-radius:8px;">`;
+            document.body.appendChild(overlay);
+        }
+
+        async function confirmSelectionAndContinue() {
+            const ids = [...document.querySelectorAll('.wizard-cut-checkbox:checked')].map(cb => parseInt(cb.dataset.id));
+            if (ids.length < 5) { alert('최소 5장 이상 선택해야 합니다.'); return; }
+            try {
+                await fetch('/api/training/select-cuts', {
+                    method:'POST', headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({ session_id: autoTrainSession.session_id, selected_cut_ids: ids })
+                });
+                showWizardStep(6);
+            } catch(e) { alert('선별 저장 실패: ' + e.message); }
+        }
+
+        // ── Step 6: 캐릭터 이름 입력 ──
+        async function startTrainingFromWizard() {
+            const nameInput = document.getElementById('wizard-char-name');
+            const triggerInput = document.getElementById('wizard-trigger-word');
+            const name = nameInput.value.trim();
+            if (!name) { alert('캐릭터 이름을 입력해주세요.'); nameInput.focus(); return; }
+            const btn = document.getElementById('wizard-start-train-btn');
+            btn.disabled = true; btn.textContent = '학습 준비 중...';
+            try {
+                const resp = await fetch('/api/training/prepare-and-train', {
+                    method:'POST', headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({
+                        session_id: autoTrainSession.session_id,
+                        character_name: name,
+                        trigger_word: triggerInput.value.trim() || null,
+                    })
+                });
+                if (!resp.ok) { const err = await resp.json(); throw new Error(err.detail || '학습 시작 실패'); }
+                const data = await resp.json();
+                autoTrainSession.character_id = data.character_id;
+                autoTrainSession.trigger_word = data.trigger_word;
+                document.getElementById('wizard-train-trigger').textContent = data.trigger_word;
+                document.getElementById('wizard-train-count').textContent = data.image_count + '장';
+                showWizardStep(7);
+                // 학습 폴링 시작
+                trainPollTimer = setInterval(() => pollTrainStatusWizard(data.character_id), 15000);
+            } catch(e) {
+                alert('학습 시작 실패: ' + e.message);
+            } finally { btn.disabled = false; btn.textContent = '학습 시작 →'; }
+        }
+
+        // ── Step 7: 학습 진행 ──
+        async function pollTrainStatusWizard(charId) {
+            try {
+                const resp = await fetch(`/api/training/training-status/${charId}`);
+                const data = await resp.json();
+                const pct = Math.round((data.progress || 0) * 100);
+                document.getElementById('wizard-train-progress-fill').style.width = pct + '%';
+                document.getElementById('wizard-train-pct').textContent = pct + '%';
+                if (data.status === 'completed') {
+                    clearInterval(trainPollTimer); trainPollTimer = null;
+                    // 완료 화면으로
+                    renderCompletionScreen(data.character);
+                    showWizardStep(8);
+                    loadTrainedCharacters();
+                } else if (data.status === 'failed') {
+                    clearInterval(trainPollTimer); trainPollTimer = null;
+                    alert('학습 실패: ' + (data.error || '알 수 없는 오류'));
+                    document.getElementById('wizard-train-pct').textContent = '실패';
+                }
+            } catch(e) { console.error('학습 폴링 오류:', e); }
+        }
+
+        // ── Step 8: 완료 ──
+        function renderCompletionScreen(char) {
+            if (!char) return;
+            document.getElementById('wizard-complete-name').textContent = char.name || '';
+            document.getElementById('wizard-complete-trigger').textContent = char.trigger_word || '';
+            document.getElementById('wizard-complete-style').textContent = char.style_label || '';
+            document.getElementById('wizard-complete-count').textContent = (char.training_count || 0) + '장';
+            // 테스트 이미지 (백그라운드 생성 중일 수 있음)
+            const sampleGrid = document.getElementById('wizard-complete-samples');
+            if (char.sample_images && char.sample_images.length > 0) {
+                sampleGrid.innerHTML = char.sample_images.map(url =>
+                    `<img src="${url}" style="width:150px; height:150px; object-fit:cover; border-radius:8px; border:1px solid var(--border);" onclick="previewCutImage('${url}')">`
+                ).join('');
+            } else {
+                sampleGrid.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">테스트 이미지 생성 중... (잠시 후 새로고침하면 표시됩니다)</p>';
+                // 10초 후 다시 확인
+                setTimeout(async () => {
+                    try {
+                        const r = await fetch(`/api/training/characters/${char.id}`);
+                        const c = await r.json();
+                        if (c.sample_images?.length) {
+                            sampleGrid.innerHTML = c.sample_images.map(url =>
+                                `<img src="${url}" style="width:150px; height:150px; object-fit:cover; border-radius:8px; border:1px solid var(--border);" onclick="previewCutImage('${url}')">`
+                            ).join('');
+                        }
+                    } catch(e) {}
+                }, 15000);
+            }
+        }
+
+        function finishWizardAndReturn() {
+            closeAutoTrainWizard();
+            loadTrainedCharacters();
+        }
+
     </script>
+
+    <!-- ★ 자동 학습 위자드 모달 -->
+    <div id="auto-train-wizard" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:9999; justify-content:center; align-items:center;">
+        <div style="background:var(--bg-card); border-radius:12px; width:90%; max-width:800px; max-height:90vh; overflow-y:auto; padding:0;">
+
+            <!-- 헤더 -->
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--border);">
+                <h3 style="margin:0; font-size:1.1rem;">📸 캐릭터 자동 학습</h3>
+                <button onclick="closeAutoTrainWizard()" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem; cursor:pointer;">&times;</button>
+            </div>
+
+            <!-- 프로그레스 -->
+            <div style="display:flex; justify-content:center; gap:8px; padding:12px 20px; border-bottom:1px solid var(--border);">
+                <span class="wizard-progress-dot active" data-step="1">1.사진</span>
+                <span class="wizard-progress-dot">2.스타일</span>
+                <span class="wizard-progress-dot">3.비용</span>
+                <span class="wizard-progress-dot">4.생성</span>
+                <span class="wizard-progress-dot">5.선별</span>
+                <span class="wizard-progress-dot">6.이름</span>
+                <span class="wizard-progress-dot">7.학습</span>
+                <span class="wizard-progress-dot">8.완료</span>
+            </div>
+
+            <div style="padding:20px;">
+
+                <!-- Step 1: 사진 업로드 -->
+                <div class="wizard-step-panel" id="wizard-step-1">
+                    <h4 style="margin-bottom:12px;">사진 1장을 업로드하세요</h4>
+                    <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:16px;">캐릭터로 만들 인물/캐릭터 사진을 올려주세요. 정면, 얼굴이 잘 보이는 사진이 좋습니다.</p>
+                    <div id="wizard-drop-zone" style="border:2px dashed var(--border); border-radius:12px; padding:2rem; text-align:center; cursor:pointer; transition:border-color 0.2s;"
+                         onclick="document.getElementById('wizard-photo-file').click()"
+                         ondragover="event.preventDefault(); this.style.borderColor='var(--primary)'"
+                         ondragleave="this.style.borderColor='var(--border)'"
+                         ondrop="event.preventDefault(); this.style.borderColor='var(--border)'; handlePhotoUpload({target:{files:event.dataTransfer.files}})">
+                        <div id="wizard-photo-preview" style="margin-bottom:12px;">
+                            <div style="font-size:3rem; margin-bottom:8px;">📷</div>
+                            <div style="color:var(--text-muted);">클릭하거나 사진을 드래그하세요</div>
+                            <div style="color:var(--text-muted); font-size:0.8rem; margin-top:4px;">JPG, PNG, WEBP / 최대 10MB</div>
+                        </div>
+                        <input type="file" id="wizard-photo-file" accept="image/jpeg,image/png,image/webp" style="display:none;" onchange="handlePhotoUpload(this)">
+                    </div>
+                    <div style="text-align:right; margin-top:16px;">
+                        <button id="wizard-upload-btn" class="btn btn-primary" onclick="uploadPhotoAndContinue()" style="display:none;">다음: 스타일 선택 →</button>
+                    </div>
+                </div>
+
+                <!-- Step 2: 스타일 선택 -->
+                <div class="wizard-step-panel" id="wizard-step-2" style="display:none;">
+                    <h4 style="margin-bottom:12px;">변환 스타일을 선택하세요</h4>
+                    <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:16px;">24컷 이미지를 어떤 스타일로 생성할지 선택합니다.</p>
+                    <div id="wizard-style-cards" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:10px; margin-bottom:20px;"></div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <button class="btn btn-secondary" onclick="showWizardStep(1)">← 이전</button>
+                        <button class="btn btn-primary" onclick="confirmStyleAndContinue()">다음: 비용 확인 →</button>
+                    </div>
+                </div>
+
+                <!-- Step 3: 비용 안내 -->
+                <div class="wizard-step-panel" id="wizard-step-3" style="display:none;">
+                    <h4 style="margin-bottom:12px;">비용 안내</h4>
+                    <div id="wizard-cost-breakdown" style="background:var(--bg-input); border-radius:8px; padding:16px; margin-bottom:20px;"></div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <button class="btn btn-secondary" onclick="showWizardStep(2)">← 이전</button>
+                        <button class="btn btn-primary" onclick="startGenerating24Cuts()">확인, 24컷 생성 시작 →</button>
+                    </div>
+                </div>
+
+                <!-- Step 4: 24컷 생성 진행 -->
+                <div class="wizard-step-panel" id="wizard-step-4" style="display:none;">
+                    <h4 style="margin-bottom:12px;">24컷 생성 중...</h4>
+                    <p id="wizard-gen-status" style="color:var(--text-muted); font-size:0.85rem; margin-bottom:12px;">준비 중...</p>
+                    <div class="training-progress-bar" style="height:8px; margin-bottom:16px;">
+                        <div id="wizard-gen-progress-fill" class="training-progress-bar-fill" style="width:0%;"></div>
+                    </div>
+                    <div id="wizard-gen-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(80px, 1fr)); gap:6px; max-height:300px; overflow-y:auto;"></div>
+                    <p style="color:var(--text-muted); font-size:0.8rem; margin-top:12px;">생성 중에도 다른 작업을 할 수 있습니다. 이 창을 닫지 마세요.</p>
+                </div>
+
+                <!-- Step 5: 이미지 선별 -->
+                <div class="wizard-step-panel" id="wizard-step-5" style="display:none;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <h4 style="margin:0;">이미지 선별</h4>
+                        <span id="wizard-select-count" style="font-weight:700;">선택: 0/0장</span>
+                    </div>
+                    <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:8px;">품질이 좋은 이미지만 선택하세요. 마음에 안 드는 이미지는 체크를 해제하세요.</p>
+                    <div id="wizard-select-warning" style="display:none; color:var(--warning); font-size:0.85rem; margin-bottom:8px;">⚠️ 최소 15장 이상 선택을 권장합니다.</div>
+                    <div style="display:flex; gap:8px; margin-bottom:12px;">
+                        <button class="btn btn-sm btn-outline" onclick="toggleSelectAll(true)">전체 선택</button>
+                        <button class="btn btn-sm btn-outline" onclick="toggleSelectAll(false)">전체 해제</button>
+                    </div>
+                    <div id="wizard-select-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(100px, 1fr)); gap:8px; max-height:400px; overflow-y:auto;"></div>
+                    <div style="display:flex; justify-content:space-between; margin-top:16px;">
+                        <button class="btn btn-secondary" onclick="showWizardStep(4)">← 이전</button>
+                        <button class="btn btn-primary" onclick="confirmSelectionAndContinue()">다음: 캐릭터 이름 입력 →</button>
+                    </div>
+                </div>
+
+                <!-- Step 6: 캐릭터 이름/트리거워드 -->
+                <div class="wizard-step-panel" id="wizard-step-6" style="display:none;">
+                    <h4 style="margin-bottom:12px;">캐릭터 정보 입력</h4>
+                    <div style="margin-bottom:16px;">
+                        <label style="display:block; font-size:0.85rem; margin-bottom:4px; font-weight:600;">캐릭터 이름 *</label>
+                        <input type="text" id="wizard-char-name" placeholder="예: 박사장, 김세무사" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px; background:var(--bg-input); color:var(--text); font-size:1rem;">
+                    </div>
+                    <div style="margin-bottom:20px;">
+                        <label style="display:block; font-size:0.85rem; margin-bottom:4px; font-weight:600;">트리거 워드 (선택 — 비워두면 자동 생성)</label>
+                        <input type="text" id="wizard-trigger-word" placeholder="예: sks_parkboss" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px; background:var(--bg-input); color:var(--text); font-size:0.9rem;">
+                        <p style="color:var(--text-muted); font-size:0.75rem; margin-top:4px;">한글 이름 입력 시 자동으로 영문 트리거 워드가 생성됩니다.</p>
+                    </div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <button class="btn btn-secondary" onclick="showWizardStep(5)">← 이전</button>
+                        <button id="wizard-start-train-btn" class="btn btn-primary" onclick="startTrainingFromWizard()">학습 시작 →</button>
+                    </div>
+                </div>
+
+                <!-- Step 7: 학습 진행 -->
+                <div class="wizard-step-panel" id="wizard-step-7" style="display:none;">
+                    <h4 style="margin-bottom:12px;">LoRA 학습 진행 중...</h4>
+                    <div style="background:var(--bg-input); border-radius:8px; padding:16px; margin-bottom:16px;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                            <span>트리거 워드: <code id="wizard-train-trigger">-</code></span>
+                            <span>학습 이미지: <span id="wizard-train-count">-</span></span>
+                        </div>
+                        <div class="training-progress-bar" style="height:10px; margin-bottom:8px;">
+                            <div id="wizard-train-progress-fill" class="training-progress-bar-fill" style="width:0%;"></div>
+                        </div>
+                        <div style="text-align:center; font-size:1.5rem; font-weight:700;" id="wizard-train-pct">0%</div>
+                    </div>
+                    <p style="color:var(--text-muted); font-size:0.85rem;">학습은 약 15~30분 소요됩니다. 이 창을 닫아도 학습은 계속 진행됩니다.</p>
+                    <div style="text-align:right; margin-top:12px;">
+                        <button class="btn btn-outline" onclick="closeAutoTrainWizard()">백그라운드로 보내기</button>
+                    </div>
+                </div>
+
+                <!-- Step 8: 완료 -->
+                <div class="wizard-step-panel" id="wizard-step-8" style="display:none;">
+                    <div style="text-align:center; margin-bottom:20px;">
+                        <div style="font-size:3rem; margin-bottom:8px;">🎉</div>
+                        <h4>캐릭터 학습 완료!</h4>
+                    </div>
+                    <div style="background:var(--bg-input); border-radius:8px; padding:16px; margin-bottom:16px;">
+                        <table style="width:100%; font-size:0.9rem;">
+                            <tr><td style="padding:4px 0; color:var(--text-muted);">캐릭터 이름</td><td style="font-weight:700;" id="wizard-complete-name">-</td></tr>
+                            <tr><td style="padding:4px 0; color:var(--text-muted);">트리거 워드</td><td><code id="wizard-complete-trigger">-</code></td></tr>
+                            <tr><td style="padding:4px 0; color:var(--text-muted);">스타일</td><td id="wizard-complete-style">-</td></tr>
+                            <tr><td style="padding:4px 0; color:var(--text-muted);">학습 이미지</td><td id="wizard-complete-count">-</td></tr>
+                        </table>
+                    </div>
+                    <div style="margin-bottom:16px;">
+                        <h5 style="margin-bottom:8px;">테스트 생성 결과</h5>
+                        <div id="wizard-complete-samples" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
+                    </div>
+                    <div style="text-align:center;">
+                        <button class="btn btn-primary" onclick="finishWizardAndReturn()">확인, 캐릭터 관리로 돌아가기</button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <style>
+        /* 위자드 프로그레스 */
+        .wizard-progress-dot {
+            padding: 4px 10px; border-radius: 20px; font-size: 0.75rem;
+            background: var(--bg-input); color: var(--text-muted); transition: all 0.2s;
+        }
+        .wizard-progress-dot.active { background: var(--primary); color: #fff; font-weight: 700; }
+        .wizard-progress-dot.done { background: var(--success); color: #fff; }
+        /* 스타일 카드 */
+        .wizard-style-card {
+            border: 2px solid var(--border); border-radius: 10px; padding: 14px; text-align: center;
+            cursor: pointer; transition: all 0.2s; background: var(--bg-input);
+        }
+        .wizard-style-card:hover { border-color: var(--primary); }
+        .wizard-style-card.selected { border-color: var(--primary); background: rgba(99,102,241,0.1); }
+        .wizard-style-card.disabled { opacity: 0.4; cursor: not-allowed; }
+        /* 선별 그리드 아이템 */
+        .wizard-cut-item {
+            position: relative; border-radius: 8px; overflow: hidden;
+            border: 2px solid var(--border); transition: border-color 0.2s;
+        }
+        .wizard-cut-item:has(input:checked) { border-color: var(--primary); }
+        .wizard-cut-item.failed { opacity: 0.4; }
+    </style>
 
     <!-- Style Manager Modal -->
     <div id="style-manager-modal" class="modal"
