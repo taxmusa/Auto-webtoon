@@ -319,11 +319,16 @@ async def list_presets():
 @router.post("/presets/{preset_id}/apply")
 async def apply_preset(preset_id: str, req: ApplyPresetRequest):
     """프리셋 3종을 현재 레퍼런스에 적용"""
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"[프리셋 적용] preset_id={preset_id}, session_id={req.session_id}")
     service = ReferenceService(req.session_id)
     try:
-        service.apply_preset(preset_id)
+        result = service.apply_preset(preset_id)
+        logger.info(f"[프리셋 적용] 완료 — 대상 디렉토리: {service.ref_dir}")
         return {"success": True, "message": f"프리셋 '{preset_id}' 적용 완료"}
     except ValueError as e:
+        logger.error(f"[프리셋 적용] 실패: {e}")
         raise HTTPException(status_code=404, detail=str(e))
 
 

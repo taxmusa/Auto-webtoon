@@ -107,6 +107,7 @@ class GenerateStoryRequest(BaseModel):
     scene_count: int = 8
     model: str = "gemini-2.0-flash"
     character_names: str = ""  # 쉼표 구분 등장인물 이름 (빈 문자열이면 AI 자동 생성)
+    collected_data: Optional[List[dict]] = None  # 프론트엔드에서 수정된 수집 데이터
 
 
 class UpdateSceneRequest(BaseModel):
@@ -122,7 +123,7 @@ class GenerateImagesRequest(BaseModel):
     session_id: str
     style: str = "webtoon"
     sub_style: str = "normal"
-    aspect_ratio: str = "4:5"
+    aspect_ratio: str = "1:1"
     model: str = "nano-banana-pro"  # Gemini 3.0 Preview 고정
     
     # Style System 2.0
@@ -199,29 +200,32 @@ async def generate_story(request: GenerateStoryRequest):
          
     session.state = WorkflowState.GENERATING_STORY
     
-    gemini = get_gemini_service()
-    
-    field_info = session.field_info or await gemini.detect_field(session.keyword)
-    
-    # 세션에 저장된 수집 데이터 가져오기 ( Step 2에서 수집함)
-    collected_data = session.collected_data or []
-    
-    if not collected_data:
-        # 수집 자료가 없는 경우 즉석으로 수집
-        collected_data = await gemini.collect_data(session.keyword, field_info)
-        session.collected_data = collected_data
-    
-    character_settings = CharacterSettings(
-        questioner_type=request.questioner_type,
-        expert_type=request.expert_type
-    )
-    
-    # 프로젝트 설정의 규칙 적용
-    rule_settings = session.settings.rules
-    
     try:
-        import logging
-        logger = logging.getLogger(__name__)
+        gemini = get_gemini_service()
+        
+        field_info = session.field_info or await gemini.detect_field(session.keyword)
+        
+        # 수집 데이터: 프론트엔드에서 수정본이 전달되면 우선 사용, 아니면 세션 저장본 사용
+        if request.collected_data and len(request.collected_data) > 0:
+            collected_data = request.collected_data
+            session.collected_data = collected_data  # 세션에도 최신본 반영
+            logger.info(f"[generate_story] 프론트엔드에서 수정된 수집 데이터 사용 ({len(collected_data)}개)")
+        else:
+            collected_data = session.collected_data or []
+        
+        if not collected_data:
+            # 수집 자료가 없는 경우 즉석으로 수집
+            collected_data = await gemini.collect_data(session.keyword, field_info)
+            session.collected_data = collected_data
+        
+        character_settings = CharacterSettings(
+            questioner_type=request.questioner_type,
+            expert_type=request.expert_type
+        )
+        
+        # 프로젝트 설정의 규칙 적용
+        rule_settings = session.settings.rules
+        
         logger.info(f"[generate_story] 스토리 생성 시작 - keyword: {session.keyword}, scene_count: {request.scene_count}, model: {request.model}")
         
         story = await gemini.generate_story(
@@ -255,9 +259,7 @@ async def generate_story(request: GenerateStoryRequest):
             "story": story.model_dump()
         }
     except Exception as e:
-        import logging
         import traceback
-        logger = logging.getLogger(__name__)
         logger.error(f"[generate_story] 오류: {str(e)}")
         logger.error(traceback.format_exc())
         session.state = WorkflowState.ERROR
@@ -555,11 +557,17 @@ async def generate_images(request: GenerateImagesRequest):
     from app.services.prompt_builder import build_scene_chaining_context
     
     ref_service = ReferenceService(request.session_id)
+    logger.info(f"[레퍼런스] 세션 디렉토리: {ref_service.ref_dir}")
     ref_data = ref_service.load_for_model(request.model) if request.use_reference_images else {}
     
     character_ref_bytes = ref_data.get("character")  # Character.jpg
     method_ref_bytes = ref_data.get("method")        # Method.jpg
     style_ref_bytes = ref_data.get("style")          # Style.jpg
+    
+    # 디버그: 각 레퍼런스 파일 크기 로그
+    logger.info(f"[레퍼런스] Character: {len(character_ref_bytes) if character_ref_bytes else 'None'}bytes, "
+                f"Method: {len(method_ref_bytes) if method_ref_bytes else 'None'}bytes, "
+                f"Style: {len(style_ref_bytes) if style_ref_bytes else 'None'}bytes")
     
     # Gemini 모델 판별
     model_lower = request.model.lower() if request.model else ""
@@ -604,6 +612,17 @@ async def generate_images(request: GenerateImagesRequest):
     if method_ref_bytes: ref_status.append("Method")
     if style_ref_bytes: ref_status.append("Style")
     logger.info(f"[레퍼런스] 사용 가능: {', '.join(ref_status) if ref_status else '없음'} (모델: {request.model})")
+
+    # ★ 성능 최적화: 레퍼런스 이미지를 PIL로 한 번만 변환 (매 씬마다 반복 방지)
+    if is_gemini:
+        from PIL import Image as PILImg
+        from io import BytesIO as BIO
+        if character_ref_bytes:
+            character_ref_bytes = PILImg.open(BIO(character_ref_bytes))
+        if method_ref_bytes:
+            method_ref_bytes = PILImg.open(BIO(method_ref_bytes))
+        if style_ref_bytes:
+            style_ref_bytes = PILImg.open(BIO(style_ref_bytes))
 
     async def generate_single_scene(scene, scene_seed=None, ref_image_bytes=None,
                                      method_bytes=None, style_bytes=None,
@@ -689,21 +708,6 @@ async def generate_images(request: GenerateImagesRequest):
             if isinstance(image_data, bytes):
                 with open(filepath, "wb") as f:
                     f.write(image_data)
-                
-                # Pillow 후처리: 상단 여백 확보
-                try:
-                    from app.services.pillow_service import get_pillow_service
-                    from PIL import Image
-                    from io import BytesIO
-                    pillow = get_pillow_service()
-                    img = Image.open(filepath)
-                    img = pillow.ensure_top_margin(img, margin_ratio=0.25)
-                    img.save(filepath, "PNG")
-                    buf = BytesIO()
-                    img.save(buf, format="PNG")
-                    image_data = buf.getvalue()
-                except Exception as margin_err:
-                    logger.warning(f"여백 후처리 실패 (씬 {scene.scene_number}): {margin_err}")
             
             return {
                 "scene_number": scene.scene_number,
@@ -1214,14 +1218,66 @@ async def regenerate_image(request: RegenerateImageRequest):
     generator = get_generator(model_name, api_key)
     
     try:
-        size = "1024x1536"  # 웹툰 기본 세로
+        size = "1024x1024"  # 1:1 정사각형 기본
         
-        # Flux Kontext 프롬프트 최적화
+        model_lower = model_name.lower()
+        is_gemini = any(k in model_lower for k in ["gemini", "nano-banana"])
         is_flux_kontext = "flux-kontext" in model_name
         is_flux_regen = "flux" in model_name
         ref_images = None
         
-        if is_flux_kontext:
+        if is_gemini:
+            # ★ Gemini 재생성: 3종 레퍼런스 + 씬 체이닝 지원
+            from app.services.reference_service import ReferenceService
+            from app.services.prompt_builder import build_scene_chaining_context
+            
+            ref_service = ReferenceService(request.session_id)
+            logger.info(f"[재생성] 세션 디렉토리: {ref_service.ref_dir}")
+            ref_data = ref_service.load_for_model(model_name)
+            character_ref = ref_data.get("character")
+            method_ref = ref_data.get("method")
+            style_ref = ref_data.get("style")
+            logger.info(f"[재생성] Character: {len(character_ref) if character_ref else 'None'}bytes, "
+                        f"Method: {len(method_ref) if method_ref else 'None'}bytes, "
+                        f"Style: {len(style_ref) if style_ref else 'None'}bytes")
+            
+            # 씬 체이닝: 직전 씬 이미지 + 이전 씬 요약
+            prev_scene_image = None
+            prev_scene_summaries = None
+            prev_scene_number = None
+            
+            if scene.scene_number > 1:
+                summaries, prev_sn = build_scene_chaining_context(
+                    session.story.scenes, scene.scene_number
+                )
+                prev_scene_summaries = summaries if summaries else None
+                prev_scene_number = prev_sn
+                
+                # 직전 씬 이미지 로드
+                if prev_sn and session.images:
+                    for img_entry in session.images:
+                        if (img_entry.scene_number == prev_sn and 
+                            img_entry.status == "generated" and 
+                            img_entry.local_path and os.path.exists(img_entry.local_path)):
+                            with open(img_entry.local_path, "rb") as rf:
+                                prev_scene_image = rf.read()
+                            break
+            
+            ref_count = sum(1 for x in [character_ref, method_ref, style_ref] if x)
+            logger.info(f"[재생성] 씬 {scene.scene_number}: {ref_count}종 레퍼런스"
+                        f"{' + 씬체이닝' if prev_scene_image else ''}")
+            
+            image_data = await generator.generate(
+                prompt,
+                reference_images=[character_ref] if character_ref else None,
+                size=size,
+                method_image=method_ref,
+                style_image=style_ref,
+                prev_scene_image=prev_scene_image,
+                prev_scene_summaries=prev_scene_summaries,
+                prev_scene_number=prev_scene_number
+            )
+        elif is_flux_kontext:
             # ★ 재생성: 현재 씬의 기존 이미지를 참조로 전달 (캐릭터 외모 유지)
             if session.images and request.scene_index < len(session.images):
                 current_img = session.images[request.scene_index]
@@ -1238,6 +1294,10 @@ async def regenerate_image(request: RegenerateImageRequest):
                 is_reference=bool(ref_images),
                 characters=session.story.characters
             )
+            
+            base_seed = session.settings.image.flux_seed if is_flux_regen else None
+            regen_seed = (base_seed + scene.scene_number * 1000) if base_seed else None
+            image_data = await generator.generate(prompt, reference_images=ref_images, size=size, seed=regen_seed)
         elif is_flux_regen:
             # flux-dev 등 일반 Flux: text2img 최적화
             from app.services.prompt_builder import optimize_for_flux_kontext
@@ -1248,11 +1308,13 @@ async def regenerate_image(request: RegenerateImageRequest):
                 is_reference=False,
                 characters=session.story.characters
             )
-        
-        # ★ 재생성 시 씬별 seed 사용 (최초 생성과 동일 seed → 유사한 결과)
-        base_seed = session.settings.image.flux_seed if is_flux_regen else None
-        regen_seed = (base_seed + scene.scene_number * 1000) if base_seed else None
-        image_data = await generator.generate(prompt, reference_images=ref_images, size=size, seed=regen_seed)
+            
+            base_seed = session.settings.image.flux_seed if is_flux_regen else None
+            regen_seed = (base_seed + scene.scene_number * 1000) if base_seed else None
+            image_data = await generator.generate(prompt, reference_images=ref_images, size=size, seed=regen_seed)
+        else:
+            # DALL-E 등: 프롬프트만 사용
+            image_data = await generator.generate(prompt, reference_images=None, size=size)
         
         # 파일 저장
         filename = f"scene_{scene.scene_number}_{uuid.uuid4().hex[:6]}.png"
@@ -1262,17 +1324,6 @@ async def regenerate_image(request: RegenerateImageRequest):
         if isinstance(image_data, bytes):
             with open(filepath, "wb") as f:
                 f.write(image_data)
-            
-            # Pillow 후처리: 상단 25% 여백 강제 확보
-            try:
-                from app.services.pillow_service import get_pillow_service
-                from PIL import Image as PILImage
-                pillow = get_pillow_service()
-                regen_img = PILImage.open(filepath)
-                regen_img = pillow.ensure_top_margin(regen_img, margin_ratio=0.25)
-                regen_img.save(filepath, "PNG")
-            except Exception as margin_err:
-                logger.warning(f"여백 후처리 실패 (재생성 씬 {scene.scene_number}): {margin_err}")
         
         new_img = GeneratedImage(
             scene_number=scene.scene_number,
@@ -1770,8 +1821,6 @@ async def init_bubble_layers(session_id: str):
             ]
             pos = positions[j % len(positions)]
             
-            colors = char_color_map.get(dialogue.character, CHARACTER_COLORS[0])
-            
             bubbles.append(BubbleOverlay(
                 id=f"s{scene.scene_number}_d{j}",
                 type="dialogue",
@@ -1780,9 +1829,9 @@ async def init_bubble_layers(session_id: str):
                 position=pos,
                 shape=BubbleShape.ROUND,
                 tail_direction="bottom-left" if j % 2 == 0 else "bottom-right",
-                bg_color=colors["bg"],
-                text_color=colors["text"],
-                border_color=colors["border"],
+                bg_color="#FFFFFF",
+                text_color="#000000",
+                border_color="#333333",
                 font_size=15,
                 visible=True
             ))
@@ -1898,6 +1947,45 @@ def _draw_wrapped_text(draw, text, font, x, y, max_width, fill="black", align="l
             draw.text((x, line_y), line, fill=fill, font=font)
         bbox = draw.textbbox((0, 0), line, font=font)
         line_y += (bbox[3] - bbox[1]) + 4
+
+
+@router.delete("/session/{session_id}/delete-scene/{scene_num}")
+async def delete_scene_from_session(session_id: str, scene_num: int):
+    """세션에서 특정 씬을 삭제 (이미지 + 말풍선 레이어 + 스토리)"""
+    session = sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
+    
+    scene_idx = scene_num - 1  # 0-based
+    
+    # 1. 이미지 삭제
+    if session.images and scene_idx < len(session.images):
+        img = session.images[scene_idx]
+        if img.local_path and os.path.exists(img.local_path):
+            try:
+                os.remove(img.local_path)
+                logger.info(f"[씬 삭제] 이미지 파일 삭제: {img.local_path}")
+            except Exception as e:
+                logger.warning(f"[씬 삭제] 이미지 파일 삭제 실패: {e}")
+        session.images.pop(scene_idx)
+        # 이미지 씬 번호 재정렬
+        for i, img in enumerate(session.images):
+            img.scene_number = i + 1
+    
+    # 2. 스토리 씬 삭제
+    if session.story and session.story.scenes and scene_idx < len(session.story.scenes):
+        session.story.scenes.pop(scene_idx)
+        for i, sc in enumerate(session.story.scenes):
+            sc.scene_number = i + 1
+    
+    # 3. 말풍선 레이어 삭제
+    if hasattr(session, 'bubble_layers') and session.bubble_layers and scene_idx < len(session.bubble_layers):
+        session.bubble_layers.pop(scene_idx)
+        for i, layer in enumerate(session.bubble_layers):
+            layer['scene_number'] = i + 1
+    
+    logger.info(f"[씬 삭제] 세션 {session_id}: 씬 {scene_num} 삭제 완료")
+    return {"success": True, "message": f"씬 {scene_num} 삭제 완료"}
 
 
 @router.post("/bubble-layers/{session_id}/export")
@@ -2082,33 +2170,39 @@ async def export_with_bubbles(session_id: str):
                                        bx2 - bx1 - padding_x * 2,
                                        fill=txt_fill)
                     
-                    # ── 꼬리(tail) 그리기 ──
-                    tail_dir = getattr(bubble, 'tail_direction', 'none') or 'none'
+                    # ── 꼬리(tail) 그리기 — 8방향 지원 ──
+                    tail_dir = bubble.tail or bubble.tail_direction or 'none'
                     if tail_dir != 'none':
-                        tail_size = max(8, int(min(bx2 - bx1, by2 - by1) * 0.12))
-                        tail_offset = int((bx2 - bx1) * 0.2)
+                        bw = bx2 - bx1
+                        bh = by2 - by1
+                        tail_size = max(8, int(min(bw, bh) * 0.12))
+                        cx = (bx1 + bx2) // 2  # 말풍선 중앙 X
+                        cy = (by1 + by2) // 2  # 말풍선 중앙 Y
+                        off = int(bw * 0.2)
                         
+                        tp = None
                         if tail_dir == 'bottom-left':
-                            tp = [(bx1 + tail_offset, by2), (bx1 + tail_offset + tail_size, by2), (bx1 + tail_offset, by2 + tail_size)]
+                            tp = [(bx1 + off, by2), (bx1 + off + tail_size, by2), (bx1 + off, by2 + tail_size)]
+                        elif tail_dir == 'bottom-center':
+                            tp = [(cx - tail_size//2, by2), (cx + tail_size//2, by2), (cx, by2 + tail_size)]
                         elif tail_dir == 'bottom-right':
-                            tp = [(bx2 - tail_offset - tail_size, by2), (bx2 - tail_offset, by2), (bx2 - tail_offset, by2 + tail_size)]
+                            tp = [(bx2 - off - tail_size, by2), (bx2 - off, by2), (bx2 - off, by2 + tail_size)]
                         elif tail_dir == 'top-left':
-                            tp = [(bx1 + tail_offset, by1 - tail_size), (bx1 + tail_offset, by1), (bx1 + tail_offset + tail_size, by1)]
+                            tp = [(bx1 + off, by1 - tail_size), (bx1 + off, by1), (bx1 + off + tail_size, by1)]
+                        elif tail_dir == 'top-center':
+                            tp = [(cx - tail_size//2, by1), (cx + tail_size//2, by1), (cx, by1 - tail_size)]
                         elif tail_dir == 'top-right':
-                            tp = [(bx2 - tail_offset, by1 - tail_size), (bx2 - tail_offset, by1), (bx2 - tail_offset - tail_size, by1)]
-                        else:
-                            tp = None
+                            tp = [(bx2 - off - tail_size, by1), (bx2 - off, by1), (bx2 - off, by1 - tail_size)]
+                        elif tail_dir == 'left':
+                            tp = [(bx1 - tail_size, cy), (bx1, cy - tail_size//2), (bx1, cy + tail_size//2)]
+                        elif tail_dir == 'right':
+                            tp = [(bx2 + tail_size, cy), (bx2, cy - tail_size//2), (bx2, cy + tail_size//2)]
                         
                         if tp:
-                            # 꼬리 배경
                             draw.polygon(tp, fill=fill_color)
-                            # 꼬리 테두리
                             if border_outline:
+                                draw.line([tp[0], tp[1]], fill=border_outline, width=max(1, border_w))
                                 draw.line([tp[0], tp[2]], fill=border_outline, width=max(1, border_w))
-                                if tail_dir.startswith('bottom'):
-                                    draw.line([tp[1], tp[2]], fill=border_outline, width=max(1, border_w))
-                                else:
-                                    draw.line([tp[0], tp[1]], fill=border_outline, width=max(1, border_w))
             
             img = Image.alpha_composite(img, overlay)
         

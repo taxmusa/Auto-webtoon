@@ -104,6 +104,124 @@ class ReferenceService:
         logger.warning(f"[_extract_image_bytes] 예상 외 타입: {type(raw_data)}")
         return raw_data if raw_data else b""
 
+    @staticmethod
+    def _find_korean_font():
+        """한글 지원 폰트 경로를 탐색하여 반환"""
+        import platform
+        candidates = []
+        system = platform.system()
+
+        if system == "Windows":
+            fonts_dir = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
+            candidates = [
+                os.path.join(fonts_dir, "malgunbd.ttf"),   # 맑은 고딕 Bold
+                os.path.join(fonts_dir, "malgun.ttf"),     # 맑은 고딕
+                os.path.join(fonts_dir, "NanumGothicBold.ttf"),
+                os.path.join(fonts_dir, "NanumGothic.ttf"),
+                os.path.join(fonts_dir, "gulim.ttc"),
+                os.path.join(fonts_dir, "batang.ttc"),
+            ]
+        elif system == "Darwin":  # macOS
+            candidates = [
+                "/System/Library/Fonts/AppleSDGothicNeo.ttc",
+                "/Library/Fonts/NanumGothicBold.ttf",
+            ]
+        else:  # Linux
+            candidates = [
+                "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
+                "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+                "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+            ]
+
+        for path in candidates:
+            if os.path.exists(path):
+                return path
+        return None
+
+    @staticmethod
+    def overlay_character_name(image_bytes: bytes, name: str, role: str = "") -> bytes:
+        """캐릭터 레퍼런스 이미지 상단에 별도 이름 바를 추가.
+
+        원본 캐릭터 이미지 위에 텍스트를 겹치지 않고,
+        캔버스를 위로 확장하여 별도 이름 영역을 만든다.
+        이렇게 하면 캐릭터 외형이 가려지지 않아
+        AI가 씬 생성 시 캐릭터를 정확히 참조할 수 있다.
+        """
+        try:
+            from PIL import Image, ImageDraw, ImageFont
+            import io
+
+            img = Image.open(io.BytesIO(image_bytes))
+            if img.mode == 'RGBA':
+                bg = Image.new('RGB', img.size, (255, 255, 255))
+                bg.paste(img, mask=img.split()[3])
+                img = bg
+            elif img.mode != 'RGB':
+                img = img.convert('RGB')
+
+            w, h = img.size
+
+            # 텍스트 구성
+            label = name
+            if role:
+                label = f"{name} ({role})"
+
+            # 폰트 크기 (이미지 너비의 약 6%, 최소 22px)
+            font_size = max(22, int(w * 0.06))
+
+            # 한글 폰트 탐색
+            font = None
+            font_path = ReferenceService._find_korean_font()
+            if font_path:
+                try:
+                    font = ImageFont.truetype(font_path, font_size)
+                except (IOError, OSError):
+                    pass
+
+            if font is None:
+                for fallback in ["C:\\Windows\\Fonts\\malgunbd.ttf",
+                                 "C:\\Windows\\Fonts\\malgun.ttf"]:
+                    try:
+                        font = ImageFont.truetype(fallback, font_size)
+                        break
+                    except (IOError, OSError):
+                        continue
+
+            if font is None:
+                font = ImageFont.load_default()
+
+            # 텍스트 크기 측정
+            temp_draw = ImageDraw.Draw(img)
+            bbox = temp_draw.textbbox((0, 0), label, font=font)
+            text_w = bbox[2] - bbox[0]
+            text_h = bbox[3] - bbox[1]
+
+            # 이름 바 높이 (텍스트 + 상하 패딩)
+            pad_y = 14
+            bar_height = text_h + pad_y * 2
+
+            # 새 캔버스: 원본 이미지 위에 이름 바 영역 추가
+            new_h = h + bar_height
+            canvas = Image.new('RGB', (w, new_h), (30, 30, 30))  # 진한 회색 바 배경
+
+            # 이름 바 영역에 텍스트 그리기
+            draw = ImageDraw.Draw(canvas)
+            text_x = (w - text_w) // 2
+            text_y = pad_y
+            draw.text((text_x, text_y), label, fill=(255, 255, 255), font=font)
+
+            # 원본 캐릭터 이미지를 이름 바 아래에 배치 (겹침 없음)
+            canvas.paste(img, (0, bar_height))
+
+            buf = io.BytesIO()
+            canvas.save(buf, format='JPEG', quality=95)
+            logger.info(f"[레퍼런스] 캐릭터 이름 바 추가 완료: '{label}'")
+            return buf.getvalue()
+
+        except Exception as e:
+            logger.warning(f"[레퍼런스] 이름 바 추가 실패 (원본 반환): {e}")
+            return image_bytes
+
     # ============================================
     # 파일 관리
     # ============================================
@@ -178,7 +296,7 @@ class ReferenceService:
 **중요 지시사항:**
 - 반드시 아래 첨부된 스타일 참조 이미지의 화풍/그림체/선화 스타일/채색 방식/색상 팔레트를 그대로 따라해주세요.
 - 마치 같은 작가가 그린 것처럼 아트 스타일이 동일해야 합니다.
-- 단색 배경(녹색 #00FF00, 흰색, 또는 밝은 회색)을 사용하세요.
+- 배경은 반드시 단색(흰색 #FFFFFF 또는 밝은 회색 #F0F0F0)으로 이미지 전체를 빈틈없이 균일하게 채워주세요.
 - 캐릭터의 전신이 머리부터 발끝까지 완전히 보이도록 하세요.
 - 캐릭터가 정면을 바라보는 자연스러운 포즈로 그려주세요.
 - 얼굴 특징(눈 색, 머리 색/스타일), 의상 디테일, 액세서리를 명확하게 표현하세요.
@@ -195,12 +313,11 @@ class ReferenceService:
 {prompt}
 
 **중요 지시사항:**
-- 단색 배경(녹색 #00FF00, 흰색, 또는 밝은 회색)을 사용하세요.
+- 배경은 반드시 단색(흰색 #FFFFFF 또는 밝은 회색 #F0F0F0)으로 이미지 전체를 빈틈없이 균일하게 채워주세요. 배경에 어떤 장식이나 요소도 넣지 마세요.
 - 캐릭터의 전신이 머리부터 발끝까지 완전히 보이도록 하세요.
 - 캐릭터가 정면을 바라보는 자연스러운 포즈로 그려주세요.
 - 얼굴 특징(눈 색, 머리 색/스타일), 의상 디테일, 액세서리를 명확하게 표현하세요.
 - 캐릭터 디자인 시트 스타일로, 깨끗하고 선명한 선화로 그려주세요.
-- 배경에 어떤 장식이나 요소도 넣지 마세요. 순수하게 캐릭터만 그려주세요.
 - 반드시 1:1 정사각형 비율의 이미지로 생성해주세요.
 - 이미지에 텍스트, 글자, 문자를 절대 넣지 마세요.
 """

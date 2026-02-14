@@ -243,243 +243,113 @@ def build_styled_prompt(
     sub_style_name: Optional[str] = None
 ) -> str:
     """
-    스타일 프리셋이 적용된 최종 프롬프트 구성 (Style System 2.0).
-    섹션 순서·FROZEN/LOCKED 규칙: STYLE_CONSISTENCY_POLICY.md §2, §3, §4 준수.
+    레퍼런스 일관성 시스템 기반 프롬프트 구성.
+    3종 레퍼런스(Character/Method/Style)가 시각 스타일을 담당하므로
+    프롬프트는 간결하게 핵심만 전달.
 
-    Structure (순서 변경 금지):
-    1. [GLOBAL ART STYLE - DO NOT DEVIATE]
-    2. [RENDERING STYLE / VISUAL PRESET]
-    3. [BACKGROUND STYLE - CONSISTENT ACROSS ALL SCENES]
-    4. [CHARACTER N IDENTITY - DO NOT MODIFY]
-    5. [THIS SCENE]
-    6. [LOCKED ATTRIBUTES]
-    7. [EXCLUSION]
-    8. [USER MANUAL OVERRIDE] (optional)
+    Structure (5섹션):
+    1. [STYLE] — 아트 스타일 + 캐릭터 외형 (프롬프트 최상단 = 가장 강한 가중치)
+    2. [SCENE] — 이번 장면 시각 묘사
+    3. [RULES] — 금지 사항
+    4. [USER OVERRIDE] (optional)
     """
-    
+
     parts = []
 
-    # -----------------------------------------------------------
-    # 추가 지시사항(additional_instructions)은 프롬프트 전체를 관통하는
-    # 최우선 제약이므로, 먼저 추출해 두고 관련 섹션을 수정한다.
-    # 한국어 → 영어 변환하여 이미지 모델이 정확히 이해하도록 함.
-    # -----------------------------------------------------------
-    additional = ""
+    # ── 사전 준비 ──
     additional_en = ""
     if manual_overrides and manual_overrides.additional_instructions:
-        additional = manual_overrides.additional_instructions.strip()
-        additional_en = _translate_to_english(additional)
+        additional_en = _translate_to_english(
+            manual_overrides.additional_instructions.strip()
+        )
 
-    # =====================================================
-    # 0. ★ GLOBAL ART STYLE -- 프롬프트 최상단 (가장 강한 가중치)
-    # AI 모델은 프롬프트 앞부분을 가장 강하게 반영하므로
-    # 아트 스타일을 맨 앞에 배치하여 스타일이 무시되는 문제를 해결
-    # =====================================================
-    char_prompt = character_style.prompt_block if character_style else "Korean webtoon style, high quality"
+    # 스타일 프롬프트 결정
+    char_prompt = (
+        character_style.prompt_block if character_style
+        else "Korean webtoon style, high quality, bright colors"
+    )
     if manual_overrides:
         if manual_overrides.character_style_prompt:
             char_prompt = manual_overrides.character_style_prompt
         elif getattr(manual_overrides, "style_prompt", None):
-            char_prompt = manual_overrides.style_prompt  # UI "스타일 프롬프트" 필드
+            char_prompt = manual_overrides.style_prompt
 
-    parts.append(f"""
-[GLOBAL ART STYLE - DO NOT DEVIATE - THIS IS THE MOST IMPORTANT INSTRUCTION]
-{char_prompt}
-You MUST draw in this exact art style. This style overrides all other visual instructions.
-""")
-
-    # 0.5 사용자 오버라이드가 있으면 상단에 삽입
-    if additional_en:
-        parts.append(f"""
-[USER OVERRIDE INSTRUCTION]
-{additional_en}
-""")
-
-    # =====================================================
-    # 1. CHARACTER CONSISTENCY (간결화)
-    # =====================================================
-    vi_blocks = []
+    # 등장 캐릭터 결정
     scene_char_names = [d.character for d in scene.dialogues]
     active_chars = [c for c in characters if c.name in scene_char_names]
     if not active_chars:
         active_chars = characters[:2]
 
+    # =====================================================
+    # 1. [STYLE] — 아트 스타일 + 캐릭터 외형 (최상단)
+    # =====================================================
+    char_lines = []
     for char in active_chars:
         vi = char.visual_identity
         if vi:
             glasses_val = (vi.glasses or "").strip().lower()
             if not glasses_val or glasses_val in ("none", "no glasses", "none (no glasses)"):
-                glasses_display = "none (NO glasses)"
+                glasses_txt = "NO glasses"
             else:
-                glasses_display = vi.glasses
-            
-            vi_blocks.append(
-                f"  {char.name}: {vi.gender or '?'}, {vi.hair_color or '?'} {vi.hair_style or '?'}, "
-                f"{vi.skin_tone or '?'} skin, glasses={glasses_display}, "
+                glasses_txt = vi.glasses
+
+            char_lines.append(
+                f"- {char.name}: {vi.gender or '?'}, "
+                f"{vi.hair_color or '?'} {vi.hair_style or '?'}, "
+                f"{vi.skin_tone or '?'} skin, "
+                f"glasses={glasses_txt}, "
                 f"outfit={vi.outfit or '?'} ({vi.outfit_color or '?'})"
             )
         else:
-            vi_blocks.append(f"  {char.name}: {char.role}, {char.appearance or 'Professional look'}")
+            char_lines.append(
+                f"- {char.name}: {char.role}, {char.appearance or 'Professional look'}"
+            )
 
-    vi_section = "\n".join(vi_blocks)
+    chars_block = "\n".join(char_lines)
 
-    parts.append(f"""
-[CHARACTER CONSISTENCY]
-Keep these character appearances IDENTICAL across all scenes:
-{vi_section}
-Do NOT change: hair color, skin tone, outfit, glasses status between scenes.
+    parts.append(f"""[STYLE]
+{char_prompt}
+Follow the attached reference images for art style, character appearance, and composition.
+
+Characters (keep IDENTICAL across all scenes):
+{chars_block}
+Do NOT change hair, skin, outfit, or glasses between scenes.
 """)
 
-    # 2. Sub Style / Rendering Style
-    if sub_style_name and sub_style_name in SUB_STYLES:
-        sub_prompt = SUB_STYLES[sub_style_name]
-        parts.append(f"""
-[RENDERING STYLE / VISUAL PRESET]
-{sub_prompt}
-""")
-
-    # 3. Background Style
-    #    manual_overrides.background_style_prompt 우선 → background_style 객체 → 씬 자연 배경
-    bg_prompt = ""
-    if manual_overrides and manual_overrides.background_style_prompt:
-        # 프론트에서 "배경 지우기" / "단색 배경" 등을 직접 프롬프트로 전달
-        bg_prompt = manual_overrides.background_style_prompt
-    elif background_style:
-        bg_prompt = background_style.prompt_block
-    else:
-        # 배경 스타일 미지정 시: 일관된 기본 배경 강제
-        # → "배경이 있다가 없다가" 하는 문제 해결
-        bg_prompt = (
-            "Clean, well-lit modern indoor room with neutral warm tones. "
-            "Consistent background across ALL scenes. "
-            "Keep it simple and consistent with the art style."
-        )
-
-    if additional_en:
-        # 배경 관련 키워드가 추가지시에 있으면 배경 섹션을 완전히 대체
-        _bg_keywords = ["배경", "background", "흰", "white", "단색", "solid", "없", "remove", "plain",
-                         "character only", "no background", "simple"]
-        if any(kw in (additional + " " + additional_en).lower() for kw in _bg_keywords):
-            bg_prompt = additional_en  # 영어 번역으로 완전 대체
-
-    parts.append(f"""
-[BACKGROUND STYLE - CONSISTENT ACROSS ALL SCENES]
-{bg_prompt}
-""")
-
-    # 4. Character Identity (visual_identity 기반 강화)
-    for i, char in enumerate(active_chars):
-        position = "LEFT" if i == 0 else "RIGHT"
-        vi = char.visual_identity
-        
-        if vi:
-            # 안경 처리: 기본값은 안경 없음
-            glasses_val = (vi.glasses or "").strip().lower()
-            if not glasses_val or glasses_val in ("none", "no glasses", "none (no glasses)"):
-                glasses_line = "NO GLASSES (do not add glasses)"
-            else:
-                glasses_line = vi.glasses
-            
-            identity_lines = f"""Name: {char.name}
-  Role: {char.role}
-  Position: {position}
-  Gender: {vi.gender or 'not specified'} | Age: {vi.age_range or 'not specified'}
-  Hair: {vi.hair_style or 'not specified'} ({vi.hair_color or 'not specified'})
-  Skin tone: {vi.skin_tone or 'not specified'}
-  Eyes: {vi.eye_shape or 'not specified'}
-  Glasses: {glasses_line}
-  Outfit: {vi.outfit or 'not specified'} -- Colors: {vi.outfit_color or 'not specified'}
-  Accessories: {vi.accessories or 'none'}
-  Build: {vi.body_type or 'average'}
-  Features: {vi.distinguishing_features or 'none'}"""
-        else:
-            identity_lines = f"""Name: {char.name}
-  Role: {char.role}
-  Position: {position}
-  Appearance: {char.appearance or 'Professional look'}
-  Personality: {char.personality or 'Neutral'}"""
-
-        parts.append(f"""
-[CHARACTER {i+1} IDENTITY -- FROZEN, DO NOT MODIFY]
-{identity_lines}
-""")
-
-    # 4.5 Character GUARD (정책 §8.2)
-    if active_chars:
-        parts.append("""[GUARD] These character appearances are ABSOLUTELY FROZEN across all scenes.
-Do NOT alter: hair style, hair color, skin tone, glasses (presence/absence), outfit, outfit colors, accessories, body proportions.
-If you are uncertain about any detail, refer back to the [ABSOLUTE CHARACTER CONSISTENCY] section above.
-""")
-
-    # 5. This Scene (★ image_prompt 우선 사용, 없으면 scene_description 대체)
+    # =====================================================
+    # 2. [SCENE] — 이번 장면 시각 묘사
+    # =====================================================
     emotions = [d.emotion for d in scene.dialogues if d.emotion]
     dominant_emotion = emotions[0] if emotions else "neutral"
-    
-    # image_prompt가 있으면 시각 묘사 전용 프롬프트 사용 (더 상세하고 정확)
-    # 없으면 기존처럼 scene_description에서 정제
+
     _scene_visual = ""
     if hasattr(scene, 'image_prompt') and scene.image_prompt:
         _scene_visual = _clean_scene_desc(scene.image_prompt)
     else:
         _scene_visual = _clean_scene_desc(scene.scene_description or "")
 
-    parts.append(f"""
-[THIS SCENE]
-Scene: {_scene_visual}
+    parts.append(f"""[SCENE]
+{_scene_visual}
 Expression: {dominant_emotion}
 """)
 
-    # 5.5 Composition & Layout (인스타툰 말풍선/나레이션 공간 확보)
-    parts.append("""
-[COMPOSITION & LAYOUT -- MANDATORY]
-This image is for an Instagram webtoon (insta-toon) where speech bubbles and narration text will be overlaid AFTER generation.
-CRITICAL SPACING RULES:
-- Leave EMPTY SPACE at the TOP: at least 25-30% of image height. This area MUST be blank or very simple background only.
-- Leave EMPTY SPACE at the BOTTOM: at least 15-20% of image height for narration text.
-- Characters should occupy only 40-55% of the VERTICAL space, positioned in the LOWER-CENTER of the frame.
-- Use a MEDIUM SHOT or MEDIUM-WIDE SHOT. Show characters from waist-up or full body. NEVER use close-up shots that fill the frame.
-- Do NOT let any character's head touch the top 25% of the image. Keep heads in the middle zone.
-- Maintain generous BREATHING ROOM on LEFT and RIGHT sides (at least 10% each) for side text.
-- Background areas must be CLEAN and UNCLUTTERED so text overlay remains readable.
-[GUARD] Composition spacing is NON-NEGOTIABLE. Top 25% must be empty. Do NOT fill the frame with characters.
+    # =====================================================
+    # 3. [RULES] — 금지 사항 (간결하게)
+    # =====================================================
+    parts.append("""[RULES]
+- Generate a SINGLE scene illustration. Do NOT split into multiple panels or comic grid.
+- No text, letters, numbers, logos, watermarks, UI elements in the image.
+- No speech bubbles or dialogue boxes.
+- Show characters fully — do not crop heads or bodies out of frame.
+- Use medium or medium-wide shot. Do not use extreme close-ups.
 """)
 
-    # 6. Locked Attributes (정책 §4: STYLE / BACKGROUND 접두어)
-    locked = "\n[LOCKED ATTRIBUTES]\n"
-    if character_style and character_style.locked_attributes:
-        for attr in character_style.locked_attributes:
-            locked += f"- STYLE: {attr}\n"
-    if background_style and background_style.locked_attributes:
-        for attr in background_style.locked_attributes:
-            locked += f"- BACKGROUND: {attr}\n"
-    parts.append(locked)
-
-    # 7. Exclusion (강화)
-    parts.append("""
-[EXCLUSION -- ABSOLUTE RULE]
-ABSOLUTELY NO text, NO speech bubbles, NO words, NO letters, NO numbers, 
-NO typography, NO logos, NO watermarks, NO writing, NO UI elements, 
-NO signs, NO labels, NO captions, NO dialogue boxes in the image.
-The image must be a PURE ILLUSTRATION with ZERO written content.
-Any text or logo makes the image UNUSABLE. This is the HIGHEST priority rule.
-""")
-
-    # 8. 사용자 오버라이드 리마인더 (맨 끝에도 다시 한 번 강조, 영어로)
+    # =====================================================
+    # 4. [USER OVERRIDE] (있을 때만)
+    # =====================================================
     if additional_en:
-        parts.append(f"""
-[REMINDER -- APPLY USER OVERRIDE ABOVE ALL ELSE]
+        parts.append(f"""[USER OVERRIDE]
 {additional_en}
-""")
-
-    # 9. FINAL REMINDER -- 프롬프트 맨 끝
-    # AI 모델은 프롬프트의 처음과 끝을 가장 강하게 따르므로,
-    # ★ 스타일 + 일관성 규칙을 마지막에 다시 반복
-    parts.append(f"""
-[FINAL REMINDER]
-STYLE REMINDER: Draw in this EXACT style → {char_prompt[:150]}
-CHARACTER: Keep hair, skin, glasses, outfit IDENTICAL to spec. No glasses unless specified.
-LAYOUT: Top 25% empty. Characters in lower-center.
-NO TEXT: No text, logos, watermarks, speech bubbles anywhere.
 """)
 
     return "\n".join(parts)

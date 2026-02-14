@@ -280,6 +280,8 @@ class BubbleShape(str, Enum):
 
 class BubbleOverlay(BaseModel):
     """개별 말풍선 오버레이"""
+    model_config = {"populate_by_name": True}
+
     id: str                                          # 고유 ID
     type: str = "dialogue"                           # dialogue | narration
     character: str = ""                              # 캐릭터 이름 (narration이면 빈 문자열)
@@ -287,12 +289,14 @@ class BubbleOverlay(BaseModel):
     position: BubblePosition = BubblePosition.TOP_CENTER
     shape: BubbleShape = BubbleShape.ROUND
     font_family: str = ""                            # 개별 폰트 (빈 문자열=레이어 글로벌 따라감)
-    tail_direction: str = "none"                     # 꼬리 방향: none|bottom-left|bottom-right|top-left|top-right
-    narration_style: str = "classic"                 # 나레이션 전용 스타일: classic|light|gradient|minimal|cinematic|parchment
+    tail_direction: str = "none"                     # 꼬리 방향: none|bottom-left|bottom-right|...
+    tail: str = "none"                               # 프론트엔드 호환 (tail_direction alias)
+    narration_style: str = "classic"                 # 나레이션 전용 스타일
     bg_color: str = "#FFFFFF"                        # 말풍선 배경색
     text_color: str = "#000000"                      # 텍스트 색
     border_color: str = "#333333"                    # 테두리 색
-    font_size: int = 15                              # px
+    font_size: int = 13                              # px
+    bold: bool = False                               # 볼드 여부
     visible: bool = True                             # 표시/숨기기 토글
     opacity: float = 0.95                            # 투명도 (0~1)
     # 자유 위치/크기 (퍼센트, 0~100)
@@ -300,6 +304,13 @@ class BubbleOverlay(BaseModel):
     y: Optional[float] = None                        # 위쪽 위치 %
     w: Optional[float] = None                        # 폭 %
     h: Optional[float] = None                        # 높이 %
+
+    def model_post_init(self, __context):
+        """tail ↔ tail_direction 양방향 동기화"""
+        if self.tail and self.tail != "none":
+            self.tail_direction = self.tail
+        elif self.tail_direction and self.tail_direction != "none":
+            self.tail = self.tail_direction
 
 
 class CharacterBubbleStyle(BaseModel):
@@ -326,13 +337,13 @@ class BubbleLayer(BaseModel):
 # 캐릭터별 자동 색상 팔레트 (최대 8명)
 CHARACTER_COLORS = [
     {"bg": "#FFFFFF", "text": "#000000", "border": "#333333"},   # 기본 흰색
-    {"bg": "#E3F2FD", "text": "#0D47A1", "border": "#1565C0"},   # 파랑
-    {"bg": "#FFF3E0", "text": "#E65100", "border": "#F57C00"},   # 주황
-    {"bg": "#F3E5F5", "text": "#6A1B9A", "border": "#8E24AA"},   # 보라
-    {"bg": "#E8F5E9", "text": "#1B5E20", "border": "#2E7D32"},   # 초록
-    {"bg": "#FCE4EC", "text": "#880E4F", "border": "#C2185B"},   # 핑크
-    {"bg": "#FFF9C4", "text": "#F57F17", "border": "#FBC02D"},   # 노랑
-    {"bg": "#EFEBE9", "text": "#3E2723", "border": "#5D4037"},   # 갈색
+    {"bg": "#E3F2FD", "text": "#000000", "border": "#1565C0"},   # 파랑
+    {"bg": "#FFF3E0", "text": "#000000", "border": "#F57C00"},   # 주황
+    {"bg": "#F3E5F5", "text": "#000000", "border": "#8E24AA"},   # 보라
+    {"bg": "#E8F5E9", "text": "#000000", "border": "#2E7D32"},   # 초록
+    {"bg": "#FCE4EC", "text": "#000000", "border": "#C2185B"},   # 핑크
+    {"bg": "#FFF9C4", "text": "#000000", "border": "#FBC02D"},   # 노랑
+    {"bg": "#EFEBE9", "text": "#000000", "border": "#5D4037"},   # 갈색
 ]
 
 
