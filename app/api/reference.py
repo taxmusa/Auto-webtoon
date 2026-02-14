@@ -105,7 +105,9 @@ async def get_reference_image(ref_type: str, session_id: Optional[str] = None):
 async def upload_reference_image(
     ref_type: str,
     file: UploadFile = File(...),
-    session_id: Optional[str] = Form(None)
+    session_id: Optional[str] = Form(None),
+    character_name: Optional[str] = Form(None),
+    character_role: Optional[str] = Form(None)
 ):
     """레퍼런스 이미지 업로드"""
     if ref_type not in VALID_TYPES:
@@ -114,6 +116,12 @@ async def upload_reference_image(
     image_bytes = await file.read()
     if not image_bytes:
         raise HTTPException(status_code=400, detail="빈 파일입니다.")
+
+    # 캐릭터 이미지인 경우 이름 오버레이 적용
+    if ref_type == "character" and character_name and character_name.strip():
+        image_bytes = ReferenceService.overlay_character_name(
+            image_bytes, character_name.strip(), (character_role or "").strip()
+        )
 
     service = ReferenceService(session_id)
     saved_path = service.save_reference(ref_type, image_bytes)

@@ -283,44 +283,24 @@ def build_styled_prompt(
     # =====================================================
     # 1. [STYLE] — 아트 스타일 + 캐릭터 외형 (최상단)
     # =====================================================
-    char_lines = []
-    for char in active_chars:
-        vi = char.visual_identity
-        if vi:
-            glasses_val = (vi.glasses or "").strip().lower()
-            if not glasses_val or glasses_val in ("none", "no glasses", "none (no glasses)"):
-                glasses_txt = "NO glasses"
-            else:
-                glasses_txt = vi.glasses
-
-            char_lines.append(
-                f"- {char.name}: {vi.gender or '?'}, "
-                f"{vi.hair_color or '?'} {vi.hair_style or '?'}, "
-                f"{vi.skin_tone or '?'} skin, "
-                f"glasses={glasses_txt}, "
-                f"outfit={vi.outfit or '?'} ({vi.outfit_color or '?'})"
-            )
-        else:
-            char_lines.append(
-                f"- {char.name}: {char.role}, {char.appearance or 'Professional look'}"
-            )
-
+    # 캐릭터는 이름과 역할만 표시 (외모는 프리셋 이미지를 따름)
+    char_lines = [f"- {char.name} ({char.role})" for char in active_chars]
     chars_block = "\n".join(char_lines)
 
     parts.append(f"""[STYLE]
 {char_prompt}
-Follow the attached reference images for art style, character appearance, and composition.
+Character appearance must follow EXACTLY from the attached character reference image.
+Do NOT invent or change any visual features — hair, face, skin, outfit, glasses must match the reference image.
 
-Characters (keep IDENTICAL across all scenes):
+Characters in this scene:
 {chars_block}
-Do NOT change hair, skin, outfit, or glasses between scenes.
 """)
 
     # =====================================================
     # 2. [SCENE] — 이번 장면 시각 묘사
     # =====================================================
     emotions = [d.emotion for d in scene.dialogues if d.emotion]
-    dominant_emotion = emotions[0] if emotions else "neutral"
+    dominant_emotion = emotions[0] if emotions else "일반"
 
     _scene_visual = ""
     if hasattr(scene, 'image_prompt') and scene.image_prompt:
@@ -330,7 +310,7 @@ Do NOT change hair, skin, outfit, or glasses between scenes.
 
     parts.append(f"""[SCENE]
 {_scene_visual}
-Expression: {dominant_emotion}
+캐릭터 표정: {dominant_emotion}
 """)
 
     # =====================================================

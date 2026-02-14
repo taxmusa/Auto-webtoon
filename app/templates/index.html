@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title }}</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🎨</text></svg>" type="image/svg+xml">
     <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap"
         rel="stylesheet">
     <style>
@@ -738,12 +739,12 @@
 
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
                         <div>
-                            <label style="font-weight: 600;">총 제작 씬(Scene) 개수</label>
+                            <label style="font-weight: 600;">총 제작 씬(Scene) 개수 <span style="font-size:0.75rem; color:var(--primary); font-weight:700; background:rgba(99,102,241,0.1); padding:2px 6px; border-radius:4px; margin-left:4px;">표지 포함</span></label>
                             <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.5rem;">
-                                <input type="number" id="total-scene-count" value="8"
+                                <input type="number" id="total-scene-count" value="8" min="3"
                                     style="width: 80px; text-align: center; font-size: 1.25rem;">
                                 <span style="font-size: 0.875rem; color: var(--text-muted);">추천: <b
-                                        id="ai-rec-scenes">8</b>개</span>
+                                        id="ai-rec-scenes">8</b>개 <span style="font-size:0.7rem;">(표지 1 + 본문 <b id="ai-rec-body-scenes">7</b>)</span></span>
                             </div>
                         </div>
                         <div>
@@ -787,7 +788,6 @@
                     </div>
                     <div style="display: flex; gap: 6px;">
                         <button onclick="navigateToStep('preset')" class="btn btn-sm" style="padding:4px 10px; font-size:0.75rem; background:var(--bg-card); border:1px solid var(--border); color:var(--text); cursor:pointer; border-radius:6px;">프리셋 관리</button>
-                        <button class="btn btn-secondary btn-sm" onclick="openStoryHistoryModal()" style="padding: 4px 10px; font-size: 0.75rem;">📂 이전 스토리</button>
                     </div>
                 </div>
                 <!-- 컴팩트 프리셋 갤러리 -->
@@ -837,6 +837,27 @@
                         </div>
                     </div>
                     <div id="scenes-container"></div>
+                </div>
+            </div>
+
+            <!-- 스토리 저장/불러오기 (항상 표시) -->
+            <div id="story-save-load" style="margin-top:1rem;">
+                <div class="card" style="padding:0.75rem;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                        <span style="font-weight:700; font-size:0.85rem;">💾 스토리 저장 / 불러오기</span>
+                        <button class="btn btn-secondary" onclick="toggleSavedStories()" style="font-size:0.7rem; padding:2px 8px;">저장 목록</button>
+                    </div>
+                    <!-- 저장 영역 (스토리가 있을 때만 표시) -->
+                    <div id="story-save-area" style="display:none; margin-bottom:0.5rem;">
+                        <div style="display:flex; gap:4px;">
+                            <input type="text" id="story-save-name" placeholder="저장 이름 입력 (예: 종소세_v2)" 
+                                style="flex:1; border:1px solid var(--border); border-radius:6px; padding:4px 8px; font-size:0.82rem; background:var(--bg-card);"
+                                onkeydown="if(event.key==='Enter') saveStoryManual();">
+                            <button class="btn btn-primary" onclick="saveStoryManual()" style="font-size:0.75rem; padding:4px 12px; flex-shrink:0;">저장</button>
+                        </div>
+                    </div>
+                    <!-- 저장 목록 (토글) -->
+                    <div id="saved-stories-list" style="display:none; max-height:250px; overflow-y:auto;"></div>
                 </div>
             </div>
 
@@ -1472,6 +1493,15 @@
         var characters = [];
         var selectedMode = 'auto'; // 'auto' or 'manual'
 
+        // 추천 씬 수 계산 및 UI 업데이트 (표지 포함)
+        function updateRecScenes() {
+            const recScenes = Math.min(Math.max(Math.round(collectedData.length * 1.5), 6), 15);
+            document.getElementById('total-scene-count').value = recScenes;
+            document.getElementById('ai-rec-scenes').innerText = recScenes;
+            const bodyEl = document.getElementById('ai-rec-body-scenes');
+            if (bodyEl) bodyEl.innerText = recScenes - 1;
+        }
+
         function selectMode(mode) {
             selectedMode = mode;
             document.querySelectorAll('.mode-card').forEach(c => {
@@ -1675,9 +1705,7 @@
                 saveDataToStorage(); // localStorage에 저장
 
                 // 씬 수 추천 (수동 모드)
-                const recScenes = Math.min(Math.max(collectedData.length * 1.5, 6), 15).toFixed(0);
-                document.getElementById('total-scene-count').value = recScenes;
-                document.getElementById('ai-rec-scenes').innerText = recScenes;
+                updateRecScenes();
 
                 loadingEl.style.display = 'none';
                 reviewArea.style.display = 'block';
@@ -1736,10 +1764,7 @@
 
                 renderDataItems();
                 saveDataToStorage(); // localStorage에 저장
-
-                const recScenes = Math.min(Math.max(collectedData.length * 1.5, 6), 15).toFixed(0);
-                document.getElementById('total-scene-count').value = recScenes;
-                document.getElementById('ai-rec-scenes').innerText = recScenes;
+                updateRecScenes();
 
                 loadingEl.style.display = 'none';
                 reviewArea.style.display = 'block';
@@ -1836,11 +1861,7 @@
                 collectedData.splice(idx, 1);
                 renderDataItems();
                 saveDataToStorage();
-
-                // 씬 수 재계산
-                const recScenes = Math.min(Math.max(collectedData.length * 1.5, 6), 15).toFixed(0);
-                document.getElementById('total-scene-count').value = recScenes;
-                document.getElementById('ai-rec-scenes').innerText = recScenes;
+                updateRecScenes();
             }
         }
 
@@ -1855,11 +1876,7 @@
             collectedData.push({ title, content });
             renderDataItems();
             saveDataToStorage();
-
-            // 씬 수 재계산
-            const recScenes = Math.min(Math.max(collectedData.length * 1.5, 6), 15).toFixed(0);
-            document.getElementById('total-scene-count').value = recScenes;
-            document.getElementById('ai-rec-scenes').innerText = recScenes;
+            updateRecScenes();
         }
 
         // === 드래그 앤 드롭 정렬 ===
@@ -2425,55 +2442,134 @@
             showToast(`캐릭터 "${updatedName}" 정보가 수정되었습니다`, 'success');
         }
 
+        // ── 감정 목록 (한글) ──
+        const EMOTION_OPTIONS = [
+            '일반', '웃으며', '밝게', '진지하게', '놀라며', '화내며',
+            '슬프게', '걱정하며', '당황하며', '자신있게', '속삭이며', '소리치며',
+            '궁금해하며', '감탄하며', '고민하며', '장난스럽게', '뿌듯하게',
+            '차분하게', '다급하게', '부끄러워하며'
+        ];
+
+        // 캐릭터 선택 드롭다운 HTML 생성
+        function renderSpeakerSelect(sceneIdx, dialogueIdx, currentChar) {
+            const chars = (storyData.characters || []).map(c => c.name || c);
+            const id = dialogueIdx === -1
+                ? `new-dialogue-char-${sceneIdx}`
+                : '';
+            const onChange = dialogueIdx === -1
+                ? ''
+                : `onchange="changeSpeaker(${sceneIdx}, ${dialogueIdx}, this.value)"`;
+            let opts = chars.map(c => {
+                const sel = (c === currentChar) ? ' selected' : '';
+                return `<option value="${c}"${sel}>${c}</option>`;
+            }).join('');
+            // 새 대사 추가용일 때 첫번째 캐릭터 기본 선택
+            return `<select ${id ? 'id="'+id+'"' : ''} ${onChange}
+                style="font-weight:700; color:var(--primary); background:transparent; border:1px solid var(--primary); border-radius:8px; padding:2px 4px; font-size:0.75rem; cursor:pointer; flex-shrink:0; max-width:76px;"
+                title="말하는 사람">${opts}</select>`;
+        }
+
+        // 감정 선택 드롭다운 HTML 생성
+        function renderEmotionSelect(sceneIdx, dialogueIdx, currentEmotion) {
+            const id = dialogueIdx === -1
+                ? `new-dialogue-emotion-${sceneIdx}`
+                : '';
+            const onChange = dialogueIdx === -1
+                ? ''
+                : `onchange="updateEmotion(${sceneIdx}, ${dialogueIdx}, this.value)"`;
+            // AI 감정값이 목록에 없으면 자동 추가
+            let options = [...EMOTION_OPTIONS];
+            const cur = (currentEmotion || '일반').trim();
+            if (cur && !options.includes(cur)) {
+                options.unshift(cur);
+            }
+            const opts = options.map(e => {
+                const sel = (e === cur) ? ' selected' : '';
+                return `<option value="${e}"${sel}>${e}</option>`;
+            }).join('');
+            return `<select ${id ? 'id="'+id+'"' : ''} ${onChange}
+                style="font-size:0.7rem; color:var(--text-muted); background:transparent; border:1px solid var(--border); border-radius:6px; padding:2px 3px; cursor:pointer; flex-shrink:0; max-width:72px;"
+                title="감정">${opts}</select>`;
+        }
+
+        // 씬별 등장인물 토글 칩 HTML 생성
+        function renderCharToggleChips(sceneIdx, sceneChars) {
+            const allChars = storyData.characters ? storyData.characters.map(c => c.name || c) : [];
+            const activeSet = new Set(sceneChars);
+            return allChars.map(c => {
+                const isActive = activeSet.has(c);
+                const safeC = c.replace(/'/g, "&#39;");
+                if (isActive) {
+                    return `<span onclick="toggleCharInScene(${sceneIdx}, '${safeC}')" 
+                        style="display:inline-flex; align-items:center; gap:2px; background:rgba(99,102,241,0.2); color:var(--primary); padding:3px 10px; border-radius:14px; font-size:0.72rem; font-weight:700; cursor:pointer; border:1.5px solid var(--primary); user-select:none; transition:all 0.15s;" 
+                        title="클릭하면 이 씬에서 제외">✓ ${c}</span>`;
+                } else {
+                    return `<span onclick="toggleCharInScene(${sceneIdx}, '${safeC}')" 
+                        style="display:inline-flex; align-items:center; gap:2px; background:transparent; color:var(--text-muted); padding:3px 10px; border-radius:14px; font-size:0.72rem; font-weight:500; cursor:pointer; border:1.5px dashed var(--border); user-select:none; opacity:0.6; transition:all 0.15s;" 
+                        title="클릭하면 이 씬에 추가">${c}</span>`;
+                }
+            }).join('');
+        }
+
         function renderScenes(scenes) {
             const container = document.getElementById('scenes-container');
             container.innerHTML = scenes.map((s, idx) => {
                 const densityWarnings = validateSceneRules(s);
-                // 씬에 등장하는 캐릭터 추출
-                const sceneChars = [...new Set(s.dialogues.map(d => d.character))];
+                const isCover = s.scene_number === 0;
                 return `
-                <div class="card" style="margin-bottom: 1rem; border: 1px solid ${densityWarnings.length > 0 ? 'var(--warning)' : 'var(--border)'};">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                        <span style="font-weight: 600;">씬 ${s.scene_number}</span>
-                        <div style="display: flex; gap: 0.5rem;">
-                             <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" onclick="editScene(${idx})">설명수정</button>
-                             <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" onclick="deleteScene(${idx})" title="씬 삭제" style="background-color: #fee2e2; color: #dc2626; border: 1px solid #fecaca;">삭제</button>
-                        </div>
+                <div class="card" style="margin-bottom: 1rem; border: ${isCover ? '2px solid var(--primary)' : '1px solid ' + (densityWarnings.length > 0 ? 'var(--warning)' : 'var(--border)')}; ${isCover ? 'background: linear-gradient(135deg, rgba(99,102,241,0.05), rgba(139,92,246,0.05));' : ''}">
+                    <!-- 씬 헤더 -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                        <span style="font-weight: 700; font-size: 0.85rem;">
+                            ${isCover 
+                                ? '<span style="background:var(--primary); color:#fff; padding:2px 8px; border-radius:10px; font-size:0.72rem; margin-right:4px;">📌 표지</span> 썸네일' 
+                                : '씬 ' + s.scene_number}
+                        </span>
+                        <button onclick="deleteScene(${idx})" 
+                            style="background:none; border:1px solid var(--danger); color:var(--danger); cursor:pointer; padding:2px 8px; border-radius:6px; font-size:0.7rem;" title="씬 삭제">삭제</button>
                     </div>
-                    <div style="font-size: 0.875rem; margin-bottom: 0.5rem; cursor:pointer;" onclick="editScene(${idx})" title="클릭하여 수정">🎬 ${s.scene_description}</div>
 
-                    <!-- 등장인물 태그 -->
-                    <div style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:0.5rem; align-items:center;">
-                        <span style="font-size:0.7rem; color:var(--text-muted); margin-right:2px;">등장:</span>
-                        ${sceneChars.map(c => `
-                            <span style="display:inline-flex; align-items:center; gap:2px; background:rgba(99,102,241,0.15); color:var(--primary); padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:600;">
-                                ${c}
-                                <button onclick="event.stopPropagation(); removeCharacterFromScene(${idx}, '${c.replace(/'/g, "\\'")}')" 
-                                    style="background:none; border:none; color:var(--danger); cursor:pointer; font-size:0.8rem; padding:0 2px; line-height:1;" title="${c} 제거">×</button>
-                            </span>
-                        `).join('')}
-                        <button onclick="addCharacterToScene(${idx})" 
-                            style="background:none; border:1px dashed var(--border); color:var(--text-muted); cursor:pointer; padding:2px 6px; border-radius:12px; font-size:0.7rem;" title="인물 추가">+ 인물</button>
+                    <!-- 씬 설명 (인라인 textarea) -->
+                    <div style="margin-bottom: 0.4rem;">
+                        <div style="font-size:0.65rem; color:var(--text-muted); margin-bottom:2px;">🎬 씬 설명</div>
+                        <textarea onchange="updateSceneDesc(${idx}, this.value)"
+                            style="width:100%; border:1px solid var(--border); border-radius:6px; padding:5px 8px; font-size:0.82rem; background:var(--bg-card); resize:vertical; min-height:38px; font-family:inherit; box-sizing:border-box;"
+                            rows="2">${(s.scene_description||'').replace(/</g,'&lt;')}</textarea>
                     </div>
 
                     <!-- 대사 목록 -->
                     ${s.dialogues.map((d, dIdx) => `
-                        <div style="background: var(--bg-input); padding: 0.4rem 0.5rem; border-radius: 6px; margin-bottom: 0.25rem; font-size: 0.875rem; display:flex; align-items:center; gap:4px;">
-                            <div style="flex:1; cursor:pointer;" onclick="editDialogue(${idx}, ${dIdx})">
-                                <span style="font-weight: 600; color: var(--primary);">${d.character}:</span> ${d.text}
-                                <span style="font-size: 0.7rem; color: var(--text-muted); margin-left:4px;">[${d.emotion}]</span>
-                            </div>
-                            <button onclick="event.stopPropagation(); deleteDialogue(${idx}, ${dIdx})" 
+                        <div style="background: var(--bg-input); padding: 0.35rem 0.5rem; border-radius: 6px; margin-bottom: 0.3rem; font-size: 0.82rem; display:flex; align-items:center; gap:4px;">
+                            ${renderSpeakerSelect(idx, dIdx, d.character)}
+                            <input type="text" value="${(d.text||'').replace(/"/g,'&quot;')}"
+                                onchange="updateDialogueText(${idx}, ${dIdx}, this.value)"
+                                style="flex:1; border:1px solid var(--border); border-radius:6px; padding:3px 6px; font-size:0.82rem; background:var(--bg-card); min-width:0;"
+                                placeholder="대사 입력">
+                            ${renderEmotionSelect(idx, dIdx, d.emotion)}
+                            <button onclick="deleteDialogue(${idx}, ${dIdx})" 
                                 style="background:none; border:none; color:var(--danger); cursor:pointer; font-size:1rem; padding:0 4px; line-height:1; flex-shrink:0;" title="대사 삭제">×</button>
                         </div>
                     `).join('')}
 
-                    <!-- 대사 추가 버튼 -->
-                    <button onclick="addDialogue(${idx})" 
-                        style="background:none; border:1px dashed var(--border); color:var(--text-muted); cursor:pointer; padding:4px 10px; border-radius:6px; font-size:0.75rem; width:100%; margin-top:4px;" title="대사 추가">+ 대사 추가</button>
+                    <!-- 대사 추가 (인라인) -->
+                    <div style="background: rgba(99,102,241,0.05); border: 1.5px dashed var(--primary); border-radius: 6px; padding: 0.35rem 0.5rem; margin-top: 0.3rem; display:flex; align-items:center; gap:4px;">
+                        ${renderSpeakerSelect(idx, -1, '')}
+                        <input type="text" id="new-dialogue-text-${idx}" placeholder="새 대사 입력 후 Enter"
+                            onkeydown="if(event.key==='Enter'){addDialogueInline(${idx});}"
+                            style="flex:1; border:1px solid var(--border); border-radius:6px; padding:3px 6px; font-size:0.82rem; background:var(--bg-card); min-width:0;">
+                        ${renderEmotionSelect(idx, -1, '일반')}
+                        <button onclick="addDialogueInline(${idx})"
+                            style="background:var(--primary); color:#fff; border:none; cursor:pointer; font-size:0.72rem; padding:3px 8px; border-radius:6px; font-weight:600; flex-shrink:0;">추가</button>
+                    </div>
 
-                    ${s.narration ? `<div style="font-style: italic; color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem; cursor: pointer;" onclick="editNarration(${idx})">💬 ${s.narration}</div>` : 
-                    `<div style="margin-top:0.5rem;"><button onclick="addNarration(${idx})" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:0.75rem;">+ 나레이션 추가</button></div>`}
+                    <!-- 나레이션 (인라인) -->
+                    <div style="margin-top: 0.4rem;">
+                        <div style="font-size:0.65rem; color:var(--text-muted); margin-bottom:2px;">💬 나레이션</div>
+                        <input type="text" value="${(s.narration||'').replace(/"/g,'&quot;')}"
+                            onchange="updateNarration(${idx}, this.value)"
+                            style="width:100%; border:1px solid var(--border); border-radius:6px; padding:4px 8px; font-size:0.82rem; background:var(--bg-card); font-style:italic; box-sizing:border-box;"
+                            placeholder="나레이션 입력 (선택사항)">
+                    </div>
                     
                     ${densityWarnings.map(w => `
                         <div class="rule-warning">⚠️ ${w}</div>
@@ -2482,17 +2578,64 @@
             `}).join('');
         }
 
-        // 씬 설명 수정
-        function editScene(idx) {
-            const scene = storyData.scenes[idx];
-            const newDesc = prompt('씬 설명:', scene.scene_description);
-            if (newDesc !== null && newDesc.trim()) {
-                storyData.scenes[idx].scene_description = newDesc;
-                renderScenes(storyData.scenes);
+        // 씬 설명 인라인 수정
+        function updateSceneDesc(idx, value) {
+            storyData.scenes[idx].scene_description = value.trim();
+        }
+
+        // 나레이션 인라인 수정
+        function updateNarration(idx, value) {
+            storyData.scenes[idx].narration = value.trim();
+        }
+
+        // 말하는 사람 변경 (드롭다운)
+        function changeSpeaker(sceneIdx, dialogueIdx, newName) {
+            const old = storyData.scenes[sceneIdx].dialogues[dialogueIdx].character;
+            storyData.scenes[sceneIdx].dialogues[dialogueIdx].character = newName;
+            showToast(`${old} → ${newName}`, 'success');
+            // 토글 칩 상태도 갱신
+            renderScenes(storyData.scenes);
+        }
+
+        // 대사 텍스트 인라인 수정
+        function updateDialogueText(sceneIdx, dialogueIdx, newText) {
+            if (newText && newText.trim()) {
+                storyData.scenes[sceneIdx].dialogues[dialogueIdx].text = newText.trim();
             }
         }
 
-        // 대사 수정
+        // 감정 인라인 수정
+        function updateEmotion(sceneIdx, dialogueIdx, newEmotion) {
+            storyData.scenes[sceneIdx].dialogues[dialogueIdx].emotion = newEmotion;
+        }
+
+        // 대사 인라인 추가 (팝업 없이)
+        function addDialogueInline(sceneIdx) {
+            const charEl = document.getElementById(`new-dialogue-char-${sceneIdx}`);
+            const textEl = document.getElementById(`new-dialogue-text-${sceneIdx}`);
+            const emotionEl = document.getElementById(`new-dialogue-emotion-${sceneIdx}`);
+            if (!charEl || !textEl) return;
+
+            const charName = charEl.value;
+            const text = textEl.value.trim();
+            const emotion = emotionEl ? emotionEl.value : '일반';
+
+            if (!text) {
+                showToast('대사를 입력해주세요.', 'error');
+                textEl.focus();
+                return;
+            }
+
+            storyData.scenes[sceneIdx].dialogues.push({
+                character: charName,
+                text: text,
+                emotion: emotion
+            });
+            renderScenes(storyData.scenes);
+            showToast(`${charName}의 대사 추가됨`, 'success');
+        }
+
+        // 기존 팝업 방식 — 호환용 유지
         function editDialogue(sceneIdx, dialogueIdx) {
             const dialogue = storyData.scenes[sceneIdx].dialogues[dialogueIdx];
             const newText = prompt(`${dialogue.character}의 대사:`, dialogue.text);
@@ -2543,34 +2686,39 @@
             showToast(`${charName}의 대사가 추가되었습니다.`, 'success');
         }
 
-        // 씬에서 인물 제거 (해당 인물의 모든 대사 삭제 + 씬 설명에서 이름 제거)
-        function removeCharacterFromScene(sceneIdx, charName) {
+        // 씬 등장인물 토글 (원클릭 ON/OFF)
+        function toggleCharInScene(sceneIdx, charName) {
             const scene = storyData.scenes[sceneIdx];
-            const dialogueCount = scene.dialogues.filter(d => d.character === charName).length;
-            
-            if (!confirm(`씬 ${scene.scene_number}에서 "${charName}"을(를) 제거하시겠습니까?\n\n• 대사 ${dialogueCount}개 삭제\n• 씬 설명에서 이름 제거`)) return;
+            const sceneChars = [...new Set(scene.dialogues.map(d => d.character))];
+            const isActive = sceneChars.includes(charName);
 
-            // 해당 인물의 대사 모두 삭제
-            scene.dialogues = scene.dialogues.filter(d => d.character !== charName);
+            if (isActive) {
+                // --- OFF: 씬에서 제거 ---
+                const dialogueCount = scene.dialogues.filter(d => d.character === charName).length;
+                if (dialogueCount > 0 && !confirm(`"${charName}"의 대사 ${dialogueCount}개가 삭제됩니다. 제거할까요?`)) return;
 
-            // 씬 설명에서 인물 이름 제거 (자연스럽게)
-            if (scene.scene_description) {
-                // "와/과 인물", "인물와/과", "인물이/가" 등 자연어 패턴 처리
-                const nameRegex = new RegExp(charName, 'g');
-                scene.scene_description = scene.scene_description.replace(nameRegex, '').replace(/\s{2,}/g, ' ').trim();
+                scene.dialogues = scene.dialogues.filter(d => d.character !== charName);
+                if (scene.scene_description) {
+                    scene.scene_description = scene.scene_description.replace(new RegExp(charName, 'g'), '').replace(/\s{2,}/g, ' ').trim();
+                }
+                if (scene.narration) {
+                    scene.narration = scene.narration.replace(new RegExp(charName, 'g'), '').replace(/\s{2,}/g, ' ').trim();
+                }
+                renderScenes(storyData.scenes);
+                showToast(`"${charName}" OFF — 씬 ${scene.scene_number}에서 제외`, 'info');
+            } else {
+                // --- ON: 씬에 추가 (빈 대사 1개 자동 생성) ---
+                scene.dialogues.push({
+                    character: charName,
+                    text: '(대사를 입력하세요)',
+                    emotion: '일반'
+                });
+                renderScenes(storyData.scenes);
+                showToast(`"${charName}" ON — 씬 ${scene.scene_number}에 추가됨 (대사를 클릭하여 수정)`, 'success');
             }
-
-            // 나레이션에서도 제거
-            if (scene.narration) {
-                const nameRegex = new RegExp(charName, 'g');
-                scene.narration = scene.narration.replace(nameRegex, '').replace(/\s{2,}/g, ' ').trim();
-            }
-
-            renderScenes(storyData.scenes);
-            showToast(`씬 ${scene.scene_number}에서 "${charName}" 제거 완료`, 'success');
         }
 
-        // 씬에 인물 추가 (대사 포함)
+        // 기존 호환용 — 더 이상 UI에서 직접 호출하지 않음
         function addCharacterToScene(sceneIdx) {
             const chars = storyData.characters ? storyData.characters.map(c => c.name || c) : [];
             const existingChars = [...new Set(storyData.scenes[sceneIdx].dialogues.map(d => d.character))];
@@ -2689,6 +2837,8 @@
                             document.getElementById('loading-story').style.display = 'none';
                             document.getElementById('story-review-area').style.display = 'block';
                             document.getElementById('story-actions').style.display = 'flex';
+                            const saveArea = document.getElementById('story-save-area');
+                            if (saveArea) saveArea.style.display = 'flex';
 
                             goToStep(3);
 
@@ -2723,6 +2873,143 @@
             if (scene.dialogues.length > 3) warnings.push(`말풍선이 너무 많습니다 (${scene.dialogues.length}개 > 3개)`);
             if (scene.narration && scene.narration.length > 60) warnings.push(`나레이션이 너무 깁니다 (${scene.narration.length}자 > 60자)`);
             return warnings;
+        }
+
+        // ── 스토리 수동 저장 ──
+        async function saveStoryManual() {
+            const nameEl = document.getElementById('story-save-name');
+            const saveName = (nameEl ? nameEl.value.trim() : '') || `스토리_${new Date().toLocaleString('ko-KR')}`;
+            if (!sessionId || !storyData) {
+                showToast('저장할 스토리가 없습니다.', 'error');
+                return;
+            }
+            try {
+                const res = await fetch('/api/workflow/story/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, save_name: saveName })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`"${saveName}" 저장 완료`, 'success');
+                    if (nameEl) nameEl.value = '';
+                    loadSavedStories();
+                } else {
+                    showToast('저장 실패: ' + (data.detail || ''), 'error');
+                }
+            } catch (e) {
+                showToast('저장 오류: ' + e.message, 'error');
+            }
+        }
+
+        // ── 저장 목록 토글 ──
+        function toggleSavedStories() {
+            const listEl = document.getElementById('saved-stories-list');
+            if (listEl.style.display === 'none') {
+                listEl.style.display = 'block';
+                loadSavedStories();
+            } else {
+                listEl.style.display = 'none';
+            }
+        }
+
+        // ── 저장 목록 로드 ──
+        async function loadSavedStories() {
+            const listEl = document.getElementById('saved-stories-list');
+            try {
+                const res = await fetch('/api/workflow/history/stories');
+                const stories = await res.json();
+                if (!stories || stories.length === 0) {
+                    listEl.innerHTML = '<div style="text-align:center; padding:1rem; color:var(--text-muted); font-size:0.8rem;">저장된 스토리가 없습니다.</div>';
+                    return;
+                }
+                listEl.innerHTML = stories.map(s => {
+                    const displayName = s.save_name || s.keyword || s.title || 'Untitled';
+                    const dateStr = s.timestamp ? new Date(s.timestamp).toLocaleString('ko-KR') : '';
+                    return `
+                    <div style="display:flex; align-items:center; gap:6px; padding:6px 8px; border-bottom:1px solid var(--border); font-size:0.78rem;">
+                        <div style="flex:1; min-width:0;">
+                            <div style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${displayName}</div>
+                            <div style="color:var(--text-muted); font-size:0.68rem;">${dateStr} · ${s.scene_count || '?'}씬</div>
+                        </div>
+                        <button onclick="loadSavedStory('${s.filename}')" class="btn btn-primary" style="font-size:0.68rem; padding:2px 8px; flex-shrink:0;">불러오기</button>
+                        <button onclick="saveAsNewName('${s.filename.replace(/'/g, "\\'")}', '${displayName.replace(/'/g, "\\'")}')" class="btn btn-secondary" style="font-size:0.62rem; padding:2px 6px; flex-shrink:0;" title="현재 스토리를 다른 이름으로 저장">다른이름저장</button>
+                        <button onclick="deleteSavedStory('${s.filename}')" style="background:none; border:none; color:var(--danger); cursor:pointer; font-size:0.9rem; padding:0 2px; flex-shrink:0;" title="삭제">×</button>
+                    </div>`;
+                }).join('');
+            } catch (e) {
+                listEl.innerHTML = '<div style="color:var(--danger); padding:0.5rem; font-size:0.8rem;">목록 로드 실패</div>';
+            }
+        }
+
+        // ── 저장된 스토리 불러오기 ──
+        async function loadSavedStory(filename) {
+            if (!confirm('현재 스토리를 저장된 스토리로 교체합니다. 계속할까요?')) return;
+            try {
+                const res = await fetch('/api/workflow/history/load', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, filename })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    if (data.session_id) sessionId = data.session_id;
+                    storyData = data.story;
+                    if (data.collected_data) collectedData = data.collected_data;
+                    renderCharacters();
+                    renderScenes(storyData.scenes);
+                    // 스토리 UI 표시
+                    document.getElementById('story-review-area').style.display = 'block';
+                    document.getElementById('story-actions').style.display = 'flex';
+                    const saveArea = document.getElementById('story-save-area');
+                    if (saveArea) saveArea.style.display = 'flex';
+                    const genBtn = document.getElementById('btn-generate-story');
+                    if (genBtn) genBtn.style.display = 'none';
+                    showToast('스토리 불러오기 완료', 'success');
+                } else {
+                    showToast('불러오기 실패', 'error');
+                }
+            } catch (e) {
+                showToast('불러오기 오류: ' + e.message, 'error');
+            }
+        }
+
+        // ── 다른 이름으로 저장 ──
+        async function saveAsNewName(originalFilename, originalName) {
+            const newName = prompt('새 저장 이름을 입력하세요:', originalName + '_수정');
+            if (!newName || !newName.trim()) return;
+            if (!sessionId || !storyData) {
+                showToast('현재 스토리가 없습니다. 먼저 불러오기 후 저장하세요.', 'error');
+                return;
+            }
+            try {
+                const res = await fetch('/api/workflow/story/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, save_name: newName.trim() })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`"${newName.trim()}" 저장 완료`, 'success');
+                    loadSavedStories();
+                } else {
+                    showToast('저장 실패: ' + (data.detail || ''), 'error');
+                }
+            } catch (e) {
+                showToast('저장 오류: ' + e.message, 'error');
+            }
+        }
+
+        // ── 저장된 스토리 삭제 ──
+        async function deleteSavedStory(filename) {
+            if (!confirm('이 스토리를 삭제할까요?')) return;
+            try {
+                await fetch(`/api/workflow/story/delete/${filename}`, { method: 'DELETE' });
+                showToast('삭제 완료', 'success');
+                loadSavedStories();
+            } catch (e) {
+                showToast('삭제 오류: ' + e.message, 'error');
+            }
         }
 
         async function approveScenes() {
@@ -2773,18 +3060,22 @@
 
             // 초기 그리드: 모든 씬을 "대기 중" 카드로 표시
             const container = document.getElementById('images-container');
-            container.innerHTML = Array.from({length: sceneCount}, (_, i) => `
-                <div class="card" id="scene-card-${i}" style="padding:0.5rem; position:relative; min-height:220px;">
+            container.innerHTML = Array.from({length: sceneCount}, (_, i) => {
+                const sn = storyData.scenes[i] ? storyData.scenes[i].scene_number : (i + 1);
+                const isCover = sn === 0;
+                const label = isCover ? '📌 표지' : `씬 ${sn}`;
+                return `
+                <div class="card" id="scene-card-${i}" style="padding:0.5rem; position:relative; min-height:220px; ${isCover ? 'border:2px solid var(--primary);' : ''}">
                     <div id="scene-img-area-${i}" style="width:100%; aspect-ratio:1/1; background:var(--bg-input); border-radius:8px; display:flex; align-items:center; justify-content:center; margin-bottom:0.5rem; position:relative; overflow:hidden;">
                         <div id="scene-placeholder-${i}" style="text-align:center;">
                             <div style="font-size:1.5rem; margin-bottom:4px;">⏳</div>
                             <div style="font-size:0.75rem; color:var(--text-muted);">대기 중</div>
                         </div>
                     </div>
-                    <div style="font-size:0.8rem; font-weight:600;">씬 ${i + 1}</div>
+                    <div style="font-size:0.8rem; font-weight:600;">${label}</div>
                     <div id="scene-status-${i}" style="font-size:0.7rem; color:var(--text-muted); margin-top:2px;">대기 중</div>
-                </div>
-            `).join('');
+                </div>`;
+            }).join('');
 
             // 진행 상태 초기화
             document.getElementById('gen-status-text').innerText = '🎨 이미지 생성 중...';
@@ -3153,14 +3444,16 @@
         // --- 유틸리티 ---
         function goToStep(step) {
             currentStep = step;
+            // 모든 step-content를 확실하게 숨김 (인라인 display 완전 초기화)
             document.querySelectorAll('.step-content').forEach(c => {
                 c.classList.remove('active');
-                c.style.display = '';  // 인라인 display 초기화 → CSS 클래스가 제어
+                c.style.display = 'none';
             });
+            // 타겟 step만 표시
             const targetEl = document.getElementById(`step-${step}`);
             if (targetEl) {
                 targetEl.classList.add('active');
-                targetEl.style.display = 'block';  // 명시적 표시
+                targetEl.style.display = 'block';
             }
 
             // 프리셋 탭은 별도 처리 (번호가 아닌 'preset')
@@ -3193,6 +3486,9 @@
                 document.getElementById('loading-story').style.display = 'none';
                 document.getElementById('story-review-area').style.display = 'block';
                 document.getElementById('story-actions').style.display = 'flex';
+                // 스토리가 있으면 저장 영역도 표시
+                const saveAreaEl = document.getElementById('story-save-area');
+                if (saveAreaEl) saveAreaEl.style.display = storyData ? 'flex' : 'none';
                 if (storyData && storyData.scenes) {
                     renderCharacters();
                     renderScenes(storyData.scenes);
@@ -3947,95 +4243,7 @@
             generateCaption();
         }
     </script>
-    <!-- Story History Modal -->
-    <div id="history-modal" class="modal"
-        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
-        <div class="modal-content"
-            style="background: #1e1e1e; color: #ffffff; padding: 20px; border-radius: 8px; width: 500px; max-width: 90%; border: 1px solid #444;">
-            <h3 style="margin-top:0; border-bottom:1px solid #444; padding-bottom:10px;">이전 스토리 불러오기 (최근 5개)</h3>
-            <div id="history-list" style="margin: 15px 0; max-height: 300px; overflow-y: auto;">
-                Loading...
-            </div>
-            <div style="text-align: right;">
-                <button class="btn btn-secondary"
-                    onclick="document.getElementById('history-modal').style.display='none'">닫기</button>
-            </div>
-        </div>
-    </div>
-
     <script>
-        async function openStoryHistoryModal() {
-            const modal = document.getElementById('history-modal');
-            const list = document.getElementById('history-list');
-            modal.style.display = 'flex';
-            list.innerHTML = '<div>Loading...</div>';
-
-            try {
-                const res = await fetch('/api/workflow/history/stories');
-                const files = await res.json();
-
-                if (files.length === 0) {
-                    list.innerHTML = '<div style="color: #aaa;">저장된 스토리가 없습니다.</div>';
-                    return;
-                }
-
-                list.innerHTML = files.map(f => `
-                <div style="background: #2d2d2d; border: 1px solid #444; padding: 10px; margin-bottom: 5px; cursor: pointer; border-radius: 4px; color: #eee;" 
-                     onclick="loadStory('${f.filename}')" 
-                     onmouseover="this.style.background='#3d3d3d'" 
-                     onmouseout="this.style.background='#2d2d2d'">
-                    <div style="font-weight: bold;">${f.keyword}</div>
-                    <div style="font-size: 0.8em; color: #666;">
-                        ${new Date(f.timestamp).toLocaleString()} | ${f.title} (${f.scene_count} scenes)
-                    </div>
-                </div>
-            `).join('');
-            } catch (e) {
-                list.innerHTML = `<div style="color:red">Error: ${e.message}</div>`;
-            }
-        }
-
-        async function loadStory(filename) {
-            if (!confirm('현재 작업 내용을 덮어쓰고 스토리를 불러오시겠습니까?')) return;
-
-            try {
-                const res = await fetch('/api/workflow/history/load', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ session_id: sessionId, filename: filename })
-                });
-                const data = await res.json();
-
-                if (data.session_id) {
-                    sessionId = data.session_id;
-                    localStorage.setItem('lastSessionId', sessionId); // 세션 ID 저장
-                }
-
-                if (data.success) {
-                    storyData = data.story;
-                    collectedData = data.collected_data || [];
-                    characters = storyData.characters || [];
-
-                    // Update UI
-                    document.getElementById('history-modal').style.display = 'none';
-
-                    renderCharacters();
-                    renderScenes(storyData.scenes);
-
-                    // Show Step 3 areas
-                    document.getElementById('loading-story').style.display = 'none';
-                    document.getElementById('story-review-area').style.display = 'block';
-                    document.getElementById('story-actions').style.display = 'flex';
-
-                    // Go to step 3 if not already
-                    goToStep(3);
-
-                    alert('스토리를 성공적으로 불러왔습니다.');
-                }
-            } catch (e) {
-                alert('Failed to load: ' + e.message);
-            }
-        }
 
         // --- Style System 2.0 Logic (커스텀 스타일 관리 기능 삭제됨) ---
 
@@ -4407,6 +4615,18 @@
         const formData = new FormData();
         formData.append('file', file);
         formData.append('session_id', _presetSessionId);
+
+        // 캐릭터 이미지 업로드 시 이름 오버레이 적용
+        if (refType === 'character') {
+            const charNamesInput = document.getElementById('preset-char-names-input');
+            if (charNamesInput) {
+                const names = charNamesInput.value.split(',').map(n => n.trim()).filter(n => n);
+                if (names.length > 0) {
+                    formData.append('character_name', names[0]);
+                    formData.append('character_role', '주인공');
+                }
+            }
+        }
 
         try {
             const res = await fetch(`/api/reference/upload/${refType}`, { method: 'POST', body: formData });

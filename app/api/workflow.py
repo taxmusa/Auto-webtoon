@@ -1459,9 +1459,63 @@ async def publish(request: PublishRequest):
 # 9. 스토리 히스토리 API
 # ============================================
 
+class ManualSaveStoryRequest(BaseModel):
+    session_id: str
+    save_name: str  # 사용자 지정 저장 이름
+
+
+@router.post("/story/save")
+async def save_story_manual(request: ManualSaveStoryRequest):
+    """스토리 수동 저장 (사용자 이름 지정)"""
+    session = sessions.get(request.session_id)
+    if not session or not session.story:
+        raise HTTPException(status_code=404, detail="세션 또는 스토리를 찾을 수 없습니다")
+
+    save_dir = "output/stories"
+    os.makedirs(save_dir, exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_name = "".join([c for c in request.save_name if c.isalnum() or c in (' ', '_', '-', '가-힣')]).strip()
+    if not safe_name:
+        safe_name = "unnamed"
+    # 한글 파일명 허용
+    import re
+    safe_name = re.sub(r'[^\w\s가-힣-]', '', request.save_name).strip()
+    if not safe_name:
+        safe_name = "unnamed"
+    filename = f"{timestamp}_{safe_name}.json"
+    filepath = os.path.join(save_dir, filename)
+
+    data = {
+        "timestamp": datetime.now().isoformat(),
+        "save_name": request.save_name,
+        "keyword": session.keyword,
+        "story": session.story.model_dump(),
+        "collected_data": session.collected_data,
+        "character_settings": session.settings.character.model_dump() if session.settings else None
+    }
+
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+    logger.info(f"[story/save] 수동 저장: {filepath}")
+    return {"success": True, "filename": filename, "message": f"'{request.save_name}' 저장 완료"}
+
+
+@router.delete("/story/delete/{filename}")
+async def delete_story(filename: str):
+    """저장된 스토리 삭제"""
+    filepath = os.path.join("output/stories", filename)
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
+    os.remove(filepath)
+    logger.info(f"[story/delete] 삭제: {filepath}")
+    return {"success": True, "message": "삭제 완료"}
+
+
 @router.get("/history/stories")
 async def list_story_history():
-    """저장된 스토리 목록 조회 (최신순 5개)"""
+    """저장된 스토리 목록 조회 (전체, 최신순)"""
     history_dir = "output/stories"
     if not os.path.exists(history_dir):
         return []
@@ -1469,23 +1523,22 @@ async def list_story_history():
     files = glob.glob(os.path.join(history_dir, "*.json"))
     files.sort(key=os.path.getmtime, reverse=True)
     
-    recent_files = files[:10]
     result = []
-    
-    for f in recent_files:
+    for f in files:
         try:
             filename = os.path.basename(f)
             with open(f, "r", encoding="utf-8") as file:
                 data = json.load(file)
                 result.append({
                     "filename": filename,
+                    "save_name": data.get("save_name", ""),
                     "keyword": data.get("keyword", "Unknown"),
                     "timestamp": data.get("timestamp", ""),
                     "title": data.get("story", {}).get("title", "Untitled"),
                     "scene_count": len(data.get("story", {}).get("scenes", []))
                 })
         except Exception as e:
-            print(f"Error reading history file {f}: {e}")
+            logger.error(f"Error reading history file {f}: {e}")
             
     return result
 
