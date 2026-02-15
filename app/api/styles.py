@@ -3,11 +3,14 @@ from pydantic import BaseModel
 from typing import List, Optional
 import os
 import json
+import logging
 from datetime import datetime
 import shutil
 from app.models.models import CharacterStyle, BackgroundStyle
 import uuid
 from app.services.gemini_service import get_gemini_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/styles", tags=["styles"])
 
@@ -61,8 +64,8 @@ async def list_character_styles():
                 try:
                     data = json.load(f)
                     results.append(data)
-                except:
-                    pass
+                except Exception as e:
+                    logger.warning(f"[스타일] 캐릭터 스타일 메타 파싱 실패 ({style_id}): {e}")
     return results
 
 @router.get("/background")
@@ -80,8 +83,8 @@ async def list_background_styles():
                 try:
                     data = json.load(f)
                     results.append(data)
-                except:
-                    pass
+                except Exception as e:
+                    logger.warning(f"[스타일] 배경 스타일 메타 파싱 실패 ({style_id}): {e}")
     return results
 
 @router.post("/save")
@@ -134,15 +137,21 @@ async def save_style(
         saved_images = []
         preview_image = None
 
-    # 새 이미지 저장 (추가)
+    # 새 이미지 저장
     if reference_images:
-        # 수정 모드라면 기존 이미지를 대체할지, 추가할지 결정해야 함. 
-        # 현재 UI 로직상 '대표 이미지' 개념이 강하므로, 새 이미지가 오면 기존 리스트를 초기화하고 덮어쓰는 게 깔끔함 (또는 UI에서 제어)
-        # 여기선 '덮어쓰기' 전략 사용 (사용자가 새 이미지를 올렸다는 건 교체 의도)
-        if id: 
-            # 기존 이미지 유지 (append 모드)
-            pass 
-            
+        if id:
+            # 수정 모드: 기존 이미지 파일 삭제 후 교체 (사용자가 새 이미지를 올렸다는 건 교체 의도)
+            for old_img_path in saved_images:
+                # /app_data/styles/character/xxx/ref_abc.jpg → 실제 경로로 변환
+                local_old = old_img_path.lstrip("/")
+                if os.path.exists(local_old):
+                    try:
+                        os.remove(local_old)
+                    except Exception:
+                        pass
+            saved_images = []  # 기존 목록 초기화
+            preview_image = None  # 프리뷰도 리셋
+
         for file in reference_images:
             file_ext = os.path.splitext(file.filename)[1]
             file_name = f"ref_{uuid.uuid4().hex[:6]}{file_ext}"

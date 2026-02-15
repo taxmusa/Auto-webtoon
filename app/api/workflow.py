@@ -1357,7 +1357,10 @@ async def regenerate_image(request: RegenerateImageRequest):
 class PublishRequest(BaseModel):
     session_id: str
     caption: str
-    images: List[str]
+    images: List[str] = []
+    target_series: Optional[int] = None  # 시리즈 번호 (None이면 전체)
+    scheduled_publish_time: Optional[int] = None  # Unix 타임스탬프 (None이면 즉시 발행)
+    share_to_threads: bool = False  # Threads 동시 발행
 
 
 class InstagramTestRequest(BaseModel):
@@ -1411,9 +1414,30 @@ async def instagram_check():
         return {"ok": False, "configured": True, "message": str(e)}
 
 
+@router.get("/threads-check")
+async def threads_check():
+    """Threads API 연결 상태 확인."""
+    try:
+        from app.services.threads_service import get_threads_service
+        threads = get_threads_service()
+        if not threads.is_configured:
+            return {"ok": False, "configured": False, "message": "Threads 토큰 미설정 (THREADS_ACCESS_TOKEN 또는 Instagram 토큰 공유)"}
+        result = await threads.check_connection()
+        if result["ok"]:
+            return {
+                "ok": True,
+                "configured": True,
+                "username": result.get("username", ""),
+                "message": f"Threads 연결 정상 (@{result.get('username', '')})"
+            }
+        return {"ok": False, "configured": True, "message": result.get("error", "알 수 없는 오류")}
+    except Exception as e:
+        return {"ok": False, "configured": False, "message": str(e)}
+
+
 @router.post("/publish")
 async def publish(request: PublishRequest):
-    """Instagram 발행. 로컬 이미지는 Cloudinary 있으면 자동 업로드 후 발행."""
+    """Instagram 발행 (즉시 또는 예약). 로컬 이미지는 Cloudinary 있으면 자동 업로드 후 발행."""
     session = sessions.get(request.session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -1426,8 +1450,18 @@ async def publish(request: PublishRequest):
         image_urls = []
         cloudinary = get_cloudinary_service()
         
-        # 1) 세션 이미지가 있으면 우선 사용 (로컬이면 Cloudinary 업로드)
-        if session.images:
+        # 1) request.images에 공개 URL이 있으면 우선 사용
+        if request.images:
+            for raw in request.images:
+                if raw.startswith("http"):
+                    image_urls.append(raw)
+                elif cloudinary.cloud_name:
+                    url = await cloudinary.upload_from_path(raw)
+                    if url:
+                        image_urls.append(url)
+
+        # 2) 없으면 세션 이미지 사용 (로컬이면 Cloudinary 업로드)
+        if not image_urls and session.images:
             for img in session.images:
                 if getattr(img, "image_url", None) and str(img.image_url).startswith("http"):
                     image_urls.append(img.image_url)
@@ -1441,29 +1475,57 @@ async def publish(request: PublishRequest):
                         return {"success": False, "error": "로컬 이미지는 Cloudinary 설정이 필요합니다. .env에 CLOUDINARY_* 를 넣어주세요."}
                 else:
                     return {"success": False, "error": "이미지에 공개 URL 또는 로컬 경로가 없습니다."}
-        # 2) request.images 가 있으면 사용 (http 아니면 업로드 시도)
-        if not image_urls and request.images:
-            for raw in request.images:
-                if raw.startswith("http"):
-                    image_urls.append(raw)
-                elif cloudinary.cloud_name:
-                    url = await cloudinary.upload_from_path(raw)
-                    if url:
-                        image_urls.append(url)
-                else:
-                    return {"success": False, "error": "이미지는 공개 URL이어야 하거나, Cloudinary를 설정해주세요."}
         
         if not image_urls:
             return {"success": False, "error": "발행할 이미지가 없습니다."}
         
+        # 예약 발행 시간 처리
+        scheduled_time = None
+        if hasattr(request, 'scheduled_publish_time') and request.scheduled_publish_time:
+            scheduled_time = request.scheduled_publish_time
+
         instagram = get_instagram_service()
         publish_data = PublishData(images=image_urls, caption=request.caption)
-        result = await instagram.publish_workflow(publish_data)
+        result = await instagram.publish_workflow(publish_data, scheduled_publish_time=scheduled_time)
+        
         if not result.get("success"):
             return {"success": False, "error": result.get("error", "Unknown error")}
+        
         session.state = WorkflowState.PUBLISHED
-        return {"success": True, "post_id": result.get("media_id", "")}
+        
+        response = {
+            "success": True,
+            "post_id": result.get("media_id", ""),
+            "scheduled": result.get("scheduled", False),
+            "scheduled_time": result.get("scheduled_time"),
+            "image_count": result.get("image_count", len(image_urls)),
+            "threads": None
+        }
+        
+        # Threads 동시 발행
+        if request.share_to_threads and not result.get("scheduled"):
+            try:
+                from app.services.threads_service import get_threads_service
+                threads = get_threads_service()
+                if threads.is_configured:
+                    threads_result = await threads.publish_workflow(
+                        image_urls=image_urls,
+                        caption=request.caption
+                    )
+                    response["threads"] = threads_result
+                    if threads_result.get("success"):
+                        logger.info(f"[Threads] 동시 발행 성공: {threads_result.get('media_id')}")
+                    else:
+                        logger.warning(f"[Threads] 동시 발행 실패: {threads_result.get('error')}")
+                else:
+                    response["threads"] = {"success": False, "error": "Threads 토큰 미설정"}
+            except Exception as te:
+                logger.error(f"[Threads] 동시 발행 오류: {te}")
+                response["threads"] = {"success": False, "error": str(te)}
+        
+        return response
     except Exception as e:
+        logger.error(f"[발행] 오류: {e}")
         return {"success": False, "error": str(e)}
 
 
@@ -1799,7 +1861,7 @@ class ToBeContinuedRequest(BaseModel):
 
 @router.post("/to-be-continued/apply")
 async def apply_to_be_continued(request: ToBeContinuedRequest):
-    """시리즈 마지막 씬에 '다음편에 계속' 오버레이 적용"""
+    """시리즈 각 편의 마지막 씬에 '다음편에 계속' 오버레이 적용 (최종편 제외)"""
     session = sessions.get(request.session_id)
     if not session:
         raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다")
@@ -1811,35 +1873,70 @@ async def apply_to_be_continued(request: ToBeContinuedRequest):
     # 시리즈 분할 안 됐거나 마지막 편이면 적용 불필요
     if not story.series_info:
         return {"success": False, "reason": "시리즈가 아닙니다"}
-    # 시리즈가 1편뿐이면 '다음편에 계속' 불필요
     if story.series_info.total <= 1:
-        return {"success": False, "reason": "마지막 편이므로 '다음편에 계속'이 불필요합니다"}
+        return {"success": False, "reason": "1편뿐이므로 '다음편에 계속'이 불필요합니다"}
     if not request.enabled:
         story.to_be_continued_enabled = False
-        return {"success": True, "enabled": False}
+        return {"success": True, "enabled": False, "applied_scenes": []}
 
-    # 마지막 씬 이미지에 오버레이 적용
     if not session.images:
         return {"success": False, "reason": "생성된 이미지가 없습니다"}
-
-    last_img = session.images[-1]
-    img_path = last_img.local_path
-    if not img_path or not os.path.exists(img_path):
-        return {"success": False, "reason": "마지막 씬 이미지를 찾을 수 없습니다"}
 
     from app.services.pillow_service import get_pillow_service
     from PIL import Image
 
     pillow = get_pillow_service()
-    base_image = Image.open(img_path)
-    result_image = pillow.add_to_be_continued(
-        image=base_image,
-        text=request.text,
-        style=request.style
-    )
+    applied_scenes = []
 
-    # 덮어쓰기 저장
-    result_image.save(img_path, "PNG")
+    # 시리즈별 마지막 씬에 오버레이 적용 (최종편은 제외)
+    episodes = story.series_info.episodes
+    for ep in episodes:
+        # 최종편이면 건너뜀 (마지막 편에는 "다음편에 계속"이 불필요)
+        if ep.episode_number >= story.series_info.total:
+            continue
+
+        # 이 편의 마지막 씬 인덱스 = scene_end - 1
+        last_scene_idx = ep.scene_end - 1
+        if last_scene_idx < 0:
+            continue
+
+        # 해당 씬 번호의 이미지 찾기 (scene_number는 1-based)
+        target_scene_num = last_scene_idx + 1  # 0-based → 1-based
+        target_img = next(
+            (img for img in session.images if img.scene_number == target_scene_num),
+            None
+        )
+
+        if not target_img:
+            # scene_number 매칭 실패 시 인덱스로 시도
+            if last_scene_idx < len(session.images):
+                target_img = session.images[last_scene_idx]
+
+        if not target_img or not target_img.local_path:
+            logger.warning(f"[다음편에 계속] 시리즈 {ep.episode_number}편 마지막 씬 이미지 없음 (인덱스 {last_scene_idx})")
+            continue
+
+        img_path = target_img.local_path
+        if not os.path.exists(img_path):
+            logger.warning(f"[다음편에 계속] 이미지 파일 없음: {img_path}")
+            continue
+
+        try:
+            base_image = Image.open(img_path)
+            result_image = pillow.add_to_be_continued(
+                image=base_image,
+                text=request.text,
+                style=request.style
+            )
+            result_image.save(img_path, "PNG")
+            applied_scenes.append({
+                "episode": ep.episode_number,
+                "scene_number": target_img.scene_number,
+                "scene_index": last_scene_idx
+            })
+            logger.info(f"[다음편에 계속] 시리즈 {ep.episode_number}편 마지막 씬 {target_img.scene_number}에 적용 완료")
+        except Exception as e:
+            logger.error(f"[다음편에 계속] 시리즈 {ep.episode_number}편 적용 실패: {e}")
 
     story.to_be_continued_enabled = True
     story.to_be_continued_style = ToBeContinuedStyle(request.style)
@@ -1848,7 +1945,8 @@ async def apply_to_be_continued(request: ToBeContinuedRequest):
         "success": True,
         "enabled": True,
         "style": request.style,
-        "applied_to_scene": last_img.scene_number
+        "applied_count": len(applied_scenes),
+        "applied_scenes": applied_scenes
     }
 
 
@@ -2490,8 +2588,8 @@ async def list_projects():
                     "image_count": len(data.get("image_files", [])),
                     "state": data.get("state", ""),
                 })
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"[프로젝트] 메타 파싱 실패 ({dirname}): {e}")
 
     return {"projects": projects}
 

@@ -20,240 +20,62 @@
             --warning: #f59e0b;
             --danger: #ef4444;
         }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Pretendard', -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+        header { background: var(--bg-card); border-bottom: 1px solid var(--border); padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-size: 1.25rem; font-weight: 700; background: linear-gradient(135deg, var(--primary), #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        main { max-width: 800px; margin: 2rem auto; padding: 0 1rem 3rem; }
+        h1 { font-size: 1.75rem; margin-bottom: 0.5rem; }
+        .page-desc { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem; }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+        .section-title { font-size: 1.1rem; font-weight: 700; margin: 2rem 0 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 0.5rem; }
+        .section-title:first-of-type { margin-top: 0; }
 
-        body {
-            font-family: 'Pretendard', -apple-system, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-        }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; margin-bottom: 0.75rem; }
+        .card-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
+        .card-header-icon { font-size: 1.3rem; }
+        .card-header-title { font-weight: 600; font-size: 0.95rem; flex: 1; }
 
-        header {
-            background: var(--bg-card);
-            border-bottom: 1px solid var(--border);
-            padding: 1rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+        label { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.35rem; font-weight: 500; }
+        input, select { width: 100%; padding: 0.6rem 0.75rem; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.82rem; }
+        input:focus { outline: none; border-color: var(--primary); }
+        input[type="password"] { font-family: monospace; letter-spacing: 1px; }
+        input:disabled { opacity: 0.6; }
 
-        .logo {
-            font-size: 1.25rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, var(--primary), #a855f7);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
+        .field-row { display: flex; gap: 0.5rem; align-items: flex-end; margin-bottom: 0.6rem; }
+        .field-row .field { flex: 1; }
+        .field-row .field-sm { flex: 0 0 auto; }
 
-        main {
-            max-width: 800px;
-            margin: 2rem auto;
-            padding: 0 1rem;
-        }
+        .btn { padding: 0.5rem 0.85rem; border-radius: 6px; font-weight: 500; font-size: 0.8rem; border: none; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-sm { padding: 0.4rem 0.65rem; font-size: 0.75rem; }
+        .btn-secondary { background: var(--bg-input); color: var(--text); border: 1px solid var(--border); }
+        .btn-success { background: var(--success); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        h1 {
-            font-size: 1.75rem;
-            margin-bottom: 1.5rem;
-        }
+        .status { display: inline-flex; align-items: center; gap: 0.2rem; font-size: 0.72rem; padding: 0.2rem 0.5rem; border-radius: 4px; white-space: nowrap; font-weight: 500; }
+        .status-ok { background: rgba(34, 197, 94, 0.15); color: var(--success); }
+        .status-err { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+        .status-warn { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
+        .status-off { background: rgba(148, 163, 184, 0.15); color: var(--text-muted); }
 
-        .tabs {
-            display: flex;
-            gap: 0;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 1.5rem;
-        }
+        .help { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.2rem; line-height: 1.4; }
+        .help a { color: var(--primary); }
+        .back-link { color: var(--text-muted); text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; }
+        .back-link:hover { color: var(--text); }
 
-        .tab {
-            padding: 0.75rem 1.5rem;
-            color: var(--text-muted);
-            cursor: pointer;
-            border-bottom: 2px solid transparent;
-            transition: all 0.2s;
-        }
+        .collapse { display: none; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+        .collapse.open { display: block; }
 
-        .tab:hover {
-            color: var(--text);
-        }
+        .info-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; background: var(--bg); border-radius: 8px; }
+        .info-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--bg-input); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
+        .info-avatar img { width: 100%; height: 100%; object-fit: cover; }
 
-        .tab.active {
-            color: var(--primary);
-            border-bottom-color: var(--primary);
-        }
-
-        .tab-content {
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        .card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 1.5rem;
-            margin-bottom: 1rem;
-        }
-
-        .card-title {
-            font-size: 1rem;
-            font-weight: 600;
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .form-group {
-            margin-bottom: 1rem;
-        }
-
-        label {
-            display: block;
-            font-size: 0.875rem;
-            color: var(--text-muted);
-            margin-bottom: 0.5rem;
-        }
-
-        input,
-        textarea,
-        select {
-            width: 100%;
-            padding: 0.75rem 1rem;
-            background: var(--bg-input);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: var(--text);
-            font-size: 0.875rem;
-        }
-
-        input:focus,
-        select:focus {
-            outline: none;
-            border-color: var(--primary);
-        }
-
-        input[type="password"] {
-            font-family: monospace;
-            letter-spacing: 2px;
-        }
-
-        .input-group {
-            display: flex;
-            gap: 0.5rem;
-        }
-
-        .input-group input {
-            flex: 1;
-        }
-
-        .btn {
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
-            font-weight: 500;
-            font-size: 0.875rem;
-            border: none;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .btn-primary {
-            background: var(--primary);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: var(--primary-hover);
-        }
-
-        .btn-secondary {
-            background: var(--bg-input);
-            color: var(--text);
-            border: 1px solid var(--border);
-        }
-
-        .btn-success {
-            background: var(--success);
-            color: white;
-        }
-
-        .status {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.25rem;
-            font-size: 0.75rem;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-        }
-
-        .status-ok {
-            background: rgba(34, 197, 94, 0.2);
-            color: var(--success);
-        }
-
-        .status-missing {
-            background: rgba(239, 68, 68, 0.2);
-            color: var(--danger);
-        }
-
-        .row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-        }
-
-        .help-text {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            margin-top: 0.25rem;
-        }
-
-        .back-link {
-            color: var(--text-muted);
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .back-link:hover {
-            color: var(--text);
-        }
-
-        .toast {
-            position: fixed;
-            bottom: 2rem;
-            right: 2rem;
-            background: var(--success);
-            color: white;
-            padding: 1rem 1.5rem;
-            border-radius: 8px;
-            display: none;
-        }
-
-        .toast.show {
-            display: block;
-            animation: slideIn 0.3s ease;
-        }
-
-        @keyframes slideIn {
-            from {
-                transform: translateY(20px);
-                opacity: 0;
-            }
-
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
-        }
+        .toast { position: fixed; bottom: 2rem; right: 2rem; background: var(--success); color: white; padding: 0.85rem 1.25rem; border-radius: 8px; display: none; z-index: 999; font-size: 0.85rem; }
+        .toast.show { display: block; animation: slideIn 0.3s ease; }
+        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     </style>
 </head>
 
@@ -265,310 +87,433 @@
 
     <main>
         <h1>⚙️ 설정</h1>
+        <p class="page-desc">API 키와 SNS 연결을 관리합니다. 모든 설정은 .env 파일에 저장되며 즉시 반영됩니다.</p>
 
-        <div class="tabs">
-            <div class="tab active" data-tab="api">API 키</div>
-            <div class="tab" data-tab="character">캐릭터</div>
-            <div class="tab" data-tab="style">스타일</div>
-            <div class="tab" data-tab="output">출력</div>
+        <!-- ============================================ -->
+        <!-- 섹션 1: SNS 발행 연결 -->
+        <!-- ============================================ -->
+        <div class="section-title">📱 SNS 발행 연결</div>
+
+        <!-- Instagram -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-header-icon">📸</span>
+                <span class="card-header-title">Instagram + Threads</span>
+                <span id="ig-badge" class="status status-off">확인 중</span>
+            </div>
+
+            <!-- 연결 상태 -->
+            <div class="info-row" style="margin-bottom:0.6rem;">
+                <div class="info-avatar" id="ig-avatar"><span style="font-size:1.2rem;">📷</span></div>
+                <div style="flex:1;">
+                    <div id="ig-name" style="font-weight:600; font-size:0.88rem;">확인 중...</div>
+                    <div id="ig-detail" style="font-size:0.75rem; color:var(--text-muted);">연결 상태를 확인하고 있습니다</div>
+                </div>
+                <div id="ig-threads-badge" style="display:none; font-size:0.72rem;"></div>
+            </div>
+
+            <!-- 현재 설정값 (마스킹) -->
+            <div id="ig-current-values" style="display:none; margin-bottom:0.6rem;">
+                <div class="field-row">
+                    <div class="field">
+                        <label>Access Token</label>
+                        <input type="text" id="ig-token-preview" disabled style="font-size:0.75rem;">
+                    </div>
+                    <div class="field" style="max-width:200px;">
+                        <label>User ID</label>
+                        <input type="text" id="ig-userid-preview" disabled style="font-size:0.75rem;">
+                    </div>
+                    <div class="field-sm" style="padding-bottom:1px;">
+                        <label>&nbsp;</label>
+                        <button class="btn btn-secondary btn-sm" onclick="toggleCollapse('ig-setup')">수정</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 설정/수정 폼 (접기) -->
+            <div id="ig-setup" class="collapse">
+                <div style="background:linear-gradient(135deg,rgba(99,102,241,0.04),rgba(99,102,241,0.1)); border-radius:8px; padding:1rem;">
+                    <div style="font-weight:600; font-size:0.85rem; margin-bottom:0.75rem;">🔧 Instagram 연결 설정</div>
+
+                    <!-- Step 1 -->
+                    <div style="margin-bottom:0.75rem; padding:0.6rem; background:var(--bg-card); border-radius:6px; border-left:3px solid var(--primary);">
+                        <div style="font-weight:600; font-size:0.8rem; margin-bottom:0.4rem;">1. Facebook App 정보</div>
+                        <div class="help" style="margin-bottom:0.4rem;">
+                            <a href="https://developers.facebook.com/apps/" target="_blank">Facebook Developers</a> → 앱 → 설정 → 기본
+                        </div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.4rem; margin-bottom:0.4rem;">
+                            <input type="text" id="fb-app-id" placeholder="App ID" style="font-size:0.78rem; padding:0.45rem;">
+                            <input type="password" id="fb-app-secret" placeholder="App Secret" style="font-size:0.78rem; padding:0.45rem;">
+                        </div>
+                        <button class="btn btn-secondary btn-sm" onclick="saveFacebookApp()" style="width:100%;">💾 저장</button>
+                    </div>
+
+                    <!-- Step 2 -->
+                    <div style="margin-bottom:0.75rem; padding:0.6rem; background:var(--bg-card); border-radius:6px; border-left:3px solid var(--warning);">
+                        <div style="font-weight:600; font-size:0.8rem; margin-bottom:0.4rem;">2. 단기 토큰 발급</div>
+                        <div class="help">
+                            <a href="https://developers.facebook.com/tools/explorer/" target="_blank">Graph API Explorer</a> → 앱 선택 → 사용자 토큰 → 권한 추가
+                            (<code style="font-size:0.68rem;">pages_show_list, pages_read_engagement, instagram_basic, instagram_content_publish, business_management</code>)
+                            → Generate Access Token → 복사
+                        </div>
+                    </div>
+
+                    <!-- Step 3 -->
+                    <div style="padding:0.6rem; background:var(--bg-card); border-radius:6px; border-left:3px solid var(--success);">
+                        <div style="font-weight:600; font-size:0.8rem; margin-bottom:0.4rem;">3. 토큰 붙여넣기 → 영구 토큰 자동 발급</div>
+                        <div class="help" style="margin-bottom:0.4rem;">복사한 토큰을 붙여넣으면 만료되지 않는 영구 토큰으로 자동 교환합니다.</div>
+                        <div style="display:flex; gap:0.4rem;">
+                            <input type="text" id="fb-short-token" placeholder="EAA... (토큰 붙여넣기)" style="flex:1; font-size:0.78rem; padding:0.45rem;">
+                            <button class="btn btn-success btn-sm" onclick="exchangeToken()" id="btn-exchange">🔄 영구 토큰 발급</button>
+                        </div>
+                        <div id="exchange-progress" style="display:none; margin-top:0.4rem; font-size:0.78rem; color:var(--text-muted);"></div>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <!-- API 키 탭 -->
-        <div class="tab-content active" id="tab-api">
-            <div class="card">
-                <div class="card-title">🤖 AI 텍스트 생성 (Gemini)</div>
-                <div class="form-group">
-                    <label>Gemini API Key</label>
-                    <div class="input-group">
-                        <input type="password" id="gemini-key" placeholder="AIza...">
-                        <button class="btn btn-secondary" onclick="togglePassword('gemini-key')">👁</button>
-                        <span class="status status-ok" id="gemini-status">✓ 연결됨</span>
-                    </div>
-                    <div class="help-text">Google AI Studio에서 발급: <a href="https://aistudio.google.com/apikey"
-                            target="_blank" style="color: var(--primary);">발급 링크</a></div>
-                </div>
-                <div class="form-group">
-                    <label>Gemini 모델</label>
-                    <select id="gemini-model">
-                        <option value="gemini-2.0-flash" selected>Gemini 2.0 Flash (빠름)</option>
-                        <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite (경제적)</option>
-                        <option value="gemini-1.5-pro">Gemini 1.5 Pro (고품질)</option>
-                        <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-                    </select>
-                </div>
+        <!-- Cloudinary -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-header-icon">☁️</span>
+                <span class="card-header-title">Cloudinary (이미지 호스팅)</span>
+                <span id="cloud-badge" class="status status-off">확인 중</span>
             </div>
 
-            <div class="card">
-                <div class="card-title">🎨 AI 이미지 생성 (OpenAI)</div>
-                <div class="form-group">
-                    <label>OpenAI API Key</label>
-                    <div class="input-group">
-                        <input type="password" id="openai-key" placeholder="sk-proj-...">
-                        <button class="btn btn-secondary" onclick="togglePassword('openai-key')">👁</button>
-                        <span class="status status-ok" id="openai-status">✓ 연결됨</span>
-                    </div>
-                    <div class="help-text">OpenAI Platform에서 발급</div>
-                </div>
-                <div class="form-group">
-                    <label>이미지 생성 모델</label>
-                    <select id="image-model">
-                        <optgroup label="Google Gemini">
-                            <option value="nano-banana" selected>Nano Banana (Gemini 2.0 Flash Exp)</option>
-                            <option value="nano-banana-pro">Nano Banana Pro (Gemini 2.0 Pro Exp)</option>
-                            <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-                            <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-                        </optgroup>
-                        <optgroup label="OpenAI DALL-E">
-                            <option value="gpt-image-1">GPT Image 1 (DALL-E 3)</option>
-                            <option value="gpt-image-1-mini" selected>GPT Image 1 Mini</option>
-                            <option value="gpt-image-1.5">GPT Image 1.5</option>
-                            <option value="dall-e-3">DALL-E 3 (Original)</option>
-                            <option value="dall-e-2">DALL-E 2</option>
-                        </optgroup>
-                    </select>
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="card-title">☁️ 이미지 호스팅 (Cloudinary)</div>
-                <div class="row">
-                    <div class="form-group">
+            <div id="cloud-current" style="margin-bottom:0.6rem;">
+                <div class="field-row">
+                    <div class="field">
                         <label>Cloud Name</label>
-                        <input type="text" id="cloudinary-name" placeholder="your-cloud-name">
+                        <input type="text" id="cloud-name" placeholder="미설정" style="font-size:0.78rem;">
                     </div>
-                    <div class="form-group">
+                    <div class="field">
                         <label>API Key</label>
-                        <input type="password" id="cloudinary-key" placeholder="123456789...">
+                        <input type="text" id="cloud-key" placeholder="미설정" style="font-size:0.78rem;">
+                    </div>
+                    <div class="field">
+                        <label>API Secret</label>
+                        <input type="password" id="cloud-secret" placeholder="미설정" style="font-size:0.78rem;">
                     </div>
                 </div>
-                <div class="form-group">
-                    <label>API Secret</label>
-                    <div class="input-group">
-                        <input type="password" id="cloudinary-secret" placeholder="abcdef...">
-                        <span class="status status-ok" id="cloudinary-status">✓ 연결됨</span>
-                    </div>
+                <div style="display:flex; gap:0.4rem; margin-top:0.4rem;">
+                    <button class="btn btn-primary btn-sm" onclick="saveCloudinary()" style="flex:1;">💾 저장</button>
+                    <button class="btn btn-secondary btn-sm" onclick="verifyCloudinary()">🔍 연결 확인</button>
                 </div>
-                <div class="help-text">Cloudinary Dashboard에서 확인 가능</div>
             </div>
 
-            <div class="card">
-                <div class="card-title">📱 Instagram Graph API</div>
-                <div class="form-group">
-                    <label>Access Token</label>
-                    <input type="password" id="instagram-token" placeholder="EAAG...">
-                </div>
-                <div class="form-group">
-                    <label>Business Account ID</label>
-                    <div class="input-group">
-                        <input type="text" id="instagram-id" placeholder="17841...">
-                        <span class="status status-ok" id="instagram-status">✓ 연결됨</span>
-                    </div>
-                </div>
-                <div class="help-text">Facebook 개발자 콘솔에서 발급</div>
-            </div>
+            <div class="help">발행 시 로컬 이미지를 공개 URL로 변환합니다. Instagram/Threads 발행에 필수. · <a href="https://cloudinary.com/console" target="_blank">Cloudinary Dashboard</a></div>
         </div>
 
-        <!-- 캐릭터 탭 -->
-        <div class="tab-content" id="tab-character">
-            <div class="card">
-                <div class="card-title">👤 기본 캐릭터 설정</div>
-                <div class="row">
-                    <div class="form-group">
-                        <label>질문자 유형</label>
-                        <select id="questioner-type">
-                            <option value="일반인">일반인</option>
-                            <option value="사업자">사업자</option>
-                            <option value="직장인">직장인</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>전문가 유형</label>
-                        <select id="expert-type">
-                            <option value="세무사">세무사</option>
-                            <option value="변호사">변호사</option>
-                            <option value="노무사">노무사</option>
-                            <option value="회계사">회계사</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="auto-emotion" checked> 대사에 따라 표정 자동 설정
-                    </label>
-                </div>
-            </div>
-        </div>
+        <!-- ============================================ -->
+        <!-- 섹션 2: AI API 키 -->
+        <!-- ============================================ -->
+        <div class="section-title">🤖 AI API 키</div>
 
-        <!-- 스타일 탭 -->
-        <div class="tab-content" id="tab-style">
-            <div class="card">
-                <div class="card-title">🎨 이미지 스타일</div>
-                <div class="row">
-                    <div class="form-group">
-                        <label>메인 스타일</label>
-                        <select id="image-style">
-                            <option value="webtoon">웹툰</option>
-                            <option value="card_news">카드뉴스</option>
-                            <option value="simple">심플</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>서브 스타일</label>
-                        <select id="sub-style">
-                            <option value="normal">일반</option>
-                            <option value="ghibli">지브리</option>
-                            <option value="romance">로맨스</option>
-                            <option value="business">비즈니스</option>
-                        </select>
+        <!-- Gemini -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-header-icon">🤖</span>
+                <span class="card-header-title">Google Gemini</span>
+                <span id="gemini-badge" class="status status-off">확인 중</span>
+            </div>
+            <div class="field-row">
+                <div class="field">
+                    <label>API Key</label>
+                    <input type="password" id="gemini-key" placeholder="AIza...">
+                </div>
+                <div class="field-sm" style="padding-bottom:1px;">
+                    <label>&nbsp;</label>
+                    <div style="display:flex; gap:0.3rem;">
+                        <button class="btn btn-secondary btn-sm" onclick="togglePw('gemini-key')">👁</button>
+                        <button class="btn btn-primary btn-sm" onclick="saveApiKey('GEMINI_API_KEY','gemini-key','gemini-badge')">저장</button>
                     </div>
                 </div>
             </div>
-
-            <div class="card">
-                <div class="card-title">✏️ 텍스트 설정</div>
-                <div class="row">
-                    <div class="form-group">
-                        <label>대사 배치</label>
-                        <select id="dialogue-placement">
-                            <option value="bubble">말풍선</option>
-                            <option value="subtitle">하단 자막</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>폰트 크기</label>
-                        <select id="font-size">
-                            <option value="20">작게 (20px)</option>
-                            <option value="24" selected>보통 (24px)</option>
-                            <option value="28">크게 (28px)</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 출력 탭 -->
-        <div class="tab-content" id="tab-output">
-            <div class="card">
-                <div class="card-title">📐 레이아웃</div>
-                <div class="row">
-                    <div class="form-group">
-                        <label>이미지 비율</label>
-                        <select id="aspect-ratio">
-                            <option value="1:1">1:1 (정사각형)</option>
-                            <option value="4:5" selected>4:5 (인스타 세로)</option>
-                            <option value="9:16">9:16 (릴스/스토리)</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>페이지 번호 위치</label>
-                        <select id="page-number-pos">
-                            <option value="bottom_right" selected>우하단</option>
-                            <option value="bottom_left">좌하단</option>
-                            <option value="top_right">우상단</option>
-                            <option value="none">표시 안함</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="card-title">💾 저장 설정</div>
-                <div class="row">
-                    <div class="form-group">
-                        <label>파일 형식</label>
-                        <select id="file-format">
-                            <option value="png" selected>PNG</option>
-                            <option value="jpg">JPG</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>품질 (JPG)</label>
-                        <select id="quality">
-                            <option value="80">보통 (80%)</option>
-                            <option value="90" selected>높음 (90%)</option>
-                            <option value="100">최상 (100%)</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.5rem;">
-            <button class="btn btn-secondary" onclick="resetSettings()">초기화</button>
-            <button class="btn btn-primary" onclick="saveSettings()">💾 설정 저장</button>
+            <div class="help">스토리·캡션 생성 + 이미지 생성(Nano Banana)의 핵심 API · <a href="https://aistudio.google.com/apikey" target="_blank">발급 링크</a></div>
         </div>
     </main>
 
-    <div class="toast" id="toast">✓ 설정이 저장되었습니다</div>
+    <div class="toast" id="toast"></div>
 
     <script>
-        // 탭 전환
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                tab.classList.add('active');
-                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-            });
-        });
-
-        // 비밀번호 토글
-        function togglePassword(id) {
-            const input = document.getElementById(id);
-            input.type = input.type === 'password' ? 'text' : 'password';
+        // ============================================
+        // 유틸
+        // ============================================
+        function togglePw(id) {
+            const el = document.getElementById(id);
+            el.type = el.type === 'password' ? 'text' : 'password';
         }
 
-        // 설정 저장
-        function saveSettings() {
-            const settings = {
-                gemini_model: document.getElementById('gemini-model').value,
-                image_model: document.getElementById('image-model').value,
-                questioner_type: document.getElementById('questioner-type').value,
-                expert_type: document.getElementById('expert-type').value,
-                auto_emotion: document.getElementById('auto-emotion').checked,
-                image_style: document.getElementById('image-style').value,
-                sub_style: document.getElementById('sub-style').value,
-                dialogue_placement: document.getElementById('dialogue-placement').value,
-                font_size: document.getElementById('font-size').value,
-                aspect_ratio: document.getElementById('aspect-ratio').value,
-                page_number_pos: document.getElementById('page-number-pos').value,
-                file_format: document.getElementById('file-format').value,
-                quality: document.getElementById('quality').value
-            };
-            localStorage.setItem('webtoon_settings', JSON.stringify(settings));
-
-            // 토스트 표시
-            const toast = document.getElementById('toast');
-            toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 2000);
+        function toggleCollapse(id) {
+            document.getElementById(id).classList.toggle('open');
         }
 
-        // 설정 불러오기
-        function loadSettings() {
-            const saved = localStorage.getItem('webtoon_settings');
-            if (saved) {
-                const settings = JSON.parse(saved);
-                Object.keys(settings).forEach(key => {
-                    const el = document.getElementById(key.replace(/_/g, '-'));
-                    if (el) {
-                        if (el.type === 'checkbox') el.checked = settings[key];
-                        else el.value = settings[key];
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.innerText = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2500);
+        }
+
+        function setBadge(id, type, text) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.className = 'status status-' + type;
+            el.innerText = text;
+        }
+
+        // ============================================
+        // 초기 로드
+        // ============================================
+        async function initPage() {
+            await Promise.all([loadInstagram(), loadCloudinary(), loadGemini()]);
+        }
+
+        // ============================================
+        // Instagram + Threads
+        // ============================================
+        async function loadInstagram() {
+            try {
+                // 상태 조회
+                const [statusRes, verifyRes] = await Promise.all([
+                    fetch('/api/sns/status'),
+                    fetch('/api/sns/instagram/verify')
+                ]);
+                const status = await statusRes.json();
+                const verify = await verifyRes.json();
+
+                // Facebook App ID 미리 채우기
+                if (status.facebook_app?.app_id) {
+                    document.getElementById('fb-app-id').value = status.facebook_app.app_id;
+                }
+
+                // 현재 값 표시
+                const valuesArea = document.getElementById('ig-current-values');
+                if (status.instagram?.configured) {
+                    valuesArea.style.display = 'block';
+                    document.getElementById('ig-token-preview').value = status.instagram.token_preview || '***';
+                    document.getElementById('ig-userid-preview').value = status.instagram.user_id || '';
+                }
+
+                if (verify.ok) {
+                    const username = verify.username || '';
+                    document.getElementById('ig-name').innerText = username ? `@${username}` : '연결됨';
+
+                    let detail = verify.permanent ? '🔒 영구 토큰' : '⏱️ 장기 토큰';
+                    if (verify.token_type) detail += ` (${verify.token_type})`;
+                    if (!verify.permanent && verify.expires_at > 0) {
+                        detail += ` · 만료: ${new Date(verify.expires_at * 1000).toLocaleDateString('ko-KR')}`;
                     }
+                    document.getElementById('ig-detail').innerText = detail;
+                    setBadge('ig-badge', 'ok', '✓ 연결됨');
+
+                    if (verify.profile_picture) {
+                        document.getElementById('ig-avatar').innerHTML =
+                            `<img src="${verify.profile_picture}">`;
+                    }
+
+                    // Threads 상태 확인
+                    loadThreadsStatus();
+                } else {
+                    document.getElementById('ig-name').innerText = '미연결';
+                    document.getElementById('ig-detail').innerText = verify.error || '아래 설정에서 연결해주세요';
+                    setBadge('ig-badge', 'err', '✗ 미연결');
+                    // 미연결이면 설정 폼 자동 열기
+                    document.getElementById('ig-setup').classList.add('open');
+                }
+            } catch(e) {
+                document.getElementById('ig-name').innerText = '확인 실패';
+                document.getElementById('ig-detail').innerText = e.message;
+                setBadge('ig-badge', 'err', '오류');
+            }
+        }
+
+        async function loadThreadsStatus() {
+            const badge = document.getElementById('ig-threads-badge');
+            try {
+                const res = await fetch('/api/workflow/threads-check');
+                const data = await res.json();
+                badge.style.display = 'block';
+                if (data.ok) {
+                    badge.innerHTML = '<span class="status status-ok">🧵 Threads 연결됨</span>';
+                } else {
+                    badge.innerHTML = '<span class="status status-warn">🧵 Threads 미연결</span>';
+                }
+            } catch(e) {
+                badge.style.display = 'none';
+            }
+        }
+
+        async function saveFacebookApp() {
+            const appId = document.getElementById('fb-app-id').value.trim();
+            const appSecret = document.getElementById('fb-app-secret').value.trim();
+            if (!appId || !appSecret) { alert('App ID와 App Secret을 모두 입력해주세요.'); return; }
+            try {
+                const res = await fetch('/api/sns/facebook/save-app', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({app_id: appId, app_secret: appSecret})
+                });
+                const data = await res.json();
+                if (data.ok) showToast('✓ Facebook App 정보 저장 완료');
+                else alert(data.error);
+            } catch(e) { alert('저장 실패: ' + e.message); }
+        }
+
+        async function exchangeToken() {
+            const token = document.getElementById('fb-short-token').value.trim();
+            if (!token) { alert('토큰을 붙여넣어주세요.'); return; }
+
+            const appId = document.getElementById('fb-app-id').value.trim();
+            const appSecret = document.getElementById('fb-app-secret').value.trim();
+            if (appId && appSecret) {
+                await fetch('/api/sns/facebook/save-app', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({app_id: appId, app_secret: appSecret})
                 });
             }
-        }
 
-        // 초기화
-        function resetSettings() {
-            if (confirm('모든 설정을 초기값으로 되돌리시겠습니까?')) {
-                localStorage.removeItem('webtoon_settings');
-                location.reload();
+            const btn = document.getElementById('btn-exchange');
+            const progress = document.getElementById('exchange-progress');
+            btn.disabled = true;
+            btn.innerText = '⏳ 교환 중...';
+            progress.style.display = 'block';
+            progress.innerHTML = '장기 토큰으로 교환 중...';
+
+            try {
+                const res = await fetch('/api/sns/facebook/exchange-token', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({short_token: token})
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    let msg = `<span style="color:var(--success); font-weight:600;">✓ ${data.message}</span>`;
+                    if (data.instagram_username) msg += `<br>Instagram: <b>@${data.instagram_username}</b>`;
+                    if (data.permanent) msg += `<br><span style="color:var(--success);">🔒 만료되지 않는 영구 토큰!</span>`;
+                    if (data.page_name) msg += `<br>페이지: ${data.page_name}`;
+                    progress.innerHTML = msg;
+                    setTimeout(() => loadInstagram(), 1500);
+                } else {
+                    progress.innerHTML = `<span style="color:var(--danger);">✗ ${data.error}</span>`;
+                    if (data.step === 0) progress.innerHTML += '<br>→ 위에서 App ID/Secret을 먼저 저장해주세요.';
+                }
+            } catch(e) {
+                progress.innerHTML = `<span style="color:var(--danger);">오류: ${e.message}</span>`;
+            } finally {
+                btn.disabled = false;
+                btn.innerText = '🔄 영구 토큰 발급';
             }
         }
 
-        // 페이지 로드 시 설정 불러오기
-        loadSettings();
+        // ============================================
+        // Cloudinary
+        // ============================================
+        async function loadCloudinary() {
+            try {
+                const res = await fetch('/api/sns/status');
+                const status = await res.json();
+                if (status.cloudinary?.configured) {
+                    document.getElementById('cloud-name').value = status.cloudinary.cloud_name || '';
+                    // 마스킹된 키 값을 placeholder에 표시
+                    const keyPreview = status.cloudinary.api_key_preview || '설정됨';
+                    const secretPreview = status.cloudinary.api_secret_preview || '설정됨';
+                    document.getElementById('cloud-key').placeholder = `현재: ${keyPreview} (변경하려면 새 값 입력)`;
+                    document.getElementById('cloud-secret').placeholder = `현재: ${secretPreview} (변경하려면 새 값 입력)`;
+                    verifyCloudinary();
+                } else {
+                    setBadge('cloud-badge', 'err', '✗ 미설정');
+                }
+            } catch(e) {
+                setBadge('cloud-badge', 'err', '오류');
+            }
+        }
+
+        async function verifyCloudinary() {
+            setBadge('cloud-badge', 'off', '확인 중...');
+            try {
+                const res = await fetch('/api/sns/cloudinary/verify');
+                const data = await res.json();
+                if (data.ok) {
+                    setBadge('cloud-badge', 'ok', '✓ 연결됨');
+                } else {
+                    setBadge('cloud-badge', 'err', '✗ ' + (data.error || '인증 실패'));
+                }
+            } catch(e) {
+                setBadge('cloud-badge', 'err', '✗ 오류');
+            }
+        }
+
+        async function saveCloudinary() {
+            const name = document.getElementById('cloud-name').value.trim();
+            const key = document.getElementById('cloud-key').value.trim();
+            const secret = document.getElementById('cloud-secret').value.trim();
+            if (!name) { alert('Cloud Name을 입력해주세요.'); return; }
+            // key/secret이 비어있으면 기존 값 유지 (변경 시에만)
+            const body = { cloud_name: name };
+            if (key) body.api_key = key;
+            if (secret) body.api_secret = secret;
+            // 최소한 하나는 새로 입력해야 최초 설정 가능
+            if (!key && !secret) {
+                // 이미 설정된 경우 이름만 변경 가능하도록
+                body.api_key = '';
+                body.api_secret = '';
+            }
+            try {
+                const res = await fetch('/api/sns/cloudinary/save', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    showToast('✓ Cloudinary 설정 저장 완료');
+                    verifyCloudinary();
+                } else { alert(data.error); }
+            } catch(e) { alert('저장 실패: ' + e.message); }
+        }
+
+        // ============================================
+        // Gemini API Key
+        // ============================================
+        async function loadGemini() {
+            try {
+                const res = await fetch('/api/sns/apikey/status');
+                const data = await res.json();
+                if (data.gemini?.configured) {
+                    document.getElementById('gemini-key').placeholder = data.gemini.preview + ' (설정됨)';
+                    setBadge('gemini-badge', 'ok', '✓ 설정됨');
+                } else {
+                    setBadge('gemini-badge', 'err', '✗ 미설정');
+                }
+            } catch(e) {
+                setBadge('gemini-badge', 'err', '오류');
+            }
+        }
+
+        async function saveApiKey(envKey, inputId, badgeId) {
+            const val = document.getElementById(inputId).value.trim();
+            if (!val) { alert('키를 입력해주세요.'); return; }
+            try {
+                const res = await fetch('/api/sns/apikey/save', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({key: envKey, value: val})
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    document.getElementById(inputId).value = '';
+                    showToast('✓ API 키 저장 완료');
+                    loadGemini();
+                } else { alert(data.error); }
+            } catch(e) { alert('저장 실패: ' + e.message); }
+        }
+
+        // ============================================
+        // 페이지 로드
+        // ============================================
+        initPage();
     </script>
 </body>
-
 </html>

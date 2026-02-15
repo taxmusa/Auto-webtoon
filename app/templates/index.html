@@ -600,23 +600,32 @@
 <body>
     <header>
         <a href="/" class="logo" style="text-decoration: none;">🎨 Tax Webtoon Auto-Generator Pro</a>
-        <div style="display: flex; gap: 1rem; align-items: center;">
+        <div style="display: flex; gap: 0.75rem; align-items: center;">
+            <button class="btn btn-secondary" onclick="toggleProjectPanel()" id="btn-project-manager"
+                style="font-size:0.78rem; padding:5px 14px; border-radius:8px; display:inline-flex; align-items:center; gap:4px; background:rgba(99,102,241,0.12); border:1px solid rgba(99,102,241,0.25); color:var(--primary);">
+                📂 저장 및 불러오기
+            </button>
             <span id="login-status" style="font-size: 0.875rem; color: var(--text-muted);">Guest User</span>
-            <a href="/settings" style="color: var(--text-muted); text-decoration: none;">⚙️ 설정</a>
+            <a href="/settings" class="btn btn-secondary"
+                style="font-size:0.78rem; padding:5px 14px; border-radius:8px; display:inline-flex; align-items:center; gap:4px; text-decoration:none; color:var(--text);">
+                ⚙️ 설정
+            </a>
         </div>
     </header>
 
-    <!-- 프로젝트 저장/불러오기 바 (항상 표시) -->
-    <div style="max-width:1200px; margin:0 auto; padding:0 2rem; display:flex; justify-content:flex-end; gap:0.5rem; align-items:center;">
-        <button class="btn btn-secondary" onclick="openProjectList()" style="font-size:0.78rem; padding:4px 12px;">📂 불러오기</button>
-        <button class="btn btn-secondary" onclick="saveCurrentProject()" id="btn-project-save" style="font-size:0.78rem; padding:4px 12px; display:none;">💾 저장</button>
-    </div>
     <div id="project-list-panel" style="display:none; max-width:1200px; margin:0 auto 0.5rem; padding:0 2rem;">
-        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:1rem;">
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:1rem; box-shadow:0 4px 12px rgba(0,0,0,0.15);">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
-                <h3 style="margin:0; font-size:0.95rem;">📂 저장된 프로젝트</h3>
+                <h3 style="margin:0; font-size:0.95rem;">📂 프로젝트 관리</h3>
                 <button onclick="document.getElementById('project-list-panel').style.display='none'" style="background:none; border:none; cursor:pointer; font-size:1.2rem; color:var(--text-muted);">×</button>
             </div>
+            <!-- 저장 버튼 영역 -->
+            <div style="display:flex; gap:0.5rem; margin-bottom:0.75rem; padding-bottom:0.75rem; border-bottom:1px solid var(--border);">
+                <button class="btn btn-primary" onclick="saveCurrentProject()" style="font-size:0.82rem; padding:6px 16px;">💾 현재 프로젝트 저장</button>
+                <span id="project-save-hint" style="font-size:0.75rem; color:var(--text-muted); align-self:center;">세션이 시작되면 저장할 수 있습니다</span>
+            </div>
+            <!-- 프로젝트 목록 -->
+            <div style="font-size:0.82rem; font-weight:600; margin-bottom:0.5rem; color:var(--text-muted);">저장된 프로젝트</div>
             <div id="project-list-content" style="max-height:300px; overflow-y:auto;">로딩 중...</div>
         </div>
     </div>
@@ -1282,12 +1291,69 @@
                         </div>
                     </div>
 
+                    <!-- 발행 대상 계정 정보 -->
+                    <div id="publish-account-info" class="card" style="padding:0.75rem 1rem; margin-bottom:0.5rem; display:none;">
+                        <div style="display:flex; align-items:center; gap:0.75rem;">
+                            <div id="pub-ig-pic" style="width:36px; height:36px; border-radius:50%; background:var(--bg-input); overflow:hidden; flex-shrink:0; display:flex; align-items:center; justify-content:center;">
+                                <span style="font-size:1.1rem;">📷</span>
+                            </div>
+                            <div style="flex:1;">
+                                <div style="font-size:0.82rem; font-weight:600;" id="pub-ig-name">Instagram 계정 확인 중...</div>
+                                <div style="font-size:0.72rem; color:var(--text-muted);" id="pub-ig-detail"></div>
+                            </div>
+                            <div style="display:flex; gap:0.4rem; align-items:center;">
+                                <a id="pub-ig-link" href="#" target="_blank" style="display:none; font-size:0.72rem; color:white; background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888); padding:3px 8px; border-radius:4px; text-decoration:none; white-space:nowrap;">📸 Instagram 열기</a>
+                                <a href="/settings" style="font-size:0.72rem; color:var(--primary); text-decoration:none; background:rgba(99,102,241,0.1); padding:3px 8px; border-radius:4px; border:1px solid rgba(99,102,241,0.2); white-space:nowrap;">⚙️ 설정</a>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="card" style="padding: 1.5rem; background: var(--bg-input);">
                         <h3 style="font-size: 1rem; margin-bottom: 1rem;">🚀 발행 옵션</h3>
+                        
+                        <!-- Threads 동시 공유 체크박스 -->
+                        <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.75rem; padding:0.6rem 0.75rem; background:rgba(99,102,241,0.06); border-radius:8px; border:1px solid rgba(99,102,241,0.15);">
+                            <input type="checkbox" id="share-to-threads" style="width:16px; height:16px; cursor:pointer; accent-color:var(--primary);">
+                            <label for="share-to-threads" style="font-size:0.82rem; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:4px;">
+                                <span style="font-size:1rem;">🧵</span> Threads에도 함께 공유
+                            </label>
+                            <span id="threads-status-badge" style="font-size:0.68rem; padding:2px 6px; border-radius:4px; margin-left:auto; display:none;"></span>
+                        </div>
+                        
                         <button class="btn btn-primary" onclick="publishToInstagram()"
-                            style="width: 100%; margin-bottom: 0.5rem;">인스타그램 즉시 발행</button>
-                        <button class="btn btn-secondary" onclick="downloadSeriesImages()" style="width: 100%; margin-bottom: 0.5rem;">이미지 ZIP
-                            다운로드</button>
+                            style="width: 100%; margin-bottom: 0.5rem;">📸 인스타그램 즉시 발행</button>
+                        
+                        <!-- 예약 발행 -->
+                        <div style="border:1px solid var(--border); border-radius:8px; padding:0.75rem; margin-bottom:0.5rem;">
+                            <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem;">
+                                <label style="font-size:0.82rem; font-weight:600; white-space:nowrap;">⏰ 예약 발행</label>
+                                <input type="datetime-local" id="schedule-datetime" 
+                                    style="flex:1; padding:4px 8px; border:1px solid var(--border); border-radius:6px; font-size:0.8rem; background:var(--bg-card); color:var(--text);">
+                            </div>
+                            <button class="btn btn-secondary" onclick="schedulePublish()" style="width:100%; font-size:0.82rem;">
+                                📅 예약 발행 등록
+                            </button>
+                        </div>
+                        
+                        <!-- 다음편에 계속 (시리즈 2편 이상일 때만) -->
+                        <div id="tbc-option" style="display:none; border:1px solid var(--border); border-radius:8px; padding:0.75rem; margin-bottom:0.5rem;">
+                            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.4rem;">
+                                <label style="font-size:0.82rem; font-weight:600;">🔄 다음편에 계속</label>
+                                <label style="position:relative; display:inline-block; width:36px; height:20px; cursor:pointer;">
+                                    <input type="checkbox" id="tbc-toggle" checked onchange="toggleToBeContinued()"
+                                        style="opacity:0; width:0; height:0;">
+                                    <span style="position:absolute;inset:0;background:var(--border);border-radius:10px;transition:.3s;"></span>
+                                    <span id="tbc-slider" style="position:absolute;left:2px;top:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:.3s;"></span>
+                                </label>
+                            </div>
+                            <select id="tbc-style" style="width:100%; padding:4px 8px; font-size:0.78rem; border:1px solid var(--border); border-radius:6px; background:var(--bg-card); color:var(--text);">
+                                <option value="fade_overlay">하단 그라데이션</option>
+                                <option value="badge">우측 하단 배지</option>
+                                <option value="full_overlay">전체 오버레이</option>
+                            </select>
+                        </div>
+
+                        <button class="btn btn-secondary" onclick="downloadSeriesImages()" style="width: 100%; margin-bottom: 0.5rem;">📥 이미지 다운로드</button>
                         <button class="btn btn-secondary" onclick="copyCaptionToClipboard()" style="width: 100%; margin-bottom: 0.5rem;">📋 캡션 전체 복사</button>
                         <button class="btn btn-secondary" onclick="saveCurrentProject()" style="width: 100%;">💾 프로젝트 저장</button>
                     </div>
@@ -1581,8 +1647,6 @@
                 const data = await res.json();
                 sessionId = data.session_id;
                 localStorage.setItem('lastSessionId', sessionId); // 세션 ID 저장
-                const btnSave = document.getElementById('btn-project-save');
-                if (btnSave) btnSave.style.display = 'inline-flex';
 
                 // 2. 세션 정보 조회 (감지된 결과 확인)
                 const sessionRes = await fetch(`/api/workflow/session/${sessionId}`);
@@ -1916,6 +1980,27 @@
             renderDataItems();
             saveDataToStorage();
             updateRecScenes();
+        }
+
+        // === 직접 항목 추가 (수집 실패 시 호출) ===
+        function addNewDataItem() {
+            const title = prompt('새 항목의 제목을 입력하세요:');
+            if (!title) return;
+            const content = prompt('새 항목의 내용을 입력하세요:');
+            if (!content) return;
+
+            collectedData.push({ title, content });
+            renderDataItems();
+            saveDataToStorage();
+            updateRecScenes();
+
+            // UI 상태 보정: 로딩 숨기고 리뷰 영역 표시
+            const loadingEl = document.getElementById('loading-data');
+            const reviewArea = document.getElementById('data-review-area');
+            const actionsEl = document.getElementById('data-actions');
+            if (loadingEl) loadingEl.style.display = 'none';
+            if (reviewArea) reviewArea.style.display = 'block';
+            if (actionsEl) actionsEl.style.display = 'flex';
         }
 
         // === 드래그 앤 드롭 정렬 ===
@@ -2703,8 +2788,12 @@
                                 ? '<span style="background:var(--primary); color:#fff; padding:2px 8px; border-radius:10px; font-size:0.72rem; margin-right:4px;">📌 표지</span> 썸네일' 
                                 : '씬 ' + s.scene_number}
                         </span>
-                        <button onclick="deleteScene(${idx})" 
-                            style="background:none; border:1px solid var(--danger); color:var(--danger); cursor:pointer; padding:2px 8px; border-radius:6px; font-size:0.7rem;" title="씬 삭제">삭제</button>
+                        <div style="display:flex; gap:4px;">
+                            <button onclick="regenerateScene(${idx})" 
+                                style="background:none; border:1px solid var(--primary); color:var(--primary); cursor:pointer; padding:2px 8px; border-radius:6px; font-size:0.7rem;" title="이 씬만 다시 생성">🔄 재생성</button>
+                            <button onclick="deleteScene(${idx})" 
+                                style="background:none; border:1px solid var(--danger); color:var(--danger); cursor:pointer; padding:2px 8px; border-radius:6px; font-size:0.7rem;" title="씬 삭제">삭제</button>
+                        </div>
                     </div>
 
                     <!-- 씬 설명 (인라인 textarea) -->
@@ -2953,10 +3042,42 @@
 
         // 씬 재생성 함수
         async function regenerateScene(idx) {
-            if (!confirm(`씬 ${idx + 1}을 AI로 다시 생성하시겠습니까?`)) return;
+            if (!confirm(`씬 ${idx + 1}을 AI로 다시 생성하시겠습니까?\n기존 대사와 설명이 새로운 내용으로 교체됩니다.`)) return;
+            if (!sessionId) { showToast('세션이 없습니다.', 'error'); return; }
 
-            const scene = storyData.scenes[idx];
-            alert('씬 재생성 기능은 추후 구현 예정입니다.\n현재는 수정 기능을 이용해주세요.');
+            // 로딩 표시
+            const sceneCard = document.querySelector(`#scene-card-${idx}`) || document.querySelector(`[data-scene-idx="${idx}"]`);
+            const origHtml = sceneCard ? sceneCard.innerHTML : null;
+            if (sceneCard) {
+                const overlay = document.createElement('div');
+                overlay.id = `regen-overlay-${idx}`;
+                overlay.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10;border-radius:8px;';
+                overlay.innerHTML = '<div style="text-align:center;color:#fff;"><div class="spinner" style="width:24px;height:24px;border-width:3px;margin:0 auto 8px;"></div><div style="font-size:0.8rem;">AI 재생성 중...</div></div>';
+                sceneCard.style.position = 'relative';
+                sceneCard.appendChild(overlay);
+            }
+
+            try {
+                const res = await fetch('/api/workflow/regenerate-scene', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, scene_index: idx })
+                });
+                const data = await res.json();
+                if (data.scene) {
+                    // 스토리 데이터 업데이트
+                    storyData.scenes[idx] = data.scene;
+                    renderScenes(storyData.scenes);
+                    showToast(`씬 ${idx + 1} 재생성 완료`, 'success');
+                } else {
+                    throw new Error(data.detail || '재생성 실패');
+                }
+            } catch (e) {
+                showToast('씬 재생성 오류: ' + e.message, 'error');
+            } finally {
+                const overlay = document.getElementById(`regen-overlay-${idx}`);
+                if (overlay) overlay.remove();
+            }
         }
 
         // 씬 삭제 함수
@@ -3622,13 +3743,17 @@
         function initPublishSeriesTabs() {
             var tabsEl = document.getElementById('publish-series-tabs');
             var btnsEl = document.getElementById('publish-series-tab-btns');
+            var tbcOption = document.getElementById('tbc-option');
             if (!tabsEl || !btnsEl) return;
             if (seriesConfig.total <= 1) {
                 tabsEl.style.display = 'none';
+                if (tbcOption) tbcOption.style.display = 'none';
                 publishCurrentSeries = 0;
                 return;
             }
             tabsEl.style.display = 'block';
+            // 시리즈 2편 이상일 때 "다음편에 계속" 옵션 표시
+            if (tbcOption) tbcOption.style.display = 'block';
             var html = '<button class="btn btn-primary" style="font-size:0.8rem; padding:5px 12px;" onclick="selectPublishSeries(0)">전체</button>';
             for (var i = 0; i < seriesConfig.total; i++) {
                 var sc = seriesConfig.scenesPerSeries[i] || 0;
@@ -3728,20 +3853,197 @@
             const tip = document.getElementById('final-tip').value || '';
             const hashtags = document.getElementById('final-hashtags').value || '';
             const caption = `${hook}\n\n${body}\n\n💡 ${tip}`.trim() + (hashtags ? '\n\n' + hashtags.trim() : '');
+
+            // 현재 시리즈 선택에 따른 이미지 URL 수집
+            const seriesImgs = getSeriesImages();
+            const imageUrls = seriesImgs.map(img => img.src).filter(src => src && src.startsWith('http'));
+
+            const shareToThreads = document.getElementById('share-to-threads')?.checked || false;
+            const threadsMsg = shareToThreads ? ' + Threads' : '';
+
+            if (!confirm(`${seriesImgs.length}장의 이미지를 인스타그램${threadsMsg}에 발행합니다. 계속할까요?`)) return;
+
             try {
                 const res = await fetch('/api/workflow/publish', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ session_id: sessionId, caption: caption, images: [] })
+                    body: JSON.stringify({ 
+                        session_id: sessionId, 
+                        caption: caption, 
+                        images: imageUrls,
+                        target_series: publishCurrentSeries > 0 ? publishCurrentSeries : null,
+                        share_to_threads: shareToThreads
+                    })
                 });
                 const data = await res.json();
                 if (data.success) {
-                    alert('인스타그램에 발행되었습니다.');
+                    let msg = '인스타그램 발행 완료!';
+                    if (data.threads) {
+                        if (data.threads.success) {
+                            msg += ' + Threads 발행 완료!';
+                        } else {
+                            msg += ' (Threads 실패: ' + (data.threads.error || '') + ')';
+                        }
+                    }
+                    showToast(msg, 'success');
                 } else {
                     alert('발행 실패: ' + (data.error || '알 수 없음'));
                 }
             } catch (e) {
                 alert('발행 오류: ' + e.message);
+            }
+        }
+
+        // 발행 탭 진입 시 Threads + Instagram 연결 상태 확인
+        async function checkThreadsConnection() {
+            const badge = document.getElementById('threads-status-badge');
+            
+            // Threads 상태
+            if (badge) {
+                try {
+                    const res = await fetch('/api/workflow/threads-check');
+                    const data = await res.json();
+                    badge.style.display = 'inline';
+                    if (data.ok) {
+                        badge.style.background = 'rgba(34,197,94,0.15)';
+                        badge.style.color = '#22c55e';
+                        badge.innerText = '@' + (data.username || '연결됨');
+                    } else if (data.configured) {
+                        badge.style.background = 'rgba(239,68,68,0.15)';
+                        badge.style.color = '#ef4444';
+                        badge.innerText = '토큰 만료';
+                    } else {
+                        badge.style.background = 'rgba(156,163,175,0.15)';
+                        badge.style.color = '#9ca3af';
+                        badge.innerText = '미설정';
+                    }
+                } catch(e) {
+                    if (badge) badge.style.display = 'none';
+                }
+            }
+
+            // Instagram 계정 정보 표시
+            const infoCard = document.getElementById('publish-account-info');
+            if (infoCard) {
+                try {
+                    const res = await fetch('/api/sns/instagram/verify');
+                    const data = await res.json();
+                    infoCard.style.display = 'block';
+                    if (data.ok) {
+                        const username = data.username || '';
+                        document.getElementById('pub-ig-name').innerText = username ? `@${username}` : '연결됨';
+                        let detail = data.permanent ? '🔒 영구 토큰' : '⏱️ 장기 토큰';
+                        document.getElementById('pub-ig-detail').innerText = `${detail} · 발행하면 이 계정에 올라갑니다`;
+                        if (data.profile_picture) {
+                            document.getElementById('pub-ig-pic').innerHTML = 
+                                `<img src="${data.profile_picture}" style="width:100%;height:100%;object-fit:cover;">`;
+                        }
+                        // Instagram 바로가기 링크
+                        const igLink = document.getElementById('pub-ig-link');
+                        if (igLink && username) {
+                            igLink.href = `https://www.instagram.com/${username}/`;
+                            igLink.style.display = 'inline-block';
+                        }
+                    } else {
+                        document.getElementById('pub-ig-name').innerText = '⚠️ Instagram 미연결';
+                        document.getElementById('pub-ig-detail').innerText = '설정 페이지에서 연결해주세요';
+                    }
+                } catch(e) {
+                    infoCard.style.display = 'none';
+                }
+            }
+        }
+
+        async function toggleToBeContinued() {
+            if (!sessionId) return;
+            const enabled = document.getElementById('tbc-toggle').checked;
+            const style = document.getElementById('tbc-style').value;
+            const slider = document.getElementById('tbc-slider');
+            if (slider) slider.style.left = enabled ? '18px' : '2px';
+            if (slider) slider.parentElement.previousElementSibling.style.background = enabled ? 'var(--primary)' : 'var(--border)';
+            
+            try {
+                const res = await fetch('/api/workflow/to-be-continued/apply', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        enabled: enabled,
+                        style: style,
+                        text: '다음편에 계속 →'
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    if (enabled && data.applied_count > 0) {
+                        showToast(`"다음편에 계속" ${data.applied_count}개 편에 적용 완료`, 'success');
+                    } else if (!enabled) {
+                        showToast('"다음편에 계속" 해제됨', 'info');
+                    } else {
+                        showToast('적용할 이미지가 없습니다 (이미지 생성 후 시도하세요)', 'warning');
+                    }
+                } else {
+                    showToast(data.reason || '적용 실패', 'warning');
+                }
+            } catch(e) {
+                showToast('오류: ' + e.message, 'error');
+            }
+        }
+
+        async function schedulePublish() {
+            if (!sessionId) { alert('세션이 없습니다.'); return; }
+            const dtInput = document.getElementById('schedule-datetime');
+            if (!dtInput || !dtInput.value) {
+                showToast('예약 발행 날짜/시간을 선택해주세요.', 'warning');
+                return;
+            }
+            const scheduledDate = new Date(dtInput.value);
+            const now = new Date();
+            // 최소 10분 뒤
+            if (scheduledDate.getTime() - now.getTime() < 10 * 60 * 1000) {
+                showToast('예약 시간은 현재로부터 최소 10분 이후여야 합니다.', 'warning');
+                return;
+            }
+            // 최대 75일
+            if (scheduledDate.getTime() - now.getTime() > 75 * 24 * 60 * 60 * 1000) {
+                showToast('예약 시간은 최대 75일 이내여야 합니다.', 'warning');
+                return;
+            }
+
+            const unixTs = Math.floor(scheduledDate.getTime() / 1000);
+            const hook = document.getElementById('final-hook').value || '';
+            const body = document.getElementById('final-body').value || '';
+            const tip = document.getElementById('final-tip').value || '';
+            const hashtags = document.getElementById('final-hashtags').value || '';
+            const caption = `${hook}\n\n${body}\n\n💡 ${tip}`.trim() + (hashtags ? '\n\n' + hashtags.trim() : '');
+
+            const seriesImgs = getSeriesImages();
+            const imageUrls = seriesImgs.map(img => img.src).filter(src => src && src.startsWith('http'));
+
+            const timeStr = scheduledDate.toLocaleString('ko-KR');
+            if (!confirm(`${seriesImgs.length}장의 이미지를 ${timeStr}에 예약 발행합니다. 계속할까요?`)) return;
+
+            try {
+                const res = await fetch('/api/workflow/publish', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        caption: caption,
+                        images: imageUrls,
+                        target_series: publishCurrentSeries > 0 ? publishCurrentSeries : null,
+                        scheduled_publish_time: unixTs
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`📅 ${timeStr}에 예약 발행 등록 완료!`, 'success');
+                    dtInput.value = '';
+                } else {
+                    alert('예약 발행 실패: ' + (data.error || '알 수 없음'));
+                }
+            } catch (e) {
+                alert('예약 발행 오류: ' + e.message);
             }
         }
 
@@ -3828,6 +4130,7 @@
             // Step 6: 캡션 + 발행 (기존 step-7 → step-6)
             if (step === 6) {
                 updateInstaPreview();
+                if (typeof checkThreadsConnection === 'function') checkThreadsConnection();
             }
 
             // 프리셋 탭
@@ -5348,10 +5651,21 @@
     // ============================================
     // 프로젝트 저장/불러오기
     // ============================================
-    async function openProjectList() {
+    async function toggleProjectPanel() {
         const panel = document.getElementById('project-list-panel');
-        const content = document.getElementById('project-list-content');
+        if (panel.style.display === 'block') {
+            panel.style.display = 'none';
+            return;
+        }
         panel.style.display = 'block';
+        // 저장 힌트 업데이트
+        const hint = document.getElementById('project-save-hint');
+        if (hint) hint.style.display = sessionId ? 'none' : 'inline';
+        await refreshProjectList();
+    }
+
+    async function refreshProjectList() {
+        const content = document.getElementById('project-list-content');
         content.innerHTML = '로딩 중...';
         try {
             const res = await fetch('/api/workflow/project/list');
@@ -5400,7 +5714,6 @@
             }
 
             document.getElementById('project-list-panel').style.display = 'none';
-            document.getElementById('btn-project-save').style.display = 'inline-flex';
 
             // 스토리가 있으면 Tab 3으로 이동
             if (storyData && storyData.scenes && storyData.scenes.length > 0) {
@@ -5440,7 +5753,7 @@
         try {
             await fetch('/api/workflow/project/delete/' + dirname, { method: 'DELETE' });
             showToast('프로젝트 삭제됨', 'info');
-            openProjectList();
+            refreshProjectList();
         } catch(e) { alert('삭제 오류: ' + e.message); }
     }
 

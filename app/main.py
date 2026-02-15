@@ -16,6 +16,7 @@ from app.api.carousel import router as carousel_router
 from app.api.cardnews import router as cardnews_router
 from app.api.reference import router as reference_router
 from app.api.characters import router as characters_router
+from app.api.sns_auth import router as sns_auth_router
 
 # 환경 변수 로드
 load_dotenv()
@@ -30,6 +31,7 @@ app.include_router(carousel_router)
 app.include_router(cardnews_router)
 app.include_router(reference_router)
 app.include_router(characters_router)
+app.include_router(sns_auth_router)
 
 # 정적 파일 및 템플릿 설정
 app.mount("/static", StaticFiles(directory="app/static"), name="static")

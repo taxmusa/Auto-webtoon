@@ -1,12 +1,15 @@
 """
 OpenAI 서비스 - DALL-E 이미지 생성
 """
+import logging
 from openai import AsyncOpenAI
 from typing import Optional
 import httpx
 
 from app.core.config import get_settings, STYLE_PROMPTS, SUB_STYLE_PROMPTS, CHARACTER_DESCRIPTIONS
 from app.models.models import Scene, ImageStyle, SubStyle, GeneratedImage, LayoutSettings
+
+logger = logging.getLogger(__name__)
 
 
 class OpenAIService:
@@ -92,10 +95,10 @@ Important rules:
             # 모델 매핑 및 Fallback
             api_model = model
             if model.startswith("gpt-image") or model.startswith("dall-e"):
-                pass # 그대로 사용
+                pass  # 지원 모델 — 그대로 사용
             else:
-                # OpenAI 모델이 아니면 DALL-E 3로 Fallback (추후 구현 필요)
-                print(f"Model {model} not supported in OpenAIService, falling back to dall-e-3")
+                # 지원하지 않는 모델명이 들어오면 DALL-E 3로 fallback
+                logger.warning(f"[OpenAI] 미지원 모델 '{model}' → dall-e-3 으로 fallback")
                 api_model = "dall-e-3"
 
             response = await self.client.images.generate(
