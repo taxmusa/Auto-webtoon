@@ -764,7 +764,7 @@ async def generate_caption(request: GenerateCaptionRequest):
     dialogues_summary = []
     for s in session.story.scenes[:5]:
         for d in s.dialogues[:2]:
-            dialogues_summary.append(f"  {d.character}: \"{d.line}\"")
+            dialogues_summary.append(f"  {d.character}: \"{d.text}\"")
     if dialogues_summary:
         story_summary += "\n주요 대사:\n" + "\n".join(dialogues_summary)
     
@@ -1376,21 +1376,30 @@ async def publish(request: PublishRequest):
                     if url:
                         image_urls.append(url)
 
-        # 2) 없으면 세션 이미지 사용 (로컬이면 Cloudinary 업로드)
-        if not image_urls and session.images:
-            for img in session.images:
-                if getattr(img, "image_url", None) and str(img.image_url).startswith("http"):
-                    image_urls.append(img.image_url)
-                elif getattr(img, "local_path", None):
-                    path = img.local_path
-                    if cloudinary.cloud_name and path:
-                        url = await cloudinary.upload_from_path(path)
-                        if url:
-                            image_urls.append(url)
-                    else:
-                        return {"success": False, "error": "로컬 이미지는 Cloudinary 설정이 필요합니다. .env에 CLOUDINARY_* 를 넣어주세요."}
+        # 2) 없으면 final_images(말풍선 합성본) 우선, 그다음 원본 images 사용
+        if not image_urls:
+            source_images = []
+            # final_images 우선 (말풍선 합성 이미지)
+            if hasattr(session, 'final_images') and session.final_images:
+                for fi in session.final_images:
+                    ep = getattr(fi, 'export_path', None) or getattr(fi, 'local_path', None)
+                    if ep:
+                        source_images.append(ep)
+            # final_images가 없으면 원본 images
+            if not source_images and session.images:
+                for img in session.images:
+                    lp = getattr(img, "local_path", None)
+                    if lp:
+                        source_images.append(lp)
+            for path in source_images:
+                if str(path).startswith("http"):
+                    image_urls.append(path)
+                elif cloudinary.cloud_name and path:
+                    url = await cloudinary.upload_from_path(path)
+                    if url:
+                        image_urls.append(url)
                 else:
-                    return {"success": False, "error": "이미지에 공개 URL 또는 로컬 경로가 없습니다."}
+                    return {"success": False, "error": "로컬 이미지는 Cloudinary 설정이 필요합니다. .env에 CLOUDINARY_* 를 넣어주세요."}
         
         if not image_urls:
             return {"success": False, "error": "발행할 이미지가 없습니다."}
@@ -1564,7 +1573,8 @@ async def load_story_history(request: LoadStoryRequest):
         if "collected_data" in data:
             session.collected_data = data["collected_data"]
             
-        # 이미지 데이터 복원 (있다면)
+        # 이미지 데이터 복원 (있다면) — 기존 세션 재사용 시 중복 방지
+        session.images = []
         images_list = []
         if data.get("images"):
             for img_data in data["images"]:
@@ -1607,12 +1617,21 @@ def save_story_to_history(session: WorkflowSession):
     filename = f"{timestamp}_{safe_keyword}.json"
     filepath = os.path.join(history_dir, filename)
     
+    # 이미지 데이터도 함께 저장
+    images_data = []
+    for img in session.images:
+        try:
+            images_data.append(img.model_dump())
+        except Exception:
+            pass
+    
     data = {
         "timestamp": datetime.now().isoformat(),
         "keyword": session.keyword,
         "story": session.story.model_dump(),
         "collected_data": session.collected_data,
-        "character_settings": session.settings.character.model_dump()
+        "character_settings": session.settings.character.model_dump(),
+        "images": images_data
     }
     
     with open(filepath, "w", encoding="utf-8") as f:
@@ -1930,7 +1949,7 @@ async def init_bubble_layers(session_id: str):
                 visible=True
             ))
         
-        # 나레이션 → BubbleOverlay
+        # 나레이션 → BubbleOverlay (하단 중앙 기본값)
         if scene.narration:
             bubbles.append(BubbleOverlay(
                 id=f"s{scene.scene_number}_narr",
@@ -1944,7 +1963,11 @@ async def init_bubble_layers(session_id: str):
                 border_color="transparent",
                 font_size=13,
                 visible=True,
-                opacity=0.85
+                opacity=0.85,
+                x=5.0,
+                y=78.0,
+                w=90.0,
+                h=12.0
             ))
         
         layers.append(BubbleLayer(
@@ -2177,6 +2200,13 @@ async def export_with_bubbles(session_id: str):
                     "Gaegu": "C:/Windows/Fonts/Gaegu-Regular.ttf",
                     "Black Han Sans": "C:/Windows/Fonts/BlackHanSans-Regular.ttf",
                     "Nanum Pen Script": "C:/Windows/Fonts/NanumPenScript-Regular.ttf",
+                    "Nanum Brush Script": "C:/Windows/Fonts/NanumBrushScript-Regular.ttf",
+                    "Nanum Myeongjo": "C:/Windows/Fonts/NanumMyeongjo.ttf",
+                    "Gothic A1": "C:/Windows/Fonts/GothicA1-Regular.ttf",
+                    "Gamja Flower": "C:/Windows/Fonts/GamjaFlower-Regular.ttf",
+                    "Hi Melody": "C:/Windows/Fonts/HiMelody-Regular.ttf",
+                    "Poor Story": "C:/Windows/Fonts/PoorStory-Regular.ttf",
+                    "Sunflower": "C:/Windows/Fonts/Sunflower-Medium.ttf",
                 }
                 _DEFAULT_FONT = "C:/Windows/Fonts/malgun.ttf"
                 

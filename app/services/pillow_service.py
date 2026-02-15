@@ -67,6 +67,18 @@ class PillowService:
         "comic": {
             "border_radius": 40, "padding": 16,
             "bg_color": (255, 255, 255, 245), "border_color": (0, 0, 0), "border_width": 3
+        },
+        "fluffy": {
+            "border_radius": 30, "padding": 16,
+            "bg_color": (255, 255, 255, 235), "border_color": (100, 100, 100), "border_width": 2
+        },
+        "explosion": {
+            "border_radius": 8, "padding": 14,
+            "bg_color": (255, 255, 255, 245), "border_color": (220, 0, 0), "border_width": 4
+        },
+        "wavy": {
+            "border_radius": 25, "padding": 14,
+            "bg_color": (255, 255, 255, 230), "border_color": (80, 80, 80), "border_width": 2
         }
     }
     

@@ -8,6 +8,9 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🎨</text></svg>" type="image/svg+xml">
     <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap"
         rel="stylesheet">
+    <!-- 웹툰 말풍선 한국어 폰트 13종 -->
+    <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700&family=Do+Hyeon&family=Jua&family=Gaegu:wght@400;700&family=Black+Han+Sans&family=Nanum+Pen+Script&family=Nanum+Brush+Script&family=Nanum+Myeongjo:wght@400;700&family=Gothic+A1:wght@400;700&family=Gamja+Flower&family=Hi+Melody&family=Poor+Story&family=Sunflower:wght@300;500&display=swap"
+        rel="stylesheet">
     <style>
         :root {
             --primary: #6366f1;
@@ -1302,12 +1305,21 @@
                             <div style="display: flex; gap: 0.4rem; align-items: center; margin-bottom: 0.4rem; flex-wrap: wrap;">
                                 <label style="font-size: 0.75rem; font-weight: 600;">폰트</label>
                                 <select id="bubble-font-family" onchange="onGlobalSettingChange()" style="padding: 3px 6px; font-size: 0.75rem; flex:1; min-width:80px;">
-                                    <option value="Nanum Gothic">나눔고딕</option>
-                                    <option value="Do Hyeon">도현</option>
-                                    <option value="Jua">주아</option>
-                                    <option value="Gaegu">개구</option>
-                                    <option value="Black Han Sans">블랙한산스</option>
+                                    <option value="Nanum Gothic" style="font-family:'Nanum Gothic'">나눔고딕</option>
+                                    <option value="Do Hyeon" style="font-family:'Do Hyeon'">도현</option>
+                                    <option value="Jua" style="font-family:'Jua'">주아</option>
+                                    <option value="Gaegu" style="font-family:'Gaegu'">개구</option>
+                                    <option value="Black Han Sans" style="font-family:'Black Han Sans'">블랙한산스</option>
+                                    <option value="Nanum Pen Script" style="font-family:'Nanum Pen Script'">나눔펜</option>
+                                    <option value="Nanum Brush Script" style="font-family:'Nanum Brush Script'">나눔붓</option>
+                                    <option value="Nanum Myeongjo" style="font-family:'Nanum Myeongjo'">나눔명조</option>
+                                    <option value="Gothic A1" style="font-family:'Gothic A1'">고딕A1</option>
+                                    <option value="Gamja Flower" style="font-family:'Gamja Flower'">감자꽃</option>
+                                    <option value="Hi Melody" style="font-family:'Hi Melody'">하이멜로디</option>
+                                    <option value="Poor Story" style="font-family:'Poor Story'">푸어스토리</option>
+                                    <option value="Sunflower" style="font-family:'Sunflower'">해바라기</option>
                                 </select>
+                                <span id="bubble-font-preview" style="font-size:0.8rem; min-width:60px; text-align:center; font-family:'Nanum Gothic'">가나다</span>
                                 <label style="font-size: 0.75rem; font-weight: 600;">모양</label>
                                 <select id="bubble-global-shape" style="padding: 3px 6px; font-size: 0.75rem;">
                                     <option value="round">둥근</option>
@@ -1318,6 +1330,15 @@
                                     <option value="thought">생각</option>
                                     <option value="cloud">구름</option>
                                     <option value="whisper">속삭임</option>
+                                    <option value="comic">만화</option>
+                                    <option value="scream">절규</option>
+                                    <option value="dark">다크</option>
+                                    <option value="emphasis">임팩트</option>
+                                    <option value="soft">부드러운</option>
+                                    <option value="system">시스템</option>
+                                    <option value="fluffy">뭉실</option>
+                                    <option value="explosion">폭발</option>
+                                    <option value="wavy">물결</option>
                                 </select>
                             </div>
                             <div style="display: flex; gap: 0.4rem; align-items: center; margin-bottom: 0.5rem;">
@@ -1362,13 +1383,15 @@
                 <button class="btn btn-secondary" onclick="goToStep(3)">← 이전 (스토리)</button>
                 <div style="display: flex; gap: 0.5rem;">
                     <button class="btn btn-secondary" onclick="exportWithBubbles()" id="bubble-export-btn">최종 이미지 내보내기</button>
-                    <button class="btn btn-primary" onclick="proceedFromEditStage()">다음 단계 (캡션) →</button>
+                    <button class="btn btn-primary" onclick="proceedFromEditStage()">다음 단계 (발행) →</button>
                 </div>
             </div>
         </div>
 
         <!-- Step 5: 캡션 생성 + 최종 발행 -->
         <div class="step-content" id="step-5">
+            <!-- 발행/미리보기용 이미지 소스 (세션 API로 채움, 숨김) -->
+            <div id="images-container" style="display:none;"></div>
             <!-- 시리즈 선택 탭 (시리즈 2개 이상일 때만 표시) -->
             <div id="publish-series-tabs" style="display:none; margin-bottom:1rem;">
                 <div style="display:flex; gap:0.5rem; flex-wrap:wrap;" id="publish-series-tab-btns"></div>
@@ -1419,6 +1442,9 @@
                 <div>
                     <div class="card" style="padding: 1.5rem;">
                         <h2 class="card-title" style="font-size: 1.25rem;">📝 캡션 및 태그 수정</h2>
+                        <button class="btn btn-secondary" onclick="generateCaption()" style="width:100%; margin-bottom:0.75rem; font-size:0.85rem; padding:8px;">
+                            ✨ AI 캡션 자동 채우기
+                        </button>
                         <div class="form-group">
                             <label>🔥 훅 문장</label>
                             <input type="text" id="final-hook" oninput="updateInstaPreview()">
@@ -1950,11 +1976,23 @@
                 warning: '#f59e0b',
                 info: '#6366f1'
             };
+            const isError = type === 'error';
+            const baseStyle = `position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:${colors[type] || colors.info}; color:#fff; padding:10px 20px; border-radius:8px; font-size:0.85rem; font-weight:600; z-index:99999; box-shadow:0 4px 12px rgba(0,0,0,0.3); transition:opacity 0.4s; max-width:90vw; text-align:center;`;
+            const errorExtras = isError ? '; user-select:text; cursor:text; white-space:pre-wrap; word-break:break-word;' : '';
             const toast = document.createElement('div');
-            toast.style.cssText = `position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:${colors[type] || colors.info}; color:#fff; padding:10px 20px; border-radius:8px; font-size:0.85rem; font-weight:600; z-index:99999; box-shadow:0 4px 12px rgba(0,0,0,0.3); transition:opacity 0.4s; max-width:90vw; text-align:center;`;
+            toast.style.cssText = baseStyle + errorExtras;
             toast.innerText = message;
+            if (isError) {
+                const closeBtn = document.createElement('button');
+                closeBtn.innerText = '닫기';
+                closeBtn.style.cssText = 'margin-left:12px; padding:4px 10px; background:rgba(255,255,255,0.25); border:none; border-radius:6px; color:#fff; cursor:pointer; font-size:0.8rem;';
+                closeBtn.onclick = () => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 400); };
+                toast.appendChild(document.createTextNode(' '));
+                toast.appendChild(closeBtn);
+            }
             document.body.appendChild(toast);
-            setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 400); }, 3000);
+            const duration = isError ? 8000 : 3000;
+            setTimeout(() => { if (toast.parentElement) { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 400); } }, duration);
         }
 
         // 에러 진단 토스트 — 서비스별 에러를 사용자 친화적으로 표시
@@ -2110,8 +2148,8 @@
             const finalYear = document.getElementById('hidden-target-year').value;
 
             // Step 1 -> Step 2
-            navigateToStep(2);
-            startDataCollection();
+            goToStep(2);
+            collectData();
         }
 
         async function startWorkflow() {
@@ -4152,16 +4190,14 @@
                     storyData = data.story;
                     if (data.collected_data) collectedData = data.collected_data;
                     
-                    // 이미지 데이터 복원 (저장된 이미지가 있는 경우)
-                    if (data.images && data.images.length > 0) {
+                    // 이미지 데이터 복원 (scene_number로 씬 배열 인덱스 매핑)
+                    if (data.images && data.images.length > 0 && storyData.scenes) {
                         window._sceneImages = {};
-                        data.images.forEach((img, idx) => {
-                            if (img.local_path && img.status !== 'missing') {
-                                const url = getImageUrl(img.local_path);
-                                // scene_number 기반으로 인덱스 매핑
-                                // scene_number가 0이면 표지(idx=0), 아니면 씬 순서대로
-                                const sceneIdx = data.images.findIndex(i => i === img);
-                                window._sceneImages[sceneIdx] = url;
+                        data.images.forEach((img) => {
+                            if (!img.local_path || img.status === 'missing') return;
+                            const sceneIdx = storyData.scenes.findIndex(s => s.scene_number === img.scene_number);
+                            if (sceneIdx !== -1) {
+                                window._sceneImages[sceneIdx] = getImageUrl(img.local_path);
                             }
                         });
                     }
@@ -4192,6 +4228,9 @@
                     
                     const imgCount = window._sceneImages ? Object.keys(window._sceneImages).length : 0;
                     showToast(`스토리 불러오기 완료${imgCount > 0 ? ` (이미지 ${imgCount}개 복원)` : ''}`, 'success');
+                    
+                    // 스토리 탭(3단계)으로 이동하여 불러온 내용을 즉시 표시
+                    goToStep(3);
                 } else {
                     showToast('불러오기 실패: ' + (data.detail || ''), 'error');
                 }
@@ -4716,8 +4755,7 @@
 
         // --- 캡션 생성 (편집 → 발행) ---
         async function generateCaption() {
-            // 먼저 발행 탭으로 이동하여 로딩 UI 표시
-            goToStep(5);
+            // 발행 탭에서 수동 호출 (탭 이동 불필요 — 이미 step 5)
             const loadingEl = document.getElementById('loading-caption');
             const captionArea = document.getElementById('caption-publish-area');
             loadingEl.style.display = 'block';
@@ -4729,10 +4767,21 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ session_id: sessionId })
                 });
-                const data = await res.json();
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    const msg = data.detail || data.message || (typeof data === 'string' ? data : `오류 ${res.status}`);
+                    showToast('캡션 생성 오류: ' + msg, 'error');
+                    loadingEl.style.display = 'none';
+                    if (captionArea) captionArea.style.display = 'grid';
+                    return;
+                }
                 const caption = data.caption;
-
-                // Step 7 입력 필드 세팅
+                if (!caption) {
+                    showToast('캡션 생성 오류: 응답 형식이 올바르지 않습니다.', 'error');
+                    loadingEl.style.display = 'none';
+                    if (captionArea) captionArea.style.display = 'grid';
+                    return;
+                }
                 document.getElementById('final-hook').value = caption.hook || '';
                 document.getElementById('final-body').value = caption.body || '';
                 document.getElementById('final-tip').value = caption.expert_tip || caption.tip || '';
@@ -4740,10 +4789,12 @@
 
                 loadingEl.style.display = 'none';
                 if (captionArea) captionArea.style.display = 'grid';
-                initPublishSeriesTabs();
-                updateInstaPreview();
+                ensurePublishImagesFromSession().then(function() {
+                    initPublishSeriesTabs();
+                    updateInstaPreview();
+                });
             } catch (e) {
-                showToast('캡션 생성 오류: ' + e.message, 'error');
+                showToast('캡션 생성 오류: ' + (e.message || String(e)), 'error');
                 loadingEl.style.display = 'none';
                 if (captionArea) captionArea.style.display = 'grid';
             }
@@ -4753,6 +4804,31 @@
         // 발행 탭: 시리즈 선택 + 다운로드 + 캡션 복사
         // ============================================
         var publishCurrentSeries = 0;
+
+        /** 발행 탭에서 사용할 이미지를 세션 API로 채움. #images-container가 비어 있을 때만 호출 */
+        async function ensurePublishImagesFromSession() {
+            if (!sessionId) return;
+            var container = document.getElementById('images-container');
+            if (!container || container.children.length > 0) return;
+            try {
+                var res = await fetch('/api/workflow/session/' + encodeURIComponent(sessionId));
+                if (!res.ok) return;
+                var data = await res.json();
+                // final_images(말풍선 합성본) 우선, 없으면 원본 images 사용
+                var images = (data.final_images && data.final_images.length > 0)
+                    ? data.final_images.map(function(fi) { return { local_path: fi.export_path || fi.local_path, scene_number: fi.scene_number }; })
+                    : (data.images || []);
+                images.sort(function(a, b) { return (a.scene_number || 0) - (b.scene_number || 0); });
+                images.forEach(function(img) {
+                    var path = img.local_path || img.original_path;
+                    if (!path) return;
+                    var el = document.createElement('img');
+                    el.src = getImageUrl(path);
+                    el.alt = '씬 ' + (img.scene_number || 0);
+                    container.appendChild(el);
+                });
+            } catch (e) { /* 무시 */ }
+        }
 
         function initPublishSeriesTabs() {
             var tabsEl = document.getElementById('publish-series-tabs');
@@ -5097,10 +5173,17 @@
                 initBubbleEditor();
             }
 
-            // Step 5: 캡션 + 발행
+            // Step 5: 캡션 + 발행 (세션 이미지로 미리보기 소스 채운 뒤 미리보기 갱신)
             if (step === 5) {
-                updateInstaPreview();
-                if (typeof checkPublishConnection === 'function') checkPublishConnection();
+                if (typeof ensurePublishImagesFromSession === 'function') {
+                    ensurePublishImagesFromSession().then(function() {
+                        updateInstaPreview();
+                        if (typeof checkPublishConnection === 'function') checkPublishConnection();
+                    });
+                } else {
+                    updateInstaPreview();
+                    if (typeof checkPublishConnection === 'function') checkPublishConnection();
+                }
             }
 
             // 프리셋 탭
@@ -5134,6 +5217,16 @@
             "cloud":     { borderRadius: "40% 40% 40% 40% / 50% 50% 35% 35%", border: "2px solid", padding: "12px 18px", label: "구름" },
             "whisper":   { borderRadius: "14px", border: "1px dashed", opacity: "0.8", fontStyle: "italic", label: "속삭임" },
             "comic":     { borderRadius: "50%", border: "3px solid", padding: "10px 14px", label: "만화" },
+            // 백엔드 기존 모양 프론트 반영
+            "scream":    { borderRadius: "2px", border: "4px solid", fontWeight: "700", boxShadow: "3px 3px 0 #000", label: "절규" },
+            "dark":      { borderRadius: "4px", border: "2px solid #555", label: "다크" },
+            "emphasis":  { borderRadius: "12px", border: "2px solid", fontWeight: "700", label: "임팩트" },
+            "soft":      { borderRadius: "22px", border: "none", boxShadow: "0 2px 12px rgba(0,0,0,0.1)", label: "부드러운" },
+            "system":    { borderRadius: "0", border: "1px solid #999", opacity: "0.85", label: "시스템" },
+            // 웹툰 전용 신규 모양
+            "fluffy":    { borderRadius: "50% 45% 50% 45% / 45% 50% 45% 50%", border: "2px solid", padding: "12px 16px", label: "뭉실" },
+            "explosion": { borderRadius: "8px", border: "4px solid #e00", fontWeight: "900", boxShadow: "4px 4px 0 rgba(255,0,0,0.3)", label: "폭발" },
+            "wavy":      { borderRadius: "30% 70% 70% 30% / 30% 30% 70% 70%", border: "2px solid", padding: "10px 14px", label: "물결" },
             "narration": { borderRadius: "0", border: "none", label: "나레이션" },
         };
 
@@ -5153,12 +5246,14 @@
         // 말풍선 데이터 마이그레이션: 기존 position 문자열 → x,y,w,h 퍼센트 + 필드명 호환
         function migrateBubbleData(bubble) {
             if (bubble.x == null || bubble.y == null) {
-                const pos = POSITION_TO_PERCENT[bubble.position] || { x: 25, y: 10 };
+                const pos = (bubble.type === 'narration')
+                    ? POSITION_TO_PERCENT['bottom-center']
+                    : (POSITION_TO_PERCENT[bubble.position] || { x: 25, y: 10 });
                 bubble.x = pos.x;
                 bubble.y = pos.y;
             }
             if (bubble.w == null) bubble.w = bubble.type === 'narration' ? 90 : 40;
-            if (bubble.h == null) bubble.h = bubble.type === 'narration' ? 10 : 16;
+            if (bubble.h == null) bubble.h = bubble.type === 'narration' ? 12 : 16;
             // 서버 tail_direction → 프론트 tail 매핑
             if (bubble.tail == null && bubble.tail_direction) {
                 bubble.tail = bubble.tail_direction;
@@ -5255,6 +5350,16 @@
             // 전체 표시 체크박스
             document.getElementById('bubble-show-all').checked = layer.show_all !== false;
 
+            // 전체 설정 폼과 레이어 동기화 (불러온 레이어의 폰트를 글로벌 셀렉트에 반영)
+            const fontSel = document.getElementById('bubble-font-family');
+            if (fontSel && layer.font_family) {
+                fontSel.value = layer.font_family;
+            }
+            const fontPreview = document.getElementById('bubble-font-preview');
+            if (fontPreview) {
+                fontPreview.style.fontFamily = "'" + (layer.font_family || 'Nanum Gothic') + "', sans-serif";
+            }
+
             // CSS 오버레이 렌더링
             renderCSSOverlay(layer);
 
@@ -5270,7 +5375,7 @@
 
             if (!layer.show_all) return;
 
-            const fontFamily = layer.font_family || "Nanum Gothic";
+            const layerFont = layer.font_family || "Nanum Gothic";
 
             layer.bubbles.forEach((bubble, i) => {
                 if (!bubble.visible || !bubble.text) return;
@@ -5279,6 +5384,8 @@
                 const shapeCSS = SHAPE_CSS[bubble.shape] || SHAPE_CSS["round"];
                 const isNarr = bubble.type === 'narration';
                 const isBold = bubble.bold || shapeCSS.fontWeight;
+                // 개별 폰트 > 레이어 글로벌 폰트
+                const fontFamily = bubble.font_family || layerFont;
 
                 const div = document.createElement('div');
                 div.dataset.bubbleIdx = i;
@@ -5474,6 +5581,18 @@
                     .map(([k, v]) => `<option value="${k}" ${bubble.shape===k?'selected':''}>${v.label}</option>`)
                     .join('');
 
+                // 개별 폰트 옵션
+                const _FONT_LIST = [
+                    ["Nanum Gothic","나눔고딕"],["Do Hyeon","도현"],["Jua","주아"],["Gaegu","개구"],
+                    ["Black Han Sans","블랙한산스"],["Nanum Pen Script","나눔펜"],["Nanum Brush Script","나눔붓"],
+                    ["Nanum Myeongjo","나눔명조"],["Gothic A1","고딕A1"],["Gamja Flower","감자꽃"],
+                    ["Hi Melody","하이멜로디"],["Poor Story","푸어스토리"],["Sunflower","해바라기"]
+                ];
+                const bubbleFontVal = bubble.font_family || '';
+                const fontOptions = '<option value="">(전체 설정 따름)</option>' + _FONT_LIST.map(([v,l]) =>
+                    `<option value="${v}" style="font-family:'${v}'" ${bubbleFontVal===v?'selected':''}>${l}</option>`
+                ).join('');
+
                 card.innerHTML = `
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
                         <span style="font-size: 0.8rem; font-weight: 700; display: flex; align-items: center; gap: 4px;">
@@ -5494,6 +5613,14 @@
                     <textarea onchange="updateBubbleText(${i}, this.value)" oninput="livePreviewText(${i}, this.value)"
                         style="width: 100%; min-height: 38px; font-size: 0.8rem; border: 1px solid var(--border); border-radius: 6px; padding: 6px; resize: vertical; background: var(--bg-input); color: var(--text);"
                     >${bubble.text || ''}</textarea>
+
+                    <!-- 0.5행: 개별 폰트 -->
+                    <div style="display: flex; gap: 0.35rem; margin-top: 0.3rem; align-items: center;">
+                        <span style="font-size:0.65rem; color:var(--text-muted); white-space:nowrap;">폰트</span>
+                        <select onchange="updateBubbleFont(${i}, this.value)" style="font-size: 0.7rem; padding: 2px 4px; flex: 1;" title="개별 폰트">
+                            ${fontOptions}
+                        </select>
+                    </div>
 
                     <!-- 1행: 모양 + 글꼴 크기 + 볼드 -->
                     <div style="display: flex; gap: 0.35rem; margin-top: 0.35rem; align-items: center;">
@@ -5553,6 +5680,15 @@
         }
 
         // ── 편집 함수들 ──
+        function updateBubbleFont(idx, fontVal) {
+            const layer = bubbleLayers[bubbleCurrentScene];
+            if (layer && layer.bubbles[idx]) {
+                saveSnapshot();
+                layer.bubbles[idx].font_family = fontVal;
+                renderCSSOverlay(layer);
+            }
+        }
+
         function updateBubbleText(idx, text) {
             const layer = bubbleLayers[bubbleCurrentScene];
             if (layer && layer.bubbles[idx]) {
@@ -5753,6 +5889,11 @@
 
         function onGlobalSettingChange() {
             const font = document.getElementById('bubble-font-family').value;
+            // 미리보기 텍스트 업데이트
+            const preview = document.getElementById('bubble-font-preview');
+            if (preview) {
+                preview.style.fontFamily = "'" + font + "', sans-serif";
+            }
             const layer = bubbleLayers[bubbleCurrentScene];
             if (layer) {
                 layer.font_family = font;
@@ -5841,7 +5982,13 @@
                     });
                 } catch(e) { console.warn(`씬 ${layer.scene_number} 말풍선 저장 실패:`, e); }
             }
-            generateCaption();
+            // 말풍선 합성 이미지 내보내기 → 발행 탭으로 이동 (캡션은 수동 버튼)
+            showToast('말풍선 합성 이미지를 생성하는 중...', 'info');
+            await exportWithBubbles();
+            // images-container 초기화 (새 final_images 반영)
+            var ic = document.getElementById('images-container');
+            if (ic) ic.innerHTML = '';
+            goToStep(5);
         }
     </script>
     <script>
@@ -6685,6 +6832,28 @@
                 };
             }
 
+            // 수집 데이터 복원
+            if (data.collected_data && Array.isArray(data.collected_data)) {
+                collectedData = data.collected_data;
+            }
+
+            // 이미지 데이터 복원
+            if (data.images && data.images.length > 0 && storyData && storyData.scenes) {
+                window._sceneImages = {};
+                data.images.forEach(function(img) {
+                    if (!img.local_path || img.status === 'missing') return;
+                    var sceneIdx = storyData.scenes.findIndex(function(s) { return s.scene_number === img.scene_number; });
+                    if (sceneIdx !== -1) {
+                        window._sceneImages[sceneIdx] = getImageUrl(img.local_path);
+                    }
+                });
+            }
+
+            // 말풍선 레이어 복원
+            if (data.bubble_layers && data.bubble_layers.length > 0) {
+                bubbleLayers = data.bubble_layers;
+            }
+
             document.getElementById('project-list-panel').style.display = 'none';
 
             // 스토리가 있으면 Tab 3으로 이동
@@ -6694,8 +6863,16 @@
                 renderScenes(storyData.scenes);
                 showSeriesPanel();
                 document.getElementById('story-review-area').style.display = 'block';
+                // 이미지가 있으면 생성 컨트롤/편집 버튼 표시
+                if (window._sceneImages && Object.keys(window._sceneImages).length > 0) {
+                    var genBar = document.getElementById('gen-control-bar');
+                    if (genBar) genBar.style.display = 'block';
+                    var editBtn = document.getElementById('btn-to-edit');
+                    if (editBtn) { editBtn.disabled = false; editBtn.title = ''; }
+                }
             }
-            showToast('프로젝트 "' + data.project_name + '" 불러오기 완료', 'success');
+            var imgCount = window._sceneImages ? Object.keys(window._sceneImages).length : 0;
+            showToast('프로젝트 "' + data.project_name + '" 불러오기 완료' + (imgCount > 0 ? ' (이미지 ' + imgCount + '개 복원)' : ''), 'success');
         } catch(e) {
             showToast('불러오기 오류: ' + e.message, 'error');
         }

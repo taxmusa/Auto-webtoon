@@ -457,6 +457,8 @@ image_prompt 나쁜 예시:
    - 스토리 내용 요약
    - CTA 포함 (저장, 공유 유도)
    - 3~5문장
+   - 가독성을 위해 2~3문장마다 줄 바꿈(\\n)을 넣을 것
+   - 강조나 분위기에 맞게 본문 중간에 적절한 이모지를 사용할 것 (예: 💡, ✅, 💰, 👋, 📌 등)
 
 3. 전문가 Tip
    - 핵심 정보 1줄 요약
@@ -468,10 +470,13 @@ image_prompt 나쁜 예시:
    - 주제 관련 태그 포함
 
 [출력 형식]
-반드시 아래 JSON 형식으로만 출력하세요:
+반드시 아래 JSON 형식으로만 출력하세요.
+- hook, expert_tip: 한 줄.
+- body: 본문은 여러 줄 가능. 줄바꿈(\\n)과 이모지를 활용해 가독성 있게 작성.
+예시:
 {{
   "hook": "🔥 훅 문장",
-  "body": "본문 캡션",
+  "body": "첫 번째 문단입니다. 스토리를 요약해 드려요.\\n\\n두 번째 문단이에요 💡 핵심만 전달합니다.\\n\\n저장해두고 활용해보세요! ✅",
   "expert_tip": "전문가 팁",
   "hashtags": ["#태그1", "#태그2"]
 }}"""
@@ -499,12 +504,9 @@ image_prompt 나쁜 예시:
             )
             
         except Exception as e:
-            return InstagramCaption(
-                hook=f"🔥 {keyword} 핵심 정리!",
-                body=f"{keyword}에 대해 알아봤어요. 저장해두고 참고하세요!",
-                expert_tip="전문가와 상담하면 더 정확해요!",
-                hashtags=FIELD_HASHTAGS.get(field.value, ["#정보", "#꿀팁"])
-            )
+            import logging
+            logging.getLogger(__name__).error(f"[generate_caption] 캡션 생성 실패: {e}")
+            raise RuntimeError(f"캡션 생성 실패: {e}")
 
 
 
