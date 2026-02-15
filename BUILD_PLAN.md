@@ -136,42 +136,86 @@ Step 3: Playwright 텍스트 오버레이 (Tab 6)
 
 ### 공통
 ```
-POST /api/workflow/start           # 세션 시작
-POST /api/workflow/collect-data    # 자료 수집
-GET  /api/workflow/session/{id}    # 세션 상태
+POST /api/workflow/start                # 세션 시작
+POST /api/workflow/collect-data         # 자료 수집
+POST /api/workflow/parse-manual-content # 수동 입력 파싱
+GET  /api/workflow/session/{id}         # 세션 상태
+POST /api/workflow/generate-common-caption # 공통 캡션 생성
+POST /api/workflow/test-model           # AI 모델 테스트
 ```
 
 ### 웹툰 전용
 ```
-POST /api/workflow/generate-story    # 스토리 생성
-POST /api/workflow/generate-images   # 이미지 생성
-POST /api/workflow/regenerate-image  # 이미지 재생성
-POST /api/workflow/stop-generation   # 생성 중단
-POST /api/workflow/publish           # 발행
+POST /api/workflow/generate-story       # 스토리 생성
+POST /api/workflow/update-scene         # 씬 수정
+POST /api/workflow/approve-scenes       # 씬 전체 승인
+POST /api/workflow/regenerate-scene     # 씬 재생성
+POST /api/workflow/regenerate-image-prompt # 이미지 프롬프트 재생성
+POST /api/workflow/generate-preview     # 미리보기 1장
+POST /api/workflow/generate-images      # 이미지 일괄 생성
+POST /api/workflow/regenerate-image     # 이미지 재생성
+POST /api/workflow/stop-generation      # 생성 중단
+POST /api/workflow/generate-caption     # 캡션 생성
+POST /api/workflow/publish              # Instagram 발행
+GET  /api/workflow/instagram-check      # Instagram 연결 확인
+GET  /api/workflow/threads-check        # Threads 연결 확인
+POST /api/workflow/instagram-test       # Instagram 테스트 발행
 ```
 
-### LoRA 학습
+### 썸네일/시리즈/프로젝트
 ```
-POST /api/training/start             # 학습 시작
-GET  /api/training/status/{job_id}   # 학습 상태
-GET  /api/training/characters        # 학습 캐릭터 목록
-POST /api/training/retrain/{id}      # 추가 학습
-DELETE /api/training/character/{id}   # 캐릭터 삭제
-POST /api/training/upload-images     # 학습 이미지 업로드
+POST /api/workflow/thumbnail/generate   # 썸네일 생성
+POST /api/workflow/thumbnail/toggle     # 썸네일 ON/OFF
+GET  /api/workflow/thumbnail/{id}       # 썸네일 조회
+POST /api/workflow/to-be-continued/apply # 다음편에 계속 적용
+POST /api/workflow/session/{id}/series-config # 시리즈 설정
+GET  /api/workflow/session/{id}/series-config # 시리즈 조회
+POST /api/workflow/project/save         # 프로젝트 저장
+GET  /api/workflow/project/list         # 프로젝트 목록
+POST /api/workflow/project/load         # 프로젝트 불러오기
+DELETE /api/workflow/project/delete/{dir} # 프로젝트 삭제
+```
+
+### 말풍선 레이어
+```
+POST /api/workflow/bubble-layers/{id}/init   # 말풍선 초기화
+GET  /api/workflow/bubble-layers/{id}        # 말풍선 조회
+PUT  /api/workflow/bubble-layers/{id}/{num}  # 말풍선 수정
+POST /api/workflow/bubble-layers/{id}/export # 말풍선 합성 내보내기
+DELETE /api/workflow/session/{id}/delete-scene/{num} # 씬 삭제
+```
+
+### SNS 인증/설정
+```
+GET  /api/sns/status                    # 전체 연결 상태
+POST /api/sns/facebook/save-app         # Facebook App 정보 저장
+POST /api/sns/facebook/exchange-token   # 토큰 교환 (영구 토큰)
+POST /api/sns/instagram/save-token      # Instagram 토큰 직접 저장
+GET  /api/sns/instagram/verify          # Instagram 토큰 검증
+POST /api/sns/cloudinary/save           # Cloudinary 설정 저장
+GET  /api/sns/cloudinary/verify         # Cloudinary 연결 확인
+GET  /api/sns/apikey/status             # API 키 상태 확인
+POST /api/sns/apikey/save               # API 키 저장
 ```
 
 ### 캐러셀 전용
 ```
-POST /api/carousel/generate-slides   # 슬라이드 텍스트 생성
-POST /api/carousel/render            # Playwright 렌더링
-POST /api/carousel/publish           # 발행
+POST /api/carousel/generate-slides      # 슬라이드 텍스트 생성
+POST /api/carousel/render               # Playwright 렌더링
 ```
 
 ### 카드뉴스 전용
 ```
-POST /api/cardnews/generate-cards    # 카드 텍스트 생성
-POST /api/cardnews/render            # Playwright 렌더링
-POST /api/cardnews/publish           # 발행
+POST /api/cardnews/generate-cards       # 카드 텍스트 생성
+POST /api/cardnews/render               # Playwright 렌더링
+```
+
+### 스타일 관리
+```
+GET  /api/styles/characters             # 캐릭터 스타일 목록
+POST /api/styles/character              # 캐릭터 스타일 저장
+GET  /api/styles/backgrounds            # 배경 스타일 목록
+POST /api/styles/background             # 배경 스타일 저장
 ```
 
 ---
@@ -182,33 +226,41 @@ POST /api/cardnews/publish           # 발행
 Auto Webtoon/
 ├── app/
 │   ├── api/
-│   │   ├── workflow.py        # 웹툰 워크플로우 (기존 + Flux 연동)
-│   │   ├── training.py        # LoRA 학습 API (신규)
-│   │   ├── carousel.py        # 캐러셀 API (신규)
-│   │   ├── cardnews.py        # 카드뉴스 API (신규)
-│   │   ├── styles.py          # 스타일 관리 (기존)
-│   │   └── edit_stage.py      # 이미지 편집 (기존)
+│   │   ├── workflow.py        # 웹툰 워크플로우 (발행/시리즈/프로젝트 포함)
+│   │   ├── carousel.py        # 캐러셀 API
+│   │   ├── cardnews.py        # 카드뉴스 API
+│   │   ├── styles.py          # 스타일 관리
+│   │   ├── edit_stage.py      # 이미지 편집
+│   │   └── sns_auth.py        # SNS 인증/연결 관리
 │   ├── services/
-│   │   ├── image_generator.py # 이미지 생성기 (기존 + FluxKontextGenerator)
-│   │   ├── fal_service.py     # fal.ai API 서비스 (신규)
-│   │   ├── image_postprocess.py # Pillow 후처리 (신규)
-│   │   ├── render_service.py  # Playwright 렌더링 (신규)
-│   │   ├── prompt_builder.py  # 프롬프트 빌더 (기존 + Flux 최적화)
-│   │   └── gemini_service.py  # Gemini AI (기존)
+│   │   ├── image_generator.py # 이미지 생성기 (Flux/OpenAI/Gemini)
+│   │   ├── gemini_service.py  # Gemini AI (텍스트+이미지)
+│   │   ├── openai_service.py  # OpenAI (이미지)
+│   │   ├── fal_service.py     # fal.ai API (Flux)
+│   │   ├── instagram_service.py # Instagram Graph API
+│   │   ├── threads_service.py # Threads API
+│   │   ├── cloudinary_service.py # 이미지 호스팅
+│   │   ├── pillow_service.py  # Pillow 후처리 (여백/오버레이)
+│   │   ├── render_service.py  # Playwright 렌더링 (캐러셀/카드뉴스)
+│   │   ├── prompt_builder.py  # 프롬프트 빌더 (Flux 최적화)
+│   │   ├── reference_service.py # 3종 레퍼런스 관리
+│   │   ├── smart_translator.py # 한영 번역 (캐시/사전/AI)
+│   │   └── scene_preprocessor.py # 씬 전처리 (숫자→시각화)
 │   ├── models/
-│   │   └── models.py          # 데이터 모델 (기존 + Training 모델)
+│   │   └── models.py          # 데이터 모델
 │   ├── templates/
-│   │   ├── index.html         # 메인 UI (기존 + 개편)
-│   │   └── bubbles/           # 말풍선 CSS 템플릿 (신규)
+│   │   ├── index.html         # 메인 UI
+│   │   └── settings.html      # 설정 페이지
 │   ├── core/
-│   │   └── config.py          # 설정 (기존 + fal_key)
-│   └── main.py                # FastAPI 앱 (기존 + 라우터 추가)
-├── trained_characters/        # 학습 캐릭터 데이터 저장 (신규)
-├── assets/
-│   └── fonts/                 # 웹툰 한글 폰트
+│   │   └── config.py          # 환경변수 설정
+│   └── main.py                # FastAPI 앱
+├── app_data/                  # 사용자 데이터 (git 제외)
+│   ├── reference/sessions/    # 레퍼런스 이미지 세션
+│   └── reference_presets/     # 레퍼런스 프리셋
 ├── requirements.txt
-├── .env
+├── .env                       # 환경변수 (git 제외)
 ├── BUILD_PLAN.md              # 이 문서
+├── WORKFLOW.md                # 워크플로우 명세
 └── run.py
 ```
 
@@ -217,12 +269,23 @@ Auto Webtoon/
 ## 환경 변수 (.env)
 
 ```
-GEMINI_API_KEY=...          # Google Gemini (텍스트+이미지)
-OPENAI_API_KEY=...          # OpenAI (이미지)
-FAL_KEY=...                 # fal.ai (Flux Kontext + LoRA) ← 신규
-INSTAGRAM_ACCESS_TOKEN=...  # 인스타 발행
-INSTAGRAM_USER_ID=...
-CLOUDINARY_CLOUD_NAME=...   # 이미지 호스팅
+# AI
+GEMINI_API_KEY=...          # Google Gemini (텍스트+이미지, 핵심)
+OPENAI_API_KEY=...          # OpenAI (이미지 대체)
+FAL_KEY=...                 # fal.ai (Flux Kontext + LoRA)
+
+# SNS 발행
+INSTAGRAM_ACCESS_TOKEN=...  # 인스타 발행 (영구 페이지 토큰)
+INSTAGRAM_USER_ID=...       # 인스타 비즈니스 계정 ID
+THREADS_ACCESS_TOKEN=...    # Threads (없으면 Instagram 토큰 공유)
+THREADS_USER_ID=...         # Threads 사용자 ID
+
+# 이미지 호스팅
+CLOUDINARY_CLOUD_NAME=...   # Cloudinary
 CLOUDINARY_API_KEY=...
 CLOUDINARY_API_SECRET=...
+
+# Facebook OAuth (토큰 교환용)
+FACEBOOK_APP_ID=...
+FACEBOOK_APP_SECRET=...
 ```

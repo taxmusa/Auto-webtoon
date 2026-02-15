@@ -24,15 +24,11 @@ aiohttp==3.9.3
 # 환경 변수
 python-dotenv==1.0.1
 
-# 파일 처리
-aiofiles==23.2.1
-
 # 데이터 검증
 pydantic==2.6.0
 pydantic-settings==2.1.0
 
-# 유틸리티
-python-dateutil==2.8.2
-
 # 배포용
 pyinstaller==6.3.0
+
+# Cloudinary (이미지 호스팅 — httpx로 직접 호출, SDK 불필요)

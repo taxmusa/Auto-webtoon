@@ -73,9 +73,13 @@
         .info-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--bg-input); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
         .info-avatar img { width: 100%; height: 100%; object-fit: cover; }
 
-        .toast { position: fixed; bottom: 2rem; right: 2rem; background: var(--success); color: white; padding: 0.85rem 1.25rem; border-radius: 8px; display: none; z-index: 999; font-size: 0.85rem; }
-        .toast.show { display: block; animation: slideIn 0.3s ease; }
+        .toast-container { position: fixed; bottom: 2rem; right: 2rem; z-index: 999; display: flex; flex-direction: column; gap: 0.5rem; }
+        .toast { padding: 0.85rem 1.25rem; border-radius: 8px; font-size: 0.85rem; color: white; animation: slideIn 0.3s ease; box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+        .toast-success { background: var(--success); }
+        .toast-error { background: var(--danger); }
+        .toast-warn { background: var(--warning); }
         @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes slideOut { from { opacity: 1; } to { opacity: 0; transform: translateY(-10px); } }
     </style>
 </head>
 
@@ -233,7 +237,7 @@
         </div>
     </main>
 
-    <div class="toast" id="toast"></div>
+    <div class="toast-container" id="toast-container"></div>
 
     <script>
         // ============================================
@@ -248,11 +252,16 @@
             document.getElementById(id).classList.toggle('open');
         }
 
-        function showToast(msg) {
-            const t = document.getElementById('toast');
+        function showToast(msg, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const t = document.createElement('div');
+            t.className = `toast toast-${type}`;
             t.innerText = msg;
-            t.classList.add('show');
-            setTimeout(() => t.classList.remove('show'), 2500);
+            container.appendChild(t);
+            setTimeout(() => {
+                t.style.animation = 'slideOut 0.3s ease forwards';
+                setTimeout(() => t.remove(), 300);
+            }, 3000);
         }
 
         function setBadge(id, type, text) {
@@ -262,11 +271,56 @@
             el.innerText = text;
         }
 
+        // 입력 검증 유틸
+        function validateInput(value, rules) {
+            if (rules.required && !value) return rules.requiredMsg || '필수 입력입니다.';
+            if (rules.minLength && value.length < rules.minLength) return `최소 ${rules.minLength}자 이상 입력해주세요.`;
+            if (rules.pattern && !rules.pattern.test(value)) return rules.patternMsg || '형식이 올바르지 않습니다.';
+            return null;
+        }
+
+        // 에러 진단 토스트 (에러 발생 시 원인+해결 방법 표시)
+        function showDiagnosticToast(diagnosis) {
+            if (!diagnosis) return;
+            const icons = {
+                auth_expired: '🔑', auth_invalid: '🚫', credits: '💰',
+                rate_limit: '⏱️', network: '🌐', server: '⚙️',
+                not_configured: '📋', unknown: '❓'
+            };
+            const colors = {
+                auth_expired: '#e74c3c', auth_invalid: '#e74c3c',
+                credits: '#e67e22', rate_limit: '#f39c12',
+                network: '#95a5a6', server: '#95a5a6',
+                not_configured: '#3498db', unknown: '#7f8c8d'
+            };
+            const icon = icons[diagnosis.type] || '❓';
+            const color = colors[diagnosis.type] || '#7f8c8d';
+            const toast = document.createElement('div');
+            toast.style.cssText = `position:fixed; top:80px; right:24px; z-index:99999; max-width:420px; animation:slideIn 0.3s ease;`;
+            toast.innerHTML = `
+                <div style="background:${color}; color:#fff; padding:16px 20px; border-radius:12px;
+                            box-shadow:0 8px 32px rgba(0,0,0,0.3); font-size:0.88rem;">
+                    <div style="font-weight:700; font-size:1rem; margin-bottom:8px;">${icon} ${diagnosis.message}</div>
+                    <div style="opacity:0.9; margin-bottom:12px; line-height:1.5;">${diagnosis.action}</div>
+                    ${diagnosis.detail ? `<details style="opacity:0.7; font-size:0.78rem;"><summary style="cursor:pointer;">기술적 상세</summary><div style="margin-top:4px;">${diagnosis.detail}</div></details>` : ''}
+                    <div style="margin-top:8px;"><button onclick="this.closest('div').parentElement.remove()" style="background:rgba(255,255,255,0.15); color:#fff; border:none; padding:6px 16px; border-radius:6px; cursor:pointer;">닫기</button></div>
+                </div>`;
+            document.body.appendChild(toast);
+            setTimeout(() => { if (toast.parentElement) toast.remove(); }, 15000);
+        }
+
         // ============================================
         // 초기 로드
         // ============================================
         async function initPage() {
-            await Promise.all([loadInstagram(), loadCloudinary(), loadGemini()]);
+            // 로딩 중 모든 저장 버튼 비활성화
+            const btns = document.querySelectorAll('.btn');
+            btns.forEach(b => b.disabled = true);
+            try {
+                await Promise.all([loadInstagram(), loadCloudinary(), loadGemini()]);
+            } finally {
+                btns.forEach(b => b.disabled = false);
+            }
         }
 
         // ============================================
@@ -340,38 +394,52 @@
                     badge.innerHTML = '<span class="status status-warn">🧵 Threads 미연결</span>';
                 }
             } catch(e) {
-                badge.style.display = 'none';
+                badge.style.display = 'block';
+                badge.innerHTML = '<span class="status status-err">🧵 확인 실패</span>';
             }
         }
 
         async function saveFacebookApp() {
             const appId = document.getElementById('fb-app-id').value.trim();
             const appSecret = document.getElementById('fb-app-secret').value.trim();
-            if (!appId || !appSecret) { alert('App ID와 App Secret을 모두 입력해주세요.'); return; }
+            if (!appId || !appSecret) { showToast('App ID와 App Secret을 모두 입력해주세요.', 'error'); return; }
+            const idErr = validateInput(appId, { pattern: /^\d+$/, patternMsg: 'App ID는 숫자만 입력 가능합니다.' });
+            if (idErr) { showToast(idErr, 'error'); return; }
+            const secretErr = validateInput(appSecret, { minLength: 10 });
+            if (secretErr) { showToast('App Secret: ' + secretErr, 'error'); return; }
+            const btn = event?.target;
+            if (btn) { btn.disabled = true; btn.innerText = '⏳ 저장 중...'; }
             try {
                 const res = await fetch('/api/sns/facebook/save-app', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({app_id: appId, app_secret: appSecret})
                 });
+                if (!res.ok) { showToast(`서버 오류 (${res.status})`, 'error'); return; }
                 const data = await res.json();
                 if (data.ok) showToast('✓ Facebook App 정보 저장 완료');
-                else alert(data.error);
-            } catch(e) { alert('저장 실패: ' + e.message); }
+                else showToast(data.error || '저장 실패', 'error');
+            } catch(e) { showToast('네트워크 오류: ' + e.message, 'error'); }
+            finally { if (btn) { btn.disabled = false; btn.innerText = '💾 저장'; } }
         }
 
         async function exchangeToken() {
             const token = document.getElementById('fb-short-token').value.trim();
-            if (!token) { alert('토큰을 붙여넣어주세요.'); return; }
+            if (!token) { showToast('토큰을 붙여넣어주세요.', 'warn'); return; }
+            const tokenErr = validateInput(token, { minLength: 20 });
+            if (tokenErr) { showToast('토큰이 너무 짧습니다. 올바른 토큰을 붙여넣어주세요.', 'error'); return; }
 
             const appId = document.getElementById('fb-app-id').value.trim();
             const appSecret = document.getElementById('fb-app-secret').value.trim();
             if (appId && appSecret) {
-                await fetch('/api/sns/facebook/save-app', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({app_id: appId, app_secret: appSecret})
-                });
+                try {
+                    const saveRes = await fetch('/api/sns/facebook/save-app', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({app_id: appId, app_secret: appSecret})
+                    });
+                    if (!saveRes.ok) { showToast('App 정보 저장 중 오류', 'warn'); }
+                } catch(e) { /* 계속 진행 */ }
             }
 
             const btn = document.getElementById('btn-exchange');
@@ -387,6 +455,10 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({short_token: token})
                 });
+                if (!res.ok) {
+                    progress.innerHTML = `<span style="color:var(--danger);">서버 오류 (${res.status})</span>`;
+                    return;
+                }
                 const data = await res.json();
                 if (data.ok) {
                     let msg = `<span style="color:var(--success); font-weight:600;">✓ ${data.message}</span>`;
@@ -449,29 +521,30 @@
             const name = document.getElementById('cloud-name').value.trim();
             const key = document.getElementById('cloud-key').value.trim();
             const secret = document.getElementById('cloud-secret').value.trim();
-            if (!name) { alert('Cloud Name을 입력해주세요.'); return; }
-            // key/secret이 비어있으면 기존 값 유지 (변경 시에만)
+            if (!name) { showToast('Cloud Name을 입력해주세요.', 'error'); return; }
             const body = { cloud_name: name };
             if (key) body.api_key = key;
             if (secret) body.api_secret = secret;
-            // 최소한 하나는 새로 입력해야 최초 설정 가능
             if (!key && !secret) {
-                // 이미 설정된 경우 이름만 변경 가능하도록
                 body.api_key = '';
                 body.api_secret = '';
             }
+            const btn = event?.target;
+            if (btn) { btn.disabled = true; btn.innerText = '⏳ 저장 중...'; }
             try {
                 const res = await fetch('/api/sns/cloudinary/save', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(body)
                 });
+                if (!res.ok) { showToast(`서버 오류 (${res.status})`, 'error'); return; }
                 const data = await res.json();
                 if (data.ok) {
                     showToast('✓ Cloudinary 설정 저장 완료');
                     verifyCloudinary();
-                } else { alert(data.error); }
-            } catch(e) { alert('저장 실패: ' + e.message); }
+                } else { showToast(data.error || '저장 실패', 'error'); }
+            } catch(e) { showToast('네트워크 오류: ' + e.message, 'error'); }
+            finally { if (btn) { btn.disabled = false; btn.innerText = '💾 저장'; } }
         }
 
         // ============================================
@@ -494,20 +567,29 @@
 
         async function saveApiKey(envKey, inputId, badgeId) {
             const val = document.getElementById(inputId).value.trim();
-            if (!val) { alert('키를 입력해주세요.'); return; }
+            if (!val) { showToast('키를 입력해주세요.', 'warn'); return; }
+            // Gemini 키 형식 검증
+            if (envKey === 'GEMINI_API_KEY') {
+                if (!val.startsWith('AIza')) { showToast('Gemini API 키는 "AIza"로 시작합니다. 올바른 키인지 확인해주세요.', 'warn'); return; }
+                if (val.length < 30) { showToast('Gemini API 키가 너무 짧습니다.', 'error'); return; }
+            }
+            const btn = event?.target;
+            if (btn) { btn.disabled = true; btn.innerText = '⏳'; }
             try {
                 const res = await fetch('/api/sns/apikey/save', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({key: envKey, value: val})
                 });
+                if (!res.ok) { showToast(`서버 오류 (${res.status})`, 'error'); return; }
                 const data = await res.json();
                 if (data.ok) {
                     document.getElementById(inputId).value = '';
                     showToast('✓ API 키 저장 완료');
                     loadGemini();
-                } else { alert(data.error); }
-            } catch(e) { alert('저장 실패: ' + e.message); }
+                } else { showToast(data.error || '저장 실패', 'error'); }
+            } catch(e) { showToast('네트워크 오류: ' + e.message, 'error'); }
+            finally { if (btn) { btn.disabled = false; btn.innerText = '저장'; } }
         }
 
         // ============================================

@@ -56,6 +56,17 @@
             -webkit-text-fill-color: transparent;
         }
 
+        .api-badge {
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: rgba(148,163,184,0.1);
+            color: var(--text-muted);
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .api-badge:hover { background: rgba(148,163,184,0.2); }
+        @keyframes slideIn { from { transform: translateY(-10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
         /* Progress Steps */
         .progress-bar {
             background: var(--bg-card);
@@ -613,6 +624,14 @@
         </div>
     </header>
 
+    <!-- API 상태 바 -->
+    <div id="api-status-bar" style="max-width:1200px; margin:0 auto; padding:4px 2rem; display:flex; gap:8px; align-items:center; font-size:0.72rem; flex-wrap:wrap;">
+        <span style="color:var(--text-muted); font-weight:600;">API:</span>
+        <span class="api-badge" id="api-st-gemini" title="Gemini" style="cursor:pointer;" onclick="location.href='/settings'">⚪ Gemini</span>
+        <span class="api-badge" id="api-st-instagram" title="Instagram" style="cursor:pointer;" onclick="location.href='/settings'">⚪ Instagram</span>
+        <span class="api-badge" id="api-st-cloudinary" title="Cloudinary" style="cursor:pointer;" onclick="location.href='/settings'">⚪ Cloudinary</span>
+    </div>
+
     <div id="project-list-panel" style="display:none; max-width:1200px; margin:0 auto 0.5rem; padding:0 2rem;">
         <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:1rem; box-shadow:0 4px 12px rgba(0,0,0,0.15);">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
@@ -869,7 +888,13 @@
                         <div id="series-validation-msg" style="display:none; margin-top:0.5rem; font-size:0.8rem; padding:6px 10px; border-radius:6px;"></div>
                     </div>
 
-                    <div id="scenes-container"></div>
+                    <div id="scenes-container">
+                        <div class="empty-state" id="scenes-empty" style="text-align:center; padding:3rem 1rem; color:var(--text-muted);">
+                            <div style="font-size:2.5rem; margin-bottom:0.75rem;">📝</div>
+                            <div style="font-weight:600; margin-bottom:0.3rem;">아직 씬이 없습니다</div>
+                            <div style="font-size:0.82rem;">AI가 스토리를 생성하면 씬이 여기에 표시됩니다</div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -1086,7 +1111,11 @@
             <div class="card">
                 <h2 class="card-title">이미지 생성 결과</h2>
                 <div id="images-container" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:1rem;">
-                    <!-- 씬 카드가 실시간으로 채워짐 -->
+                    <div class="empty-state" id="images-empty" style="grid-column:1/-1; text-align:center; padding:3rem 1rem; color:var(--text-muted);">
+                        <div style="font-size:2.5rem; margin-bottom:0.75rem;">🎨</div>
+                        <div style="font-weight:600; margin-bottom:0.3rem;">이미지가 아직 없습니다</div>
+                        <div style="font-size:0.82rem;">씬을 확정하면 이미지 생성을 시작할 수 있습니다</div>
+                    </div>
                 </div>
             </div>
 
@@ -1587,6 +1616,62 @@
             toast.innerText = message;
             document.body.appendChild(toast);
             setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 400); }, 3000);
+        }
+
+        // 에러 진단 토스트 — 서비스별 에러를 사용자 친화적으로 표시
+        function showDiagnosticToast(diagnosis) {
+            if (!diagnosis) return;
+            const icons = {
+                auth_expired: '🔑', auth_invalid: '🚫',
+                credits: '💰', rate_limit: '⏱️',
+                network: '🌐', server: '⚙️',
+                not_configured: '📋', unknown: '❓'
+            };
+            const colors = {
+                auth_expired: '#e74c3c', auth_invalid: '#e74c3c',
+                credits: '#e67e22', rate_limit: '#f39c12',
+                network: '#95a5a6', server: '#95a5a6',
+                not_configured: '#3498db', unknown: '#7f8c8d'
+            };
+            const icon = icons[diagnosis.type] || '❓';
+            const color = colors[diagnosis.type] || '#7f8c8d';
+            const toast = document.createElement('div');
+            toast.style.cssText = `position:fixed; top:80px; right:24px; z-index:99999; max-width:420px; animation:slideIn 0.3s ease;`;
+            toast.innerHTML = `
+                <div style="background:${color}; color:#fff; padding:16px 20px; border-radius:12px;
+                            box-shadow:0 8px 32px rgba(0,0,0,0.3); font-size:0.88rem;">
+                    <div style="font-weight:700; font-size:1rem; margin-bottom:8px;">
+                        ${icon} ${diagnosis.message}
+                    </div>
+                    <div style="opacity:0.9; margin-bottom:12px; line-height:1.5;">
+                        ${diagnosis.action}
+                    </div>
+                    ${diagnosis.detail ? `<details style="opacity:0.7; font-size:0.78rem; margin-bottom:8px;">
+                        <summary style="cursor:pointer;">기술적 상세</summary>
+                        <div style="margin-top:4px; word-break:break-all;">${diagnosis.detail}</div>
+                    </details>` : ''}
+                    <div style="display:flex; gap:8px;">
+                        ${diagnosis.action_link ?
+                            `<a href="${diagnosis.action_link}" style="background:rgba(255,255,255,0.2);
+                             color:#fff; padding:6px 16px; border-radius:6px; text-decoration:none;
+                             font-weight:600; font-size:0.82rem;">설정으로 이동</a>` : ''}
+                        <button onclick="this.closest('div').parentElement.remove()"
+                                style="background:rgba(255,255,255,0.15); color:#fff; border:none;
+                                padding:6px 16px; border-radius:6px; cursor:pointer; font-size:0.82rem;">닫기</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(toast);
+            setTimeout(() => { if (toast.parentElement) { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }}, 15000);
+        }
+
+        // fetch 응답에서 diagnosis 필드 자동 확인 유틸
+        function handleApiResponse(data) {
+            if (data && data.diagnosis) {
+                showDiagnosticToast(data.diagnosis);
+                return false; // 에러 있음
+            }
+            return true; // 정상
         }
 
         var currentStep = 1;
@@ -3096,7 +3181,36 @@
         }
 
         // 초기화 시 자동 복원 및 기본 모델 설정
+        // API 상태 바 업데이트
+        async function refreshApiStatusBar() {
+            try {
+                const res = await fetch('/api/sns/system/status');
+                if (!res.ok) return;
+                const data = await res.json();
+                const statusMap = {
+                    ok: { icon: '🟢', label: '연결됨' },
+                    warning: { icon: '🟡', label: '경고' },
+                    error: { icon: '🔴', label: '오류' },
+                    expired: { icon: '🔴', label: '만료' },
+                    no_key: { icon: '⚪', label: '미설정' },
+                };
+                ['gemini', 'instagram', 'cloudinary'].forEach(svc => {
+                    const el = document.getElementById(`api-st-${svc}`);
+                    if (!el) return;
+                    const st = statusMap[data[svc]] || statusMap.no_key;
+                    const name = svc.charAt(0).toUpperCase() + svc.slice(1);
+                    el.innerText = `${st.icon} ${name}`;
+                    el.title = `${name}: ${st.label}`;
+                });
+            } catch(e) { /* 상태 바 업데이트 실패 무시 */ }
+        }
+
         window.addEventListener('DOMContentLoaded', async () => {
+            // 0. API 상태 바 초기화
+            refreshApiStatusBar();
+            // 5분마다 자동 갱신
+            setInterval(refreshApiStatusBar, 5 * 60 * 1000);
+
             // 1. 기본 모델 설정
             const modelSelect = document.getElementById('ai-model-select');
             if (modelSelect) {
@@ -4047,17 +4161,6 @@
             }
         }
 
-        function downloadImages() {
-            const imgs = document.querySelectorAll('#images-container img');
-            if (!imgs.length) { alert('다운로드할 이미지가 없습니다.'); return; }
-            imgs.forEach((img, i) => {
-                const a = document.createElement('a');
-                a.href = img.src;
-                a.download = `scene_${i + 1}.png`;
-                a.click();
-            });
-        }
-
         // --- 유틸리티 ---
         function goToStep(step) {
             currentStep = step;
@@ -4867,13 +4970,6 @@
 
         // --- Preview & Generation ---
 
-        function cancelPreview() {
-            if (previewAbortController) {
-                previewAbortController.abort();
-                previewAbortController = null;
-            }
-        }
-
         async function generatePreview() {
             // 이전 요청이 있으면 중단
             if (previewAbortController) {
@@ -5066,10 +5162,6 @@
                 }
                 if (manualResultContainer) manualResultContainer.innerHTML = `<div style="color:${wasManualCancel && seconds < 125 ? 'var(--text-muted)' : 'red'}; padding:1rem;">${msg}</div>`;
             }
-        }
-
-        function applyManualOverrides() {
-            generatePreview();
         }
 
         // ============================================

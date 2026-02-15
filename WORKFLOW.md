@@ -969,6 +969,55 @@ output/projects/{project_dirname}/
 
 ---
 
+## 7. Threads 동시 발행
+
+### 7.1 개요
+
+Instagram 발행 시 Threads에도 동시 공유 가능 (체크박스 옵션).
+
+### 7.2 워크플로우
+
+1. 발행 탭에서 "🧵 Threads에도 함께 공유" 체크
+2. Instagram 즉시 발행 성공 후, 동일 이미지+캡션으로 Threads API 호출
+3. 예약 발행 시에는 Threads 동시 발행 불가 (예약 발행은 Instagram만)
+
+### 7.3 API 구조
+
+- Threads API는 Instagram Graph API와 유사한 컨테이너 모델 사용
+- Access Token은 Instagram과 공유 (동일 Facebook OAuth)
+- `threads_service.py` → `publish_workflow(image_urls, caption)`
+
+---
+
+## 8. 말풍선 레이어 시스템 (Non-destructive)
+
+### 8.1 원칙
+
+- 원본 이미지는 절대 수정하지 않음 (비파괴 편집)
+- 대사/나레이션을 JSON(BubbleOverlay)으로 분리 저장
+- 내보내기 시에만 원본 + 말풍선을 합성하여 별도 파일 생성
+
+### 8.2 BubbleOverlay 구조
+
+```
+{
+    id, type(dialogue/narration), character, text,
+    position(9-grid), x/y/w/h(퍼센트), shape,
+    tail_direction, bg_color, text_color, border_color,
+    font_size, font_family, visible, opacity
+}
+```
+
+### 8.3 지원 모양
+
+- round, round-lg, square, soft, dark, shout, spike, thought, cloud
+
+### 8.4 나레이션 스타일
+
+- classic, light, gradient, minimal, cinematic, parchment
+
+---
+
 ## 변경 이력
 
 | 날짜 | 버전 | 변경 내용 |
@@ -976,3 +1025,4 @@ output/projects/{project_dirname}/
 | 2026-02-06 | 1.0.0 | 초기 워크플로우 스펙 작성 |
 | 2026-02-11 | 1.1.0 | §2.8 "다음편에 계속" 추가, §2.8.5 썸네일 단계 추가, §2.10 번호 수정(§2.9.1→§2.10.1), §2.11 시리즈 발행 흐름 추가 |
 | 2026-02-15 | 1.2.0 | §5 Instagram Graph API 예약 발행 추가, §6 프로젝트 저장/불러오기 추가, "다음편에 계속" UI 연동, 씬 재생성 기능 활성화 |
+| 2026-02-15 | 1.3.0 | §7 Threads 동시 발행 추가, §8 말풍선 레이어 시스템 문서화, 코드 품질 수정 (에러 처리/검증/dead code/import 정리) |

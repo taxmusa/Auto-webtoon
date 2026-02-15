@@ -230,7 +230,8 @@ async def _generate_card_texts(
     try:
         import google.generativeai as genai
 
-        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY", "")
+        from app.core.config import get_settings
+        api_key = get_settings().gemini_api_key or ""
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel("gemini-2.0-flash")
 

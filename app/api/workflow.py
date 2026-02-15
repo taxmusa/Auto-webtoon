@@ -10,14 +10,12 @@ import uuid
 
 from app.models.models import (
     WorkflowSession, WorkflowState, WorkflowMode,
-    Story, Scene, InstagramCaption, ProjectSettings,
-    CharacterSettings, ImageStyle, SubStyle, SpecializedField,
+    Story, Scene, CharacterSettings, SpecializedField,
     ManualPromptOverrides, ThumbnailData, ThumbnailSource, ThumbnailPosition,
     SeriesInfo, SeriesEpisode, ToBeContinuedStyle, GeneratedImage,
     BubbleLayer, BubbleOverlay, BubblePosition, BubbleShape, CHARACTER_COLORS
 )
 from app.services.gemini_service import get_gemini_service
-from app.services.openai_service import get_openai_service
 from app.services.image_generator import get_generator
 from app.services.prompt_builder import build_styled_prompt
 from app.api.styles import get_character_style, get_background_style
@@ -42,12 +40,14 @@ stop_signals: dict[str, bool] = {}
 
 def _resolve_api_key(model_name: str) -> str:
     """모델명에 따라 적절한 API 키를 반환하는 헬퍼"""
+    from app.core.config import get_settings
+    settings = get_settings()
     if "flux" in model_name:
-        return os.getenv("FAL_KEY", "")
+        return settings.fal_key or ""
     elif "gpt" in model_name or "dall-e" in model_name:
-        return os.getenv("OPENAI_API_KEY", "")
+        return settings.openai_api_key or ""
     else:
-        return os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY", "")
+        return settings.gemini_api_key or ""
 
 
 async def _translate_scenes_to_english(scenes):
@@ -157,38 +157,42 @@ class GenerateCaptionRequest(BaseModel):
 @router.post("/start", response_model=StartWorkflowResponse)
 async def start_workflow(request: StartWorkflowRequest):
     """워크플로우 시작"""
-    session_id = str(uuid.uuid4())
-    
-    mode = WorkflowMode.AUTO if request.mode == "auto" else WorkflowMode.MANUAL
-    
-    session = WorkflowSession(
-        session_id=session_id,
-        mode=mode,
-        keyword=request.keyword,
-        state=WorkflowState.INITIALIZED
-    )
-    
-    # 자동 모드: 분야 감지
-    field_name = None
-    requires_verification = False
-    
-    if mode == WorkflowMode.AUTO and request.keyword:
-        gemini = get_gemini_service()
-        # AI 자동 감지 호출 (Async) - 모델 파라미터 전달
-        field_info = await gemini.detect_field(request.keyword, request.model)
-        session.field_info = field_info
-        session.state = WorkflowState.COLLECTING_INFO
-        field_name = field_info.field.value
-        requires_verification = field_info.requires_legal_verification
-    
-    sessions[session_id] = session
-    
-    return StartWorkflowResponse(
-        session_id=session_id,
-        state=session.state.value,
-        field=field_name,
-        field_requires_verification=requires_verification
-    )
+    try:
+        session_id = str(uuid.uuid4())
+        
+        mode = WorkflowMode.AUTO if request.mode == "auto" else WorkflowMode.MANUAL
+        
+        session = WorkflowSession(
+            session_id=session_id,
+            mode=mode,
+            keyword=request.keyword,
+            state=WorkflowState.INITIALIZED
+        )
+        
+        # 자동 모드: 분야 감지
+        field_name = None
+        requires_verification = False
+        
+        if mode == WorkflowMode.AUTO and request.keyword:
+            gemini = get_gemini_service()
+            # AI 자동 감지 호출 (Async) - 모델 파라미터 전달
+            field_info = await gemini.detect_field(request.keyword, request.model)
+            session.field_info = field_info
+            session.state = WorkflowState.COLLECTING_INFO
+            field_name = field_info.field.value
+            requires_verification = field_info.requires_legal_verification
+        
+        sessions[session_id] = session
+        
+        return StartWorkflowResponse(
+            session_id=session_id,
+            state=session.state.value,
+            field=field_name,
+            field_requires_verification=requires_verification
+        )
+    except Exception as e:
+        logger.error(f"[start_workflow] 오류: {e}")
+        raise HTTPException(status_code=500, detail=f"워크플로우 시작 실패: {str(e)}")
 
 
 @router.post("/generate-story")
@@ -286,24 +290,28 @@ async def update_scene(request: UpdateSceneRequest):
     if not session or not session.story:
         raise HTTPException(status_code=404, detail="Session or story not found")
     
-    for scene in session.story.scenes:
-        if scene.scene_number == request.scene_number:
-            if request.scene_description:
-                scene.scene_description = request.scene_description
-            if request.image_prompt is not None:
-                scene.image_prompt = request.image_prompt
-            if request.dialogues:
-                from app.models.models import Dialogue
-                scene.dialogues = [
-                    Dialogue(character=d["character"], text=d["text"])
-                    for d in request.dialogues
-                ]
-            if request.narration is not None:
-                scene.narration = request.narration
-            scene.status = "approved"
-            break
-    
-    return {"success": True, "story": session.story.model_dump()}
+    try:
+        for scene in session.story.scenes:
+            if scene.scene_number == request.scene_number:
+                if request.scene_description:
+                    scene.scene_description = request.scene_description
+                if request.image_prompt is not None:
+                    scene.image_prompt = request.image_prompt
+                if request.dialogues:
+                    from app.models.models import Dialogue
+                    scene.dialogues = [
+                        Dialogue(character=d["character"], text=d["text"])
+                        for d in request.dialogues
+                    ]
+                if request.narration is not None:
+                    scene.narration = request.narration
+                scene.status = "approved"
+                break
+        
+        return {"success": True, "story": session.story.model_dump()}
+    except Exception as e:
+        logger.error(f"[update_scene] 씬 {request.scene_number} 수정 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"씬 수정 실패: {str(e)}")
 
 
 class RegenerateImagePromptRequest(BaseModel):
@@ -391,12 +399,16 @@ async def approve_all_scenes(session_id: str):
     if not session or not session.story:
         raise HTTPException(status_code=404, detail="Session or story not found")
     
-    for scene in session.story.scenes:
-        scene.status = "approved"
-    
-    session.state = WorkflowState.GENERATING_IMAGES
-    
-    return {"success": True, "state": session.state.value}
+    try:
+        for scene in session.story.scenes:
+            scene.status = "approved"
+        
+        session.state = WorkflowState.GENERATING_IMAGES
+        
+        return {"success": True, "state": session.state.value}
+    except Exception as e:
+        logger.error(f"[approve_scenes] 오류: {e}")
+        raise HTTPException(status_code=500, detail=f"씬 승인 실패: {str(e)}")
 
 
 @router.post("/generate-preview")
@@ -897,7 +909,8 @@ async def generate_common_caption(request: CommonCaptionRequest):
     """콘텐츠 타입에 맞는 캡션 생성 (세션 불필요)"""
     import google.generativeai as genai
 
-    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY", "")
+    from app.core.config import get_settings as _gs
+    api_key = _gs().gemini_api_key or ""
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel("gemini-2.0-flash")
 
@@ -1754,7 +1767,8 @@ async def generate_thumbnail(request: ThumbnailGenerateRequest):
             f"No text, no speech bubbles, no letters, no typography."
         )
 
-        api_key = os.getenv("OPENAI_API_KEY")
+        from app.core.config import get_settings as _gs2
+        api_key = _gs2().openai_api_key or ""
         if not api_key:
             raise HTTPException(status_code=500, detail="OPENAI_API_KEY가 설정되지 않았습니다")
 
@@ -2566,32 +2580,36 @@ async def save_project(request: ProjectSaveRequest):
 @router.get("/project/list")
 async def list_projects():
     """저장된 프로젝트 목록 조회"""
-    projects_dir = os.path.join("output", "projects")
-    if not os.path.exists(projects_dir):
-        return {"projects": []}
+    try:
+        projects_dir = os.path.join("output", "projects")
+        if not os.path.exists(projects_dir):
+            return {"projects": []}
 
-    projects = []
-    for dirname in sorted(os.listdir(projects_dir), reverse=True):
-        project_json = os.path.join(projects_dir, dirname, "project.json")
-        if os.path.exists(project_json):
-            try:
-                with open(project_json, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                scene_count = len(data.get("story", {}).get("scenes", [])) if data.get("story") else 0
-                series_count = data.get("story", {}).get("total_series", 1) if data.get("story") else 1
-                projects.append({
-                    "dirname": dirname,
-                    "project_name": data.get("project_name", dirname),
-                    "saved_at": data.get("saved_at", ""),
-                    "scene_count": scene_count,
-                    "series_count": series_count,
-                    "image_count": len(data.get("image_files", [])),
-                    "state": data.get("state", ""),
-                })
-            except Exception as e:
-                logger.warning(f"[프로젝트] 메타 파싱 실패 ({dirname}): {e}")
+        projects = []
+        for dirname in sorted(os.listdir(projects_dir), reverse=True):
+            project_json = os.path.join(projects_dir, dirname, "project.json")
+            if os.path.exists(project_json):
+                try:
+                    with open(project_json, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    scene_count = len(data.get("story", {}).get("scenes", [])) if data.get("story") else 0
+                    series_count = data.get("story", {}).get("total_series", 1) if data.get("story") else 1
+                    projects.append({
+                        "dirname": dirname,
+                        "project_name": data.get("project_name", dirname),
+                        "saved_at": data.get("saved_at", ""),
+                        "scene_count": scene_count,
+                        "series_count": series_count,
+                        "image_count": len(data.get("image_files", [])),
+                        "state": data.get("state", ""),
+                    })
+                except Exception as e:
+                    logger.warning(f"[프로젝트] 메타 파싱 실패 ({dirname}): {e}")
 
-    return {"projects": projects}
+        return {"projects": projects}
+    except Exception as e:
+        logger.error(f"[list_projects] 디렉토리 읽기 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"프로젝트 목록 조회 실패: {str(e)}")
 
 
 @router.post("/project/load")
@@ -2662,6 +2680,10 @@ async def delete_project(dirname: str):
     if not os.path.exists(project_dir):
         raise HTTPException(status_code=404, detail="프로젝트를 찾을 수 없습니다")
 
-    shutil.rmtree(project_dir)
-    logger.info(f"[프로젝트] 삭제: {dirname}")
-    return {"success": True, "deleted": dirname}
+    try:
+        shutil.rmtree(project_dir)
+        logger.info(f"[프로젝트] 삭제: {dirname}")
+        return {"success": True, "deleted": dirname}
+    except Exception as e:
+        logger.error(f"[delete_project] 삭제 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"프로젝트 삭제 실패: {str(e)}")

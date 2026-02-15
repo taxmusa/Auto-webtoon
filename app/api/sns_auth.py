@@ -6,11 +6,10 @@ SNS 인증·연결 관리 API
 - 연결 상태 확인
 """
 import os
-import re
 import logging
 import httpx
 from typing import Optional
-from fastapi import APIRouter, Query
+from fastapi import APIRouter
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -488,7 +487,57 @@ async def verify_fal():
     key = env.get("FAL_KEY", "")
     if not key:
         return {"ok": False, "error": "미설정"}
-    # fal.ai는 간단한 ping이 없으므로 키 형식만 확인
     if len(key) > 10:
         return {"ok": True, "note": "키 형식 확인됨 (실제 호출 시 검증)"}
     return {"ok": False, "error": "키가 너무 짧습니다"}
+
+
+@router.get("/system/status")
+async def system_status():
+    """전체 API 연결 상태 요약 (헤더 상태 바용)"""
+    env = _read_env()
+    result = {}
+
+    # Gemini
+    gemini_key = env.get("GEMINI_API_KEY", "")
+    if gemini_key and len(gemini_key) > 10:
+        result["gemini"] = "ok"
+    elif gemini_key:
+        result["gemini"] = "warning"
+    else:
+        result["gemini"] = "no_key"
+
+    # Instagram
+    ig_token = env.get("INSTAGRAM_ACCESS_TOKEN", "")
+    ig_user = env.get("INSTAGRAM_USER_ID", "")
+    if ig_token and ig_user:
+        # 간단 핑
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                r = await client.get(
+                    "https://graph.facebook.com/v18.0/me",
+                    params={"fields": "id", "access_token": ig_token}
+                )
+                if r.status_code == 200:
+                    result["instagram"] = "ok"
+                else:
+                    data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+                    err_code = data.get("error", {}).get("code")
+                    if err_code == 190:
+                        result["instagram"] = "expired"
+                    else:
+                        result["instagram"] = "error"
+        except Exception:
+            result["instagram"] = "error"
+    else:
+        result["instagram"] = "no_key"
+
+    # Cloudinary
+    cloud_name = env.get("CLOUDINARY_CLOUD_NAME", "")
+    cloud_key = env.get("CLOUDINARY_API_KEY", "")
+    if cloud_name and cloud_key:
+        result["cloudinary"] = "ok"
+    else:
+        result["cloudinary"] = "no_key"
+
+    return result

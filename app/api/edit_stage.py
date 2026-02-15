@@ -10,7 +10,6 @@ from pydantic import BaseModel
 from typing import Optional, List
 import os
 import logging
-import shutil
 
 from app.models.models import ImageEditStatus, GeneratedImage
 from app.services.image_editor import (
@@ -282,10 +281,12 @@ async def regenerate_scene(session_id: str, scene_num: int, req: SceneRegenerate
         model_name = session.settings.image.model if hasattr(session.settings, 'image') and session.settings.image else "dall-e-3"
 
         # API 키 결정
+        from app.core.config import get_settings
+        _settings = get_settings()
         if "gpt" in model_name or "dall-e" in model_name:
-            api_key = os.getenv("OPENAI_API_KEY")
+            api_key = _settings.openai_api_key or ""
         else:
-            api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+            api_key = _settings.gemini_api_key or ""
 
         generator = get_generator(model_name, api_key)
 

@@ -18,6 +18,17 @@ output/
 *.log
 *.zip
 
+# 앱 데이터 (사용자별 설정/세션)
+app_data/
+
+# 임시/테스트 스크립트
+_tmp.py
+_test_*.py
+_token_exchange.py
+_commit_msg.txt
+ss.txt
+toonstoons_extracted/
+
 # IDE
 .idea/
 .vscode/
