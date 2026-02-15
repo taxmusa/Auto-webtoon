@@ -606,6 +606,21 @@
         </div>
     </header>
 
+    <!-- 프로젝트 저장/불러오기 바 (항상 표시) -->
+    <div style="max-width:1200px; margin:0 auto; padding:0 2rem; display:flex; justify-content:flex-end; gap:0.5rem; align-items:center;">
+        <button class="btn btn-secondary" onclick="openProjectList()" style="font-size:0.78rem; padding:4px 12px;">📂 불러오기</button>
+        <button class="btn btn-secondary" onclick="saveCurrentProject()" id="btn-project-save" style="font-size:0.78rem; padding:4px 12px; display:none;">💾 저장</button>
+    </div>
+    <div id="project-list-panel" style="display:none; max-width:1200px; margin:0 auto 0.5rem; padding:0 2rem;">
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:1rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                <h3 style="margin:0; font-size:0.95rem;">📂 저장된 프로젝트</h3>
+                <button onclick="document.getElementById('project-list-panel').style.display='none'" style="background:none; border:none; cursor:pointer; font-size:1.2rem; color:var(--text-muted);">×</button>
+            </div>
+            <div id="project-list-content" style="max-height:300px; overflow-y:auto;">로딩 중...</div>
+        </div>
+    </div>
+
     <div class="progress-bar">
         <div class="steps">
             <!-- 프리셋관리 탭: 워크플로우 바깥, 별도 색상 -->
@@ -737,25 +752,15 @@
                     <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1rem;">수집된 정보의 양을 분석했을 때,
                         다음과 같은 구성을 추천합니다.</p>
 
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
-                        <div>
-                            <label style="font-weight: 600;">총 제작 씬(Scene) 개수 <span style="font-size:0.75rem; color:var(--primary); font-weight:700; background:rgba(99,102,241,0.1); padding:2px 6px; border-radius:4px; margin-left:4px;">표지 포함</span></label>
-                            <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.5rem;">
-                                <input type="number" id="total-scene-count" value="8" min="3"
-                                    style="width: 80px; text-align: center; font-size: 1.25rem;">
-                                <span style="font-size: 0.875rem; color: var(--text-muted);">추천: <b
-                                        id="ai-rec-scenes">8</b>개 <span style="font-size:0.7rem;">(표지 1 + 본문 <b id="ai-rec-body-scenes">7</b>)</span></span>
-                            </div>
+                    <div>
+                        <label style="font-weight: 600;">총 제작 씬(Scene) 개수 <span style="font-size:0.75rem; color:var(--primary); font-weight:700; background:rgba(99,102,241,0.1); padding:2px 6px; border-radius:4px; margin-left:4px;">표지 포함</span></label>
+                        <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.5rem;">
+                            <input type="number" id="total-scene-count" value="8" min="3"
+                                style="width: 80px; text-align: center; font-size: 1.25rem;">
+                            <span style="font-size: 0.875rem; color: var(--text-muted);">추천: <b
+                                    id="ai-rec-scenes">8</b>개 <span style="font-size:0.7rem;">(표지 1 + 본문 <b id="ai-rec-body-scenes">7</b>)</span></span>
                         </div>
-                        <div>
-                            <label style="font-weight: 600;">시리즈 분할 (인스타 캐러셀용)</label>
-                            <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.5rem;">
-                                <input type="text" id="series-split" value="8" placeholder="예: 8,7 (8장+7장)"
-                                    style="width: 120px; text-align: center;">
-                                <span style="font-size: 0.875rem; color: var(--text-muted);">추천: <b
-                                        id="ai-rec-split">단일</b></span>
-                            </div>
-                        </div>
+                        <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">※ 시리즈 분할은 스토리 생성 후 Tab 3에서 설정합니다.</p>
                     </div>
                 </div>
             </div>
@@ -836,6 +841,25 @@
                         <div style="font-size: 0.75rem; color: var(--text-muted);" id="rule-status">대사 20자 / 말풍선 2개 준수 중
                         </div>
                     </div>
+                    <!-- 시리즈 분할 설정 패널 -->
+                    <div id="series-split-panel" style="display:none; background: linear-gradient(135deg, rgba(99,102,241,0.05), rgba(99,102,241,0.12)); border: 1.5px solid var(--primary); border-radius: 10px; padding: 1rem; margin-bottom: 1rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                            <h3 style="margin:0; font-size:0.95rem;">📚 시리즈 분할 설정</h3>
+                            <span style="font-size:0.75rem; color:var(--text-muted);" id="series-total-scenes-info"></span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.75rem;">
+                            <label style="font-size:0.85rem; font-weight:600; white-space:nowrap;">총 시리즈 수</label>
+                            <input type="number" id="series-count-input" value="1" min="1" max="10"
+                                style="width:60px; text-align:center; font-size:1rem; border:1px solid var(--border); border-radius:6px; padding:4px;"
+                                onchange="onSeriesCountChange(this.value)">
+                            <span style="font-size:0.8rem; color:var(--text-muted);">1 = 분할 안 함</span>
+                        </div>
+                        <!-- 편별 씬 배분 영역 (시리즈 2 이상일 때 표시) -->
+                        <div id="series-episodes-config" style="display:none;"></div>
+                        <!-- 유효성 결과 -->
+                        <div id="series-validation-msg" style="display:none; margin-top:0.5rem; font-size:0.8rem; padding:6px 10px; border-radius:6px;"></div>
+                    </div>
+
                     <div id="scenes-container"></div>
                 </div>
             </div>
@@ -1018,7 +1042,13 @@
                             <option value="bottom_center">중앙 하단</option>
                         </select>
                     </div>
-                    <div style="display:flex; gap:1rem; align-items:center;">
+                    <div style="display:flex; gap:1rem; align-items:center; flex-wrap:wrap;">
+                        <div id="series-gen-selector" style="display:none;">
+                            <label style="font-size:0.85rem; margin-bottom:0.25rem;">생성 범위</label>
+                            <select id="target-series" style="padding:0.6rem;" onchange="updateEstTime()">
+                                <option value="all">전체 시리즈</option>
+                            </select>
+                        </div>
                         <span style="font-size:0.85rem; color:var(--text-muted);">예상: <b id="image-est-time">2</b>분</span>
                         <button class="btn btn-primary" onclick="startImageGeneration()">이미지 생성 시작</button>
                     </div>
@@ -1184,10 +1214,15 @@
 
         <!-- Step 6: 캡션 생성 + 최종 발행 (기존 step-7 → step-6) -->
         <div class="step-content" id="step-6">
+            <!-- 시리즈 선택 탭 (시리즈 2개 이상일 때만 표시) -->
+            <div id="publish-series-tabs" style="display:none; margin-bottom:1rem;">
+                <div style="display:flex; gap:0.5rem; flex-wrap:wrap;" id="publish-series-tab-btns"></div>
+            </div>
             <div class="loading" id="loading-caption" style="display: none;">
                 <div class="spinner"></div>
                 <div>AI가 인스타그램 맞춤형 캡션을 생성하고 있습니다...</div>
             </div>
+
             <div id="caption-publish-area" style="display: grid; grid-template-columns: 1fr 380px; gap: 2rem;">
                 <!-- Left: Instagram Mockup -->
                 <div class="card"
@@ -1251,8 +1286,10 @@
                         <h3 style="font-size: 1rem; margin-bottom: 1rem;">🚀 발행 옵션</h3>
                         <button class="btn btn-primary" onclick="publishToInstagram()"
                             style="width: 100%; margin-bottom: 0.5rem;">인스타그램 즉시 발행</button>
-                        <button class="btn btn-secondary" onclick="downloadImages()" style="width: 100%;">이미지 ZIP
+                        <button class="btn btn-secondary" onclick="downloadSeriesImages()" style="width: 100%; margin-bottom: 0.5rem;">이미지 ZIP
                             다운로드</button>
+                        <button class="btn btn-secondary" onclick="copyCaptionToClipboard()" style="width: 100%; margin-bottom: 0.5rem;">📋 캡션 전체 복사</button>
+                        <button class="btn btn-secondary" onclick="saveCurrentProject()" style="width: 100%;">💾 프로젝트 저장</button>
                     </div>
                 </div>
             </div>
@@ -1544,6 +1581,8 @@
                 const data = await res.json();
                 sessionId = data.session_id;
                 localStorage.setItem('lastSessionId', sessionId); // 세션 ID 저장
+                const btnSave = document.getElementById('btn-project-save');
+                if (btnSave) btnSave.style.display = 'inline-flex';
 
                 // 2. 세션 정보 조회 (감지된 결과 확인)
                 const sessionRes = await fetch(`/api/workflow/session/${sessionId}`);
@@ -2350,6 +2389,7 @@
 
                 renderCharacters();
                 renderScenes(storyData.scenes || []);
+                showSeriesPanel();
 
                 loadingEl.style.display = 'none';
                 reviewArea.style.display = 'block';
@@ -2511,12 +2551,150 @@
             }).join('');
         }
 
+        // ============================================
+        // 시리즈 분할 설정 로직
+        // ============================================
+        let seriesConfig = { total: 1, scenesPerSeries: [] };
+
+        function showSeriesPanel() {
+            const panel = document.getElementById('series-split-panel');
+            if (!panel || !storyData || !storyData.scenes) return;
+            const totalScenes = storyData.scenes.length;
+            document.getElementById('series-total-scenes-info').textContent = '전체 ' + totalScenes + '장';
+            panel.style.display = 'block';
+        }
+
+        function onSeriesCountChange(val) {
+            const count = parseInt(val) || 1;
+            if (count < 1) return;
+            const totalScenes = storyData.scenes.length;
+            seriesConfig.total = count;
+
+            const configArea = document.getElementById('series-episodes-config');
+            if (count <= 1) {
+                configArea.style.display = 'none';
+                seriesConfig.scenesPerSeries = [totalScenes];
+                updateSeriesValidation();
+                renderScenes(storyData.scenes);
+                return;
+            }
+
+            // 균등 분배 기본값
+            const base = Math.floor(totalScenes / count);
+            const remainder = totalScenes % count;
+            seriesConfig.scenesPerSeries = [];
+            for (let i = 0; i < count; i++) {
+                seriesConfig.scenesPerSeries.push(base + (i < remainder ? 1 : 0));
+            }
+            renderSeriesEpisodesConfig();
+        }
+
+        function renderSeriesEpisodesConfig() {
+            const configArea = document.getElementById('series-episodes-config');
+            const totalScenes = storyData.scenes.length;
+            configArea.style.display = 'block';
+
+            let offset = 0;
+            let html = '';
+            for (let i = 0; i < seriesConfig.total; i++) {
+                const sc = seriesConfig.scenesPerSeries[i] || 0;
+                const startScene = offset;
+                const endScene = offset + sc - 1;
+                const rangeText = sc > 0 ? ('씬 ' + startScene + ' ~ ' + endScene) : '-';
+                html += '<div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.4rem;">'
+                    + '<span style="font-size:0.82rem; font-weight:600; min-width:65px;">시리즈 ' + (i+1) + '</span>'
+                    + '<input type="number" value="' + sc + '" min="1" max="' + totalScenes + '"'
+                    + ' onchange="onEpisodeSceneCountChange(' + i + ', this.value)"'
+                    + ' style="width:55px; text-align:center; border:1px solid var(--border); border-radius:6px; padding:3px;">'
+                    + '<span style="font-size:0.75rem; color:var(--text-muted);">장</span>'
+                    + '<span style="font-size:0.72rem; color:var(--primary); margin-left:4px;">' + rangeText + '</span>'
+                    + '</div>';
+                offset += sc;
+            }
+            // 총합 표시
+            const sum = seriesConfig.scenesPerSeries.reduce((a,b) => a+b, 0);
+            const match = sum === totalScenes;
+            html += '<div style="margin-top:0.5rem; font-size:0.8rem; font-weight:600; color:' + (match ? 'var(--success)' : 'var(--danger)') + ';">'
+                + '총합: ' + sum + '장 / 전체 ' + totalScenes + '장 ' + (match ? '✓ 일치' : '✗ 불일치') + '</div>';
+
+            configArea.innerHTML = html;
+            updateSeriesValidation();
+            renderScenes(storyData.scenes);
+        }
+
+        function onEpisodeSceneCountChange(episodeIdx, val) {
+            seriesConfig.scenesPerSeries[episodeIdx] = parseInt(val) || 0;
+            renderSeriesEpisodesConfig();
+        }
+
+        function updateSeriesValidation() {
+            const msgEl = document.getElementById('series-validation-msg');
+            if (!msgEl) return;
+            const totalScenes = storyData.scenes.length;
+            const sum = seriesConfig.scenesPerSeries.reduce((a,b) => a+b, 0);
+
+            if (seriesConfig.total <= 1) {
+                msgEl.style.display = 'none';
+                return;
+            }
+
+            if (sum !== totalScenes) {
+                msgEl.style.display = 'block';
+                msgEl.style.background = 'rgba(239,68,68,0.1)';
+                msgEl.style.color = 'var(--danger)';
+                msgEl.textContent = '편별 씬 수 합계(' + sum + ')가 전체(' + totalScenes + ')와 맞지 않습니다. 조정해주세요.';
+            } else {
+                msgEl.style.display = 'block';
+                msgEl.style.background = 'rgba(34,197,94,0.1)';
+                msgEl.style.color = 'var(--success)';
+                msgEl.textContent = '✓ 시리즈 ' + seriesConfig.total + '편 분할 완료 (편당 ' + seriesConfig.scenesPerSeries.join(', ') + '장)';
+                // 백엔드에 저장
+                saveSeriesConfigToServer();
+            }
+        }
+
+        async function saveSeriesConfigToServer() {
+            if (!sessionId) return;
+            try {
+                await fetch('/api/workflow/session/' + sessionId + '/series-config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        total_series: seriesConfig.total,
+                        scenes_per_series: seriesConfig.scenesPerSeries
+                    })
+                });
+            } catch(e) { console.error('시리즈 설정 저장 실패:', e); }
+        }
+
+        function getSeriesForScene(sceneIdx) {
+            if (seriesConfig.total <= 1) return -1;
+            let offset = 0;
+            for (let i = 0; i < seriesConfig.scenesPerSeries.length; i++) {
+                if (sceneIdx < offset + seriesConfig.scenesPerSeries[i]) return i;
+                offset += seriesConfig.scenesPerSeries[i];
+            }
+            return -1;
+        }
+
+        // ============================================
+
         function renderScenes(scenes) {
             const container = document.getElementById('scenes-container');
+            let prevSeriesIdx = -1;
             container.innerHTML = scenes.map((s, idx) => {
                 const densityWarnings = validateSceneRules(s);
                 const isCover = s.scene_number === 0;
-                return `
+                const curSeriesIdx = getSeriesForScene(idx);
+                let seriesHeader = '';
+                if (seriesConfig.total > 1 && curSeriesIdx >= 0 && curSeriesIdx !== prevSeriesIdx) {
+                    const epNum = curSeriesIdx + 1;
+                    const sc = seriesConfig.scenesPerSeries[curSeriesIdx] || 0;
+                    seriesHeader = '<div style="background:var(--primary); color:#fff; padding:6px 14px; border-radius:8px; margin-bottom:0.5rem; font-size:0.85rem; font-weight:700;">📚 시리즈 ' + epNum + ' (' + sc + '장)</div>';
+                }
+                prevSeriesIdx = curSeriesIdx;
+                return seriesHeader + `
                 <div class="card" style="margin-bottom: 1rem; border: ${isCover ? '2px solid var(--primary)' : '1px solid ' + (densityWarnings.length > 0 ? 'var(--warning)' : 'var(--border)')}; ${isCover ? 'background: linear-gradient(135deg, rgba(99,102,241,0.05), rgba(139,92,246,0.05));' : ''}">
                     <!-- 씬 헤더 -->
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
@@ -3019,8 +3197,41 @@
             const estTimeEl = document.getElementById('image-est-time');
             if (estTimeEl) estTimeEl.innerText = Math.ceil(storyData.scenes.length * 0.25);
 
+            // 시리즈 선택 드롭다운 업데이트
+            updateSeriesGenSelector();
+
             // 프리셋 레퍼런스 자동 적용 (3종 이미지를 세션에 복사)
             await applyPresetReferencesToSession();
+        }
+
+        function updateSeriesGenSelector() {
+            const selector = document.getElementById('series-gen-selector');
+            const select = document.getElementById('target-series');
+            if (!selector || !select) return;
+
+            if (seriesConfig.total <= 1) {
+                selector.style.display = 'none';
+                return;
+            }
+
+            selector.style.display = 'block';
+            select.innerHTML = '<option value="all">전체 시리즈</option>';
+            for (let i = 0; i < seriesConfig.total; i++) {
+                const sc = seriesConfig.scenesPerSeries[i] || 0;
+                select.innerHTML += '<option value="' + (i+1) + '">시리즈 ' + (i+1) + ' (' + sc + '장)</option>';
+            }
+        }
+
+        function updateEstTime() {
+            const sel = document.getElementById('target-series');
+            const val = sel ? sel.value : 'all';
+            let count = storyData.scenes.length;
+            if (val !== 'all') {
+                const idx = parseInt(val) - 1;
+                count = seriesConfig.scenesPerSeries[idx] || count;
+            }
+            const estTimeEl = document.getElementById('image-est-time');
+            if (estTimeEl) estTimeEl.innerText = Math.ceil(count * 0.25);
         }
 
         // --- Step 4: 설정 탭 관리 ---
@@ -3058,24 +3269,34 @@
             statusBar.style.display = 'block';
             controlBtns.style.display = 'flex';
 
-            // 초기 그리드: 모든 씬을 "대기 중" 카드로 표시
+            // 초기 그리드: 모든 씬을 "대기 중" 카드로 표시 (시리즈 경계 포함)
             const container = document.getElementById('images-container');
-            container.innerHTML = Array.from({length: sceneCount}, (_, i) => {
+            let gridHtml = '';
+            let prevSeries = -1;
+            for (let i = 0; i < sceneCount; i++) {
+                // 시리즈 경계 헤더 삽입
+                if (seriesConfig.total > 1) {
+                    const curSeries = getSeriesForScene(i);
+                    if (curSeries !== prevSeries && curSeries >= 0) {
+                        const epCount = seriesConfig.scenesPerSeries[curSeries] || 0;
+                        gridHtml += '<div style="grid-column:1/-1; padding:0.5rem 0.75rem; background:linear-gradient(90deg,var(--primary),#7c3aed); color:#fff; border-radius:8px; font-size:0.85rem; font-weight:700; margin-top:' + (curSeries > 0 ? '0.5rem' : '0') + ';">시리즈 ' + (curSeries+1) + ' (' + epCount + '장)</div>';
+                        prevSeries = curSeries;
+                    }
+                }
                 const sn = storyData.scenes[i] ? storyData.scenes[i].scene_number : (i + 1);
                 const isCover = sn === 0;
-                const label = isCover ? '📌 표지' : `씬 ${sn}`;
-                return `
-                <div class="card" id="scene-card-${i}" style="padding:0.5rem; position:relative; min-height:220px; ${isCover ? 'border:2px solid var(--primary);' : ''}">
-                    <div id="scene-img-area-${i}" style="width:100%; aspect-ratio:1/1; background:var(--bg-input); border-radius:8px; display:flex; align-items:center; justify-content:center; margin-bottom:0.5rem; position:relative; overflow:hidden;">
-                        <div id="scene-placeholder-${i}" style="text-align:center;">
-                            <div style="font-size:1.5rem; margin-bottom:4px;">⏳</div>
-                            <div style="font-size:0.75rem; color:var(--text-muted);">대기 중</div>
-                        </div>
-                    </div>
-                    <div style="font-size:0.8rem; font-weight:600;">${label}</div>
-                    <div id="scene-status-${i}" style="font-size:0.7rem; color:var(--text-muted); margin-top:2px;">대기 중</div>
-                </div>`;
-            }).join('');
+                const label = isCover ? '📌 표지' : '씬 ' + sn;
+                gridHtml += '<div class="card" id="scene-card-' + i + '" style="padding:0.5rem; position:relative; min-height:220px; ' + (isCover ? 'border:2px solid var(--primary);' : '') + '">'
+                    + '<div id="scene-img-area-' + i + '" style="width:100%; aspect-ratio:1/1; background:var(--bg-input); border-radius:8px; display:flex; align-items:center; justify-content:center; margin-bottom:0.5rem; position:relative; overflow:hidden;">'
+                    + '<div id="scene-placeholder-' + i + '" style="text-align:center;">'
+                    + '<div style="font-size:1.5rem; margin-bottom:4px;">⏳</div>'
+                    + '<div style="font-size:0.75rem; color:var(--text-muted);">대기 중</div>'
+                    + '</div></div>'
+                    + '<div style="font-size:0.8rem; font-weight:600;">' + label + '</div>'
+                    + '<div id="scene-status-' + i + '" style="font-size:0.7rem; color:var(--text-muted); margin-top:2px;">대기 중</div>'
+                    + '</div>';
+            }
+            container.innerHTML = gridHtml;
 
             // 진행 상태 초기화
             document.getElementById('gen-status-text').innerText = '🎨 이미지 생성 중...';
@@ -3093,25 +3314,31 @@
             };
 
             const ratio = document.getElementById('aspect-ratio').value;
+            const targetSeriesEl = document.getElementById('target-series');
+            const targetSeries = targetSeriesEl ? targetSeriesEl.value : 'all';
 
             try {
                 // 현재 "생성 중" 표시: 씬 1
                 updateSceneCard(0, 'generating');
 
                 // fire-and-forget: 백엔드에 생성 요청
+                const reqBody = {
+                    session_id: sessionId,
+                    character_style_id: null,
+                    background_style_id: null,
+                    trained_character_id: null,
+                    sub_style: "",
+                    manual_overrides: overrides,
+                    model: model,
+                    aspect_ratio: ratio
+                };
+                if (targetSeries !== 'all') {
+                    reqBody.target_series = parseInt(targetSeries);
+                }
                 fetch('/api/workflow/generate-images', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        session_id: sessionId,
-                        character_style_id: null,
-                        background_style_id: null,
-                        trained_character_id: null,
-                        sub_style: "",
-                        manual_overrides: overrides,
-                        model: model,
-                        aspect_ratio: ratio
-                    })
+                    body: JSON.stringify(reqBody)
                 }).catch(e => console.error('이미지 생성 백엔드 오류:', e));
 
                 // 즉시 폴링 시작
@@ -3378,12 +3605,100 @@
 
                 loadingEl.style.display = 'none';
                 if (captionArea) captionArea.style.display = 'grid';
+                initPublishSeriesTabs();
                 updateInstaPreview();
             } catch (e) {
                 alert('캡션 생성 오류: ' + e.message);
                 loadingEl.style.display = 'none';
                 if (captionArea) captionArea.style.display = 'grid';
             }
+        }
+
+        // ============================================
+        // 발행 탭: 시리즈 선택 + 다운로드 + 캡션 복사
+        // ============================================
+        var publishCurrentSeries = 0;
+
+        function initPublishSeriesTabs() {
+            var tabsEl = document.getElementById('publish-series-tabs');
+            var btnsEl = document.getElementById('publish-series-tab-btns');
+            if (!tabsEl || !btnsEl) return;
+            if (seriesConfig.total <= 1) {
+                tabsEl.style.display = 'none';
+                publishCurrentSeries = 0;
+                return;
+            }
+            tabsEl.style.display = 'block';
+            var html = '<button class="btn btn-primary" style="font-size:0.8rem; padding:5px 12px;" onclick="selectPublishSeries(0)">전체</button>';
+            for (var i = 0; i < seriesConfig.total; i++) {
+                var sc = seriesConfig.scenesPerSeries[i] || 0;
+                html += '<button class="btn btn-secondary" style="font-size:0.8rem; padding:5px 12px;" onclick="selectPublishSeries(' + (i+1) + ')">시리즈 ' + (i+1) + ' (' + sc + '장)</button>';
+            }
+            btnsEl.innerHTML = html;
+            selectPublishSeries(0);
+        }
+
+        function selectPublishSeries(seriesNum) {
+            publishCurrentSeries = seriesNum;
+            var btns = document.querySelectorAll('#publish-series-tab-btns button');
+            btns.forEach(function(btn, idx) {
+                btn.className = (idx === seriesNum) ? 'btn btn-primary' : 'btn btn-secondary';
+                btn.style.fontSize = '0.8rem';
+                btn.style.padding = '5px 12px';
+            });
+            updateInstaPreviewForSeries();
+        }
+
+        function getSeriesImages() {
+            var allImgs = document.querySelectorAll('#images-container img');
+            if (publishCurrentSeries === 0 || seriesConfig.total <= 1) return Array.from(allImgs);
+            var epIdx = publishCurrentSeries - 1;
+            var start = 0;
+            for (var i = 0; i < epIdx; i++) start += (seriesConfig.scenesPerSeries[i] || 0);
+            var count = seriesConfig.scenesPerSeries[epIdx] || 0;
+            return Array.from(allImgs).slice(start, start + count);
+        }
+
+        function updateInstaPreviewForSeries() {
+            var imgs = getSeriesImages();
+            var previewImg = document.getElementById('insta-preview-img');
+            var indexEl = document.getElementById('insta-carousel-index');
+            if (imgs.length > 0 && previewImg) previewImg.src = imgs[0].src;
+            if (indexEl) indexEl.innerText = '1 / ' + imgs.length;
+        }
+
+        function downloadSeriesImages() {
+            var imgs = getSeriesImages();
+            if (!imgs.length) { alert('다운로드할 이미지가 없습니다.'); return; }
+            var prefix = publishCurrentSeries > 0 ? 'series' + publishCurrentSeries + '_' : '';
+            imgs.forEach(function(img, i) {
+                var a = document.createElement('a');
+                a.href = img.src;
+                a.download = prefix + 'scene_' + (i + 1) + '.png';
+                a.click();
+            });
+            showToast(imgs.length + '개 이미지 다운로드 시작', 'success');
+        }
+
+        function copyCaptionToClipboard() {
+            var hook = document.getElementById('final-hook').value || '';
+            var body = document.getElementById('final-body').value || '';
+            var tip = document.getElementById('final-tip').value || '';
+            var hashtags = document.getElementById('final-hashtags').value || '';
+            var fullText = hook + '\n\n' + body;
+            if (tip) fullText += '\n\n💡 ' + tip;
+            if (hashtags) fullText += '\n\n' + hashtags;
+            navigator.clipboard.writeText(fullText.trim()).then(function() {
+                showToast('캡션이 클립보드에 복사되었습니다', 'success');
+            }).catch(function() {
+                var ta = document.createElement('textarea');
+                ta.value = fullText.trim();
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                showToast('캡션이 클립보드에 복사되었습니다', 'success');
+            });
         }
 
         function updateInstaPreview() {
@@ -5028,6 +5343,105 @@
         renderStoryPresetGallery();
         renderPresetGallery(); // 프리셋관리 탭도 동기화
         showToast(`프리셋 "${preset.name}" 선택됨 — 캐릭터 이름 반영 완료`, 'success');
+    }
+
+    // ============================================
+    // 프로젝트 저장/불러오기
+    // ============================================
+    async function openProjectList() {
+        const panel = document.getElementById('project-list-panel');
+        const content = document.getElementById('project-list-content');
+        panel.style.display = 'block';
+        content.innerHTML = '로딩 중...';
+        try {
+            const res = await fetch('/api/workflow/project/list');
+            const data = await res.json();
+            if (!data.projects || data.projects.length === 0) {
+                content.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem; padding:1rem; text-align:center;">저장된 프로젝트가 없습니다.</div>';
+                return;
+            }
+            content.innerHTML = data.projects.map(p => {
+                const date = p.saved_at ? new Date(p.saved_at).toLocaleString('ko-KR') : '';
+                return '<div style="display:flex; justify-content:space-between; align-items:center; padding:0.6rem 0.75rem; border-bottom:1px solid var(--border);">'
+                    + '<div>'
+                    + '<div style="font-weight:600; font-size:0.88rem;">' + (p.project_name || p.dirname) + '</div>'
+                    + '<div style="font-size:0.72rem; color:var(--text-muted);">' + date + ' · 씬 ' + p.scene_count + '장 · 시리즈 ' + p.series_count + '편 · 이미지 ' + p.image_count + '개</div>'
+                    + '</div>'
+                    + '<div style="display:flex; gap:0.4rem;">'
+                    + '<button class="btn btn-primary" style="font-size:0.72rem; padding:4px 10px;" onclick="loadProject(\'' + p.dirname + '\')">불러오기</button>'
+                    + '<button style="background:none; border:none; cursor:pointer; color:var(--danger); font-size:1rem;" onclick="deleteProject(\'' + p.dirname + '\')" title="삭제">×</button>'
+                    + '</div></div>';
+            }).join('');
+        } catch(e) {
+            content.innerHTML = '<div style="color:var(--danger);">목록 로드 실패: ' + e.message + '</div>';
+        }
+    }
+
+    async function loadProject(dirname) {
+        try {
+            const res = await fetch('/api/workflow/project/load', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dirname: dirname })
+            });
+            const data = await res.json();
+            if (!data.success) { alert('불러오기 실패: ' + (data.detail || '')); return; }
+
+            sessionId = data.session_id;
+            if (data.story) {
+                storyData = data.story;
+                characters = data.story.characters || [];
+            }
+            if (data.series_config) {
+                seriesConfig = {
+                    total: data.series_config.total || 1,
+                    scenesPerSeries: data.story ? (data.story.scenes_per_series || []) : []
+                };
+            }
+
+            document.getElementById('project-list-panel').style.display = 'none';
+            document.getElementById('btn-project-save').style.display = 'inline-flex';
+
+            // 스토리가 있으면 Tab 3으로 이동
+            if (storyData && storyData.scenes && storyData.scenes.length > 0) {
+                goToStep(3);
+                renderCharacters();
+                renderScenes(storyData.scenes);
+                showSeriesPanel();
+                document.getElementById('story-review-area').style.display = 'block';
+            }
+            showToast('프로젝트 "' + data.project_name + '" 불러오기 완료', 'success');
+        } catch(e) {
+            alert('불러오기 오류: ' + e.message);
+        }
+    }
+
+    async function saveCurrentProject() {
+        if (!sessionId) { alert('저장할 세션이 없습니다.'); return; }
+        const name = prompt('프로젝트 이름을 입력하세요:', storyData ? (storyData.title || '') : '');
+        if (!name) return;
+        try {
+            const res = await fetch('/api/workflow/project/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_id: sessionId, project_name: name })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast('프로젝트 저장 완료 (이미지 ' + data.image_count + '개)', 'success');
+            } else {
+                alert('저장 실패: ' + (data.detail || ''));
+            }
+        } catch(e) { alert('저장 오류: ' + e.message); }
+    }
+
+    async function deleteProject(dirname) {
+        if (!confirm('이 프로젝트를 삭제하시겠습니까?')) return;
+        try {
+            await fetch('/api/workflow/project/delete/' + dirname, { method: 'DELETE' });
+            showToast('프로젝트 삭제됨', 'info');
+            openProjectList();
+        } catch(e) { alert('삭제 오류: ' + e.message); }
     }
 
     </script>

@@ -105,10 +105,30 @@ class Scene(BaseModel):
     layout_meta: Optional[dict] = Field(default_factory=dict) # 씬별 개별 레이아웃 설정
 
 
+class SeriesPublishStatus(str, Enum):
+    """시리즈별 발행 상태"""
+    NOT_PUBLISHED = "not_published"   # 미발행
+    PUBLISHED = "published"           # 발행완료
+    SCHEDULED = "scheduled"           # 예약중
+
+class SeriesEpisode(BaseModel):
+    """시리즈 개별 편 정보"""
+    episode_number: int = 1                          # 편 번호 (1-based)
+    scene_count: int = 0                             # 이 편의 씬 수
+    scene_start: int = 0                             # 시작 씬 인덱스 (0-based, 전체 씬 목록 기준)
+    scene_end: int = 0                               # 끝 씬 인덱스 (exclusive)
+    publish_status: SeriesPublishStatus = SeriesPublishStatus.NOT_PUBLISHED
+    published_at: Optional[str] = None               # 발행 일시
+    scheduled_at: Optional[str] = None               # 예약 발행 일시
+    caption_hook: Optional[str] = None               # 훅 문장
+    caption_body: Optional[str] = None               # 본문 캡션
+    caption_tip: Optional[str] = None                # 전문가 Tip
+    caption_hashtags: Optional[str] = None           # 해시태그
+
 class SeriesInfo(BaseModel):
     """시리즈 분할 정보"""
-    current: int = 1              # 현재 편 (1-based)
     total: int = 1                # 전체 편 수
+    episodes: List[SeriesEpisode] = Field(default_factory=list)  # 편별 상세 정보
     prev_episode_url: Optional[str] = None   # 이전편 URL (발행 후 채워짐)
     prev_summary: Optional[str] = None       # 이전편 한줄 요약
 

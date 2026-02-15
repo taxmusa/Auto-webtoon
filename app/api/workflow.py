@@ -13,7 +13,7 @@ from app.models.models import (
     Story, Scene, InstagramCaption, ProjectSettings,
     CharacterSettings, ImageStyle, SubStyle, SpecializedField,
     ManualPromptOverrides, ThumbnailData, ThumbnailSource, ThumbnailPosition,
-    SeriesInfo, ToBeContinuedStyle, GeneratedImage,
+    SeriesInfo, SeriesEpisode, ToBeContinuedStyle, GeneratedImage,
     BubbleLayer, BubbleOverlay, BubblePosition, BubbleShape, CHARACTER_COLORS
 )
 from app.services.gemini_service import get_gemini_service
@@ -134,6 +134,9 @@ class GenerateImagesRequest(BaseModel):
     # 3종 레퍼런스 & 씬 체이닝
     use_reference_images: bool = True    # 레퍼런스 이미지 사용 여부
     scene_chaining: bool = True          # 이전 씬 참조 (직전 씬 이미지 + 텍스트 요약)
+    
+    # 시리즈 필터링
+    target_series: Optional[int] = None  # None=전체, 1/2/3=해당 시리즈만
 
 
 class GeneratePreviewRequest(BaseModel):
@@ -742,7 +745,16 @@ async def generate_images(request: GenerateImagesRequest):
     # 생성된 씬 이미지 저장 (체이닝용)
     generated_scene_images = {}  # {scene_number: image_bytes}
     
-    for scene in session.story.scenes:
+    # ★ 시리즈 필터링: target_series가 지정되면 해당 시리즈 씬만 생성
+    scenes_to_generate = session.story.scenes
+    if request.target_series and session.story.series_info:
+        episodes = session.story.series_info.episodes
+        target_ep = next((ep for ep in episodes if ep.episode_number == request.target_series), None)
+        if target_ep:
+            scenes_to_generate = session.story.scenes[target_ep.scene_start:target_ep.scene_end]
+            logger.info(f"[시리즈] 시리즈 {request.target_series} 씬만 생성: 인덱스 {target_ep.scene_start}~{target_ep.scene_end-1} ({len(scenes_to_generate)}장)")
+    
+    for scene in scenes_to_generate:
         if stop_signals.get(request.session_id, False):
             logger.info(f"[STOP] 세션 {request.session_id} 이미지 생성 중단됨 "
                         f"({len(session.images)}/{len(session.story.scenes)} 완료)")
@@ -1799,7 +1811,8 @@ async def apply_to_be_continued(request: ToBeContinuedRequest):
     # 시리즈 분할 안 됐거나 마지막 편이면 적용 불필요
     if not story.series_info:
         return {"success": False, "reason": "시리즈가 아닙니다"}
-    if story.series_info.current >= story.series_info.total:
+    # 시리즈가 1편뿐이면 '다음편에 계속' 불필요
+    if story.series_info.total <= 1:
         return {"success": False, "reason": "마지막 편이므로 '다음편에 계속'이 불필요합니다"}
     if not request.enabled:
         story.to_be_continued_enabled = False
@@ -2277,3 +2290,280 @@ async def export_with_bubbles(session_id: str):
         "exported_count": len(exported),
         "images": exported
     }
+
+
+# ============================================
+# 시리즈 분할 설정 API
+# ============================================
+
+class SeriesConfigRequest(BaseModel):
+    session_id: str
+    total_series: int = 1
+    scenes_per_series: List[int] = []  # 예: [5, 5, 5]
+
+@router.post("/session/{session_id}/series-config")
+async def save_series_config(session_id: str, request: SeriesConfigRequest):
+    """시리즈 분할 설정 저장"""
+    session = sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다")
+    
+    if not session.story:
+        raise HTTPException(status_code=400, detail="스토리가 아직 생성되지 않았습니다")
+    
+    total_scenes = len(session.story.scenes)
+    
+    # 유효성 검증
+    if request.total_series < 1:
+        raise HTTPException(status_code=400, detail="시리즈 수는 1 이상이어야 합니다")
+    
+    if request.total_series == 1:
+        # 분할 안 함
+        session.story.total_series = 1
+        session.story.scenes_per_series = [total_scenes]
+        session.story.series_info = SeriesInfo(
+            total=1,
+            episodes=[SeriesEpisode(
+                episode_number=1,
+                scene_count=total_scenes,
+                scene_start=0,
+                scene_end=total_scenes
+            )]
+        )
+    else:
+        # 분할
+        if len(request.scenes_per_series) != request.total_series:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"시리즈 수({request.total_series})와 편별 씬 수 배열 길이({len(request.scenes_per_series)})가 일치하지 않습니다"
+            )
+        
+        scene_sum = sum(request.scenes_per_series)
+        if scene_sum != total_scenes:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"편별 씬 수 합계({scene_sum})가 전체 씬 수({total_scenes})와 일치하지 않습니다"
+            )
+        
+        # 에피소드 목록 생성
+        episodes = []
+        offset = 0
+        for i, count in enumerate(request.scenes_per_series):
+            episodes.append(SeriesEpisode(
+                episode_number=i + 1,
+                scene_count=count,
+                scene_start=offset,
+                scene_end=offset + count
+            ))
+            offset += count
+        
+        session.story.total_series = request.total_series
+        session.story.scenes_per_series = request.scenes_per_series
+        session.story.series_info = SeriesInfo(
+            total=request.total_series,
+            episodes=episodes
+        )
+    
+    logger.info(f"시리즈 설정 저장: {request.total_series}편, 씬 배분={session.story.scenes_per_series}")
+    
+    return {
+        "success": True,
+        "total_series": session.story.total_series,
+        "scenes_per_series": session.story.scenes_per_series,
+        "episodes": [ep.model_dump() for ep in session.story.series_info.episodes]
+    }
+
+
+@router.get("/session/{session_id}/series-config")
+async def get_series_config(session_id: str):
+    """시리즈 분할 설정 조회"""
+    session = sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다")
+    
+    if not session.story:
+        return {"total_series": 1, "scenes_per_series": [], "episodes": [], "total_scenes": 0}
+    
+    total_scenes = len(session.story.scenes)
+    series_info = session.story.series_info
+    
+    return {
+        "total_series": session.story.total_series,
+        "scenes_per_series": session.story.scenes_per_series,
+        "episodes": [ep.model_dump() for ep in series_info.episodes] if series_info else [],
+        "total_scenes": total_scenes
+    }
+
+
+# ============================================
+# 10. 프로젝트 저장/불러오기 API
+# ============================================
+
+import shutil
+
+class ProjectSaveRequest(BaseModel):
+    session_id: str
+    project_name: str
+
+
+@router.post("/project/save")
+async def save_project(request: ProjectSaveRequest):
+    """현재 세션을 프로젝트로 저장 (스토리+이미지+시리즈+말풍선 전부)"""
+    session = sessions.get(request.session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다")
+
+    # 프로젝트 디렉토리 생성
+    safe_name = "".join(c for c in request.project_name if c.isalnum() or c in (' ', '_', '-')).strip() or 'project'
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    project_dir = os.path.join("output", "projects", f"{safe_name}_{timestamp}")
+    os.makedirs(project_dir, exist_ok=True)
+    images_dir = os.path.join(project_dir, "images")
+    os.makedirs(images_dir, exist_ok=True)
+
+    # 이미지 파일 복사
+    image_files = []
+    if session.images:
+        for img in session.images:
+            src = img.local_path if hasattr(img, 'local_path') else (img.get('local_path') if isinstance(img, dict) else None)
+            if src and os.path.exists(src):
+                fname = os.path.basename(src)
+                dst = os.path.join(images_dir, fname)
+                shutil.copy2(src, dst)
+                image_files.append(fname)
+
+    # 메타데이터 구성
+    project_data = {
+        "project_name": request.project_name,
+        "session_id": request.session_id,
+        "saved_at": datetime.now().isoformat(),
+        "keyword": session.keyword if hasattr(session, 'keyword') else "",
+        "story": session.story.model_dump() if session.story else None,
+        "characters": [c.model_dump() if hasattr(c, 'model_dump') else c for c in (session.story.characters if session.story else [])],
+        "series_config": session.story.series_info.model_dump() if (session.story and session.story.series_info) else None,
+        "bubble_layers": [bl.model_dump() if hasattr(bl, 'model_dump') else bl for bl in (session.bubble_layers or [])],
+        "images": [img.model_dump() if hasattr(img, 'model_dump') else img for img in (session.images or [])],
+        "image_files": image_files,
+        "preset_name": getattr(session, 'preset_name', None),
+        "collected_data": session.collected_data if hasattr(session, 'collected_data') else None,
+        "state": session.state.value if session.state else "idle",
+        "last_tab": getattr(session, 'last_tab', None),
+    }
+
+    project_path = os.path.join(project_dir, "project.json")
+    with open(project_path, "w", encoding="utf-8") as f:
+        json.dump(project_data, f, ensure_ascii=False, indent=2)
+
+    logger.info(f"[프로젝트] 저장 완료: {project_dir} (이미지 {len(image_files)}개)")
+
+    return {
+        "success": True,
+        "project_dir": project_dir,
+        "project_name": request.project_name,
+        "image_count": len(image_files),
+        "saved_at": project_data["saved_at"]
+    }
+
+
+@router.get("/project/list")
+async def list_projects():
+    """저장된 프로젝트 목록 조회"""
+    projects_dir = os.path.join("output", "projects")
+    if not os.path.exists(projects_dir):
+        return {"projects": []}
+
+    projects = []
+    for dirname in sorted(os.listdir(projects_dir), reverse=True):
+        project_json = os.path.join(projects_dir, dirname, "project.json")
+        if os.path.exists(project_json):
+            try:
+                with open(project_json, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                scene_count = len(data.get("story", {}).get("scenes", [])) if data.get("story") else 0
+                series_count = data.get("story", {}).get("total_series", 1) if data.get("story") else 1
+                projects.append({
+                    "dirname": dirname,
+                    "project_name": data.get("project_name", dirname),
+                    "saved_at": data.get("saved_at", ""),
+                    "scene_count": scene_count,
+                    "series_count": series_count,
+                    "image_count": len(data.get("image_files", [])),
+                    "state": data.get("state", ""),
+                })
+            except Exception:
+                pass
+
+    return {"projects": projects}
+
+
+@router.post("/project/load")
+async def load_project(request: dict):
+    """프로젝트 불러오기 - 세션 복원"""
+    dirname = request.get("dirname")
+    if not dirname:
+        raise HTTPException(status_code=400, detail="dirname이 필요합니다")
+
+    project_json = os.path.join("output", "projects", dirname, "project.json")
+    if not os.path.exists(project_json):
+        raise HTTPException(status_code=404, detail="프로젝트를 찾을 수 없습니다")
+
+    with open(project_json, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # 새 세션 생성 또는 기존 세션 재사용
+    sid = data.get("session_id", str(uuid.uuid4()))
+    session = WorkflowSession(session_id=sid)
+    session.keyword = data.get("keyword", "")
+
+    # 스토리 복원
+    if data.get("story"):
+        session.story = Story(**data["story"])
+
+    # 이미지 복원
+    if data.get("images"):
+        session.images = []
+        for img_data in data["images"]:
+            try:
+                session.images.append(GeneratedImage(**img_data) if isinstance(img_data, dict) else img_data)
+            except Exception:
+                session.images.append(img_data)
+
+    # 말풍선 복원
+    if data.get("bubble_layers"):
+        session.bubble_layers = []
+        for bl_data in data["bubble_layers"]:
+            try:
+                session.bubble_layers.append(BubbleLayer(**bl_data) if isinstance(bl_data, dict) else bl_data)
+            except Exception:
+                session.bubble_layers.append(bl_data)
+
+    # 수집 데이터 복원
+    if data.get("collected_data"):
+        session.collected_data = data["collected_data"]
+
+    # 세션 등록
+    sessions[sid] = session
+    logger.info(f"[프로젝트] 불러오기 완료: {dirname} → 세션 {sid}")
+
+    return {
+        "success": True,
+        "session_id": sid,
+        "project_name": data.get("project_name", ""),
+        "story": session.story.model_dump() if session.story else None,
+        "images": [img.model_dump() if hasattr(img, 'model_dump') else img for img in (session.images or [])],
+        "bubble_layers": [bl.model_dump() if hasattr(bl, 'model_dump') else bl for bl in (session.bubble_layers or [])],
+        "series_config": data.get("series_config"),
+        "state": data.get("state", "idle"),
+    }
+
+
+@router.delete("/project/delete/{dirname}")
+async def delete_project(dirname: str):
+    """프로젝트 삭제"""
+    project_dir = os.path.join("output", "projects", dirname)
+    if not os.path.exists(project_dir):
+        raise HTTPException(status_code=404, detail="프로젝트를 찾을 수 없습니다")
+
+    shutil.rmtree(project_dir)
+    logger.info(f"[프로젝트] 삭제: {dirname}")
+    return {"success": True, "deleted": dirname}
