@@ -28,11 +28,7 @@ class Settings(BaseSettings):
     instagram_access_token: Optional[str] = Field(default=None, alias="INSTAGRAM_ACCESS_TOKEN")
     instagram_user_id: Optional[str] = Field(default=None, alias="INSTAGRAM_USER_ID")
     
-    # Threads API (미설정 시 Instagram 토큰/ID를 그대로 사용)
-    threads_access_token: Optional[str] = Field(default=None, alias="THREADS_ACCESS_TOKEN")
-    threads_user_id: Optional[str] = Field(default=None, alias="THREADS_USER_ID")
-
-    @field_validator("instagram_access_token", "instagram_user_id", "threads_access_token", "threads_user_id", mode="before")
+    @field_validator("instagram_access_token", "instagram_user_id", mode="before")
     @classmethod
     def strip_instagram(cls, v):
         return v.strip() if v and isinstance(v, str) else v

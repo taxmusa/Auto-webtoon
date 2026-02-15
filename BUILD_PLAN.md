@@ -158,7 +158,6 @@ POST /api/workflow/stop-generation      # 생성 중단
 POST /api/workflow/generate-caption     # 캡션 생성
 POST /api/workflow/publish              # Instagram 발행
 GET  /api/workflow/instagram-check      # Instagram 연결 확인
-GET  /api/workflow/threads-check        # Threads 연결 확인
 POST /api/workflow/instagram-test       # Instagram 테스트 발행
 ```
 
@@ -238,7 +237,6 @@ Auto Webtoon/
 │   │   ├── openai_service.py  # OpenAI (이미지)
 │   │   ├── fal_service.py     # fal.ai API (Flux)
 │   │   ├── instagram_service.py # Instagram Graph API
-│   │   ├── threads_service.py # Threads API
 │   │   ├── cloudinary_service.py # 이미지 호스팅
 │   │   ├── pillow_service.py  # Pillow 후처리 (여백/오버레이)
 │   │   ├── render_service.py  # Playwright 렌더링 (캐러셀/카드뉴스)
@@ -277,9 +275,6 @@ FAL_KEY=...                 # fal.ai (Flux Kontext + LoRA)
 # SNS 발행
 INSTAGRAM_ACCESS_TOKEN=...  # 인스타 발행 (영구 페이지 토큰)
 INSTAGRAM_USER_ID=...       # 인스타 비즈니스 계정 ID
-THREADS_ACCESS_TOKEN=...    # Threads (없으면 Instagram 토큰 공유)
-THREADS_USER_ID=...         # Threads 사용자 ID
-
 # 이미지 호스팅
 CLOUDINARY_CLOUD_NAME=...   # Cloudinary
 CLOUDINARY_API_KEY=...

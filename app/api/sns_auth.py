@@ -100,17 +100,11 @@ async def get_status():
     cloud_name = env.get("CLOUDINARY_CLOUD_NAME", "")
     cloud_key = env.get("CLOUDINARY_API_KEY", "")
     cloud_secret = env.get("CLOUDINARY_API_SECRET", "")
-    threads_token = env.get("THREADS_ACCESS_TOKEN", "")
-
     return {
         "instagram": {
             "configured": bool(insta_token and insta_id),
             "token_preview": _mask_token(insta_token),
             "user_id": insta_id,
-        },
-        "threads": {
-            "configured": bool(threads_token) or bool(insta_token),
-            "token_preview": _mask_token(threads_token) if threads_token else "(Instagram 토큰 공유)",
         },
         "cloudinary": {
             "configured": bool(cloud_name and cloud_key and cloud_secret),

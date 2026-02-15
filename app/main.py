@@ -14,6 +14,7 @@ from app.api.styles import router as styles_router
 from app.api.edit_stage import router as edit_stage_router
 from app.api.carousel import router as carousel_router
 from app.api.cardnews import router as cardnews_router
+from app.api.content_generator import router as content_router
 from app.api.reference import router as reference_router
 from app.api.characters import router as characters_router
 from app.api.sns_auth import router as sns_auth_router
@@ -21,7 +22,7 @@ from app.api.sns_auth import router as sns_auth_router
 # 환경 변수 로드
 load_dotenv()
 
-app = FastAPI(title="Tax Webtoon Auto-Generator")
+app = FastAPI(title="Webtoon Auto-Generator")
 
 # 라우터 등록
 app.include_router(workflow_router)
@@ -29,6 +30,7 @@ app.include_router(styles_router)
 app.include_router(edit_stage_router)
 app.include_router(carousel_router)
 app.include_router(cardnews_router)
+app.include_router(content_router)
 app.include_router(reference_router)
 app.include_router(characters_router)
 app.include_router(sns_auth_router)
@@ -43,7 +45,7 @@ templates = Jinja2Templates(directory="app/templates")
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request, "title": "홈 - Tax Webtoon Auto-Generator"})
+    return templates.TemplateResponse("index.html", {"request": request, "title": "홈 - Webtoon Auto-Generator"})
 
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):

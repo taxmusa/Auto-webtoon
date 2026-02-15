@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>설정 - Tax Webtoon Auto-Generator</title>
+    <title>설정 - Webtoon Auto-Generator</title>
     <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -85,7 +85,7 @@
 
 <body>
     <header>
-        <a href="/" class="logo" style="text-decoration: none;">🎨 Tax Webtoon Auto-Generator</a>
+        <a href="/" class="logo" style="text-decoration: none;">🎨 Webtoon Auto-Generator</a>
         <a href="/" class="back-link">← 메인으로</a>
     </header>
 
@@ -102,7 +102,7 @@
         <div class="card">
             <div class="card-header">
                 <span class="card-header-icon">📸</span>
-                <span class="card-header-title">Instagram + Threads</span>
+                <span class="card-header-title">Instagram</span>
                 <span id="ig-badge" class="status status-off">확인 중</span>
             </div>
 
@@ -113,7 +113,6 @@
                     <div id="ig-name" style="font-weight:600; font-size:0.88rem;">확인 중...</div>
                     <div id="ig-detail" style="font-size:0.75rem; color:var(--text-muted);">연결 상태를 확인하고 있습니다</div>
                 </div>
-                <div id="ig-threads-badge" style="display:none; font-size:0.72rem;"></div>
             </div>
 
             <!-- 현재 설정값 (마스킹) -->
@@ -205,7 +204,7 @@
                 </div>
             </div>
 
-            <div class="help">발행 시 로컬 이미지를 공개 URL로 변환합니다. Instagram/Threads 발행에 필수. · <a href="https://cloudinary.com/console" target="_blank">Cloudinary Dashboard</a></div>
+            <div class="help">발행 시 로컬 이미지를 공개 URL로 변환합니다. Instagram 발행에 필수. · <a href="https://cloudinary.com/console" target="_blank">Cloudinary Dashboard</a></div>
         </div>
 
         <!-- ============================================ -->
@@ -324,7 +323,7 @@
         }
 
         // ============================================
-        // Instagram + Threads
+        // Instagram
         // ============================================
         async function loadInstagram() {
             try {
@@ -366,8 +365,6 @@
                             `<img src="${verify.profile_picture}">`;
                     }
 
-                    // Threads 상태 확인
-                    loadThreadsStatus();
                 } else {
                     document.getElementById('ig-name').innerText = '미연결';
                     document.getElementById('ig-detail').innerText = verify.error || '아래 설정에서 연결해주세요';
@@ -379,23 +376,6 @@
                 document.getElementById('ig-name').innerText = '확인 실패';
                 document.getElementById('ig-detail').innerText = e.message;
                 setBadge('ig-badge', 'err', '오류');
-            }
-        }
-
-        async function loadThreadsStatus() {
-            const badge = document.getElementById('ig-threads-badge');
-            try {
-                const res = await fetch('/api/workflow/threads-check');
-                const data = await res.json();
-                badge.style.display = 'block';
-                if (data.ok) {
-                    badge.innerHTML = '<span class="status status-ok">🧵 Threads 연결됨</span>';
-                } else {
-                    badge.innerHTML = '<span class="status status-warn">🧵 Threads 미연결</span>';
-                }
-            } catch(e) {
-                badge.style.display = 'block';
-                badge.innerHTML = '<span class="status status-err">🧵 확인 실패</span>';
             }
         }
 

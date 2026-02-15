@@ -1373,7 +1373,6 @@ class PublishRequest(BaseModel):
     images: List[str] = []
     target_series: Optional[int] = None  # 시리즈 번호 (None이면 전체)
     scheduled_publish_time: Optional[int] = None  # Unix 타임스탬프 (None이면 즉시 발행)
-    share_to_threads: bool = False  # Threads 동시 발행
 
 
 class InstagramTestRequest(BaseModel):
@@ -1425,27 +1424,6 @@ async def instagram_check():
         return {"ok": True, "configured": True, "message": "인스타 설정 정상."}
     except Exception as e:
         return {"ok": False, "configured": True, "message": str(e)}
-
-
-@router.get("/threads-check")
-async def threads_check():
-    """Threads API 연결 상태 확인."""
-    try:
-        from app.services.threads_service import get_threads_service
-        threads = get_threads_service()
-        if not threads.is_configured:
-            return {"ok": False, "configured": False, "message": "Threads 토큰 미설정 (THREADS_ACCESS_TOKEN 또는 Instagram 토큰 공유)"}
-        result = await threads.check_connection()
-        if result["ok"]:
-            return {
-                "ok": True,
-                "configured": True,
-                "username": result.get("username", ""),
-                "message": f"Threads 연결 정상 (@{result.get('username', '')})"
-            }
-        return {"ok": False, "configured": True, "message": result.get("error", "알 수 없는 오류")}
-    except Exception as e:
-        return {"ok": False, "configured": False, "message": str(e)}
 
 
 @router.post("/publish")
@@ -1512,29 +1490,7 @@ async def publish(request: PublishRequest):
             "scheduled": result.get("scheduled", False),
             "scheduled_time": result.get("scheduled_time"),
             "image_count": result.get("image_count", len(image_urls)),
-            "threads": None
         }
-        
-        # Threads 동시 발행
-        if request.share_to_threads and not result.get("scheduled"):
-            try:
-                from app.services.threads_service import get_threads_service
-                threads = get_threads_service()
-                if threads.is_configured:
-                    threads_result = await threads.publish_workflow(
-                        image_urls=image_urls,
-                        caption=request.caption
-                    )
-                    response["threads"] = threads_result
-                    if threads_result.get("success"):
-                        logger.info(f"[Threads] 동시 발행 성공: {threads_result.get('media_id')}")
-                    else:
-                        logger.warning(f"[Threads] 동시 발행 실패: {threads_result.get('error')}")
-                else:
-                    response["threads"] = {"success": False, "error": "Threads 토큰 미설정"}
-            except Exception as te:
-                logger.error(f"[Threads] 동시 발행 오류: {te}")
-                response["threads"] = {"success": False, "error": str(te)}
         
         return response
     except Exception as e:

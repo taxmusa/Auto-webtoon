@@ -265,37 +265,6 @@ def classify_cloudinary_error(e: Exception) -> DiagnosticError:
     )
 
 
-def classify_threads_error(e: Exception, error_data: dict = None) -> DiagnosticError:
-    """Threads API 에러 분류 (Instagram과 유사)"""
-    msg = str(e).lower()
-    code = None
-    if error_data:
-        err = error_data.get("error", {})
-        code = err.get("code")
-
-    if code == 190 or "token" in msg and "expired" in msg:
-        return DiagnosticError(
-            ErrorType.AUTH_EXPIRED, "Threads",
-            "Threads 토큰이 만료되었습니다.",
-            "설정 → SNS 연결에서 Instagram 토큰을 다시 발급하세요. (Threads는 Instagram 토큰을 공유합니다)",
-            "/settings",
-            detail=str(e)[:200],
-        )
-    if code == 4 or "rate" in msg:
-        return DiagnosticError(
-            ErrorType.RATE_LIMIT, "Threads",
-            "Threads API 요청 한도에 도달했습니다.",
-            "잠시 후 다시 시도하세요.",
-            detail=str(e)[:200],
-        )
-    return DiagnosticError(
-        ErrorType.UNKNOWN, "Threads",
-        "Threads API에서 오류가 발생했습니다.",
-        "에러 상세를 확인하고 다시 시도하세요.",
-        detail=str(e)[:300],
-    )
-
-
 def classify_general_error(e: Exception, service: str = "시스템") -> DiagnosticError:
     """일반 에러 분류 (서비스 특정 불가 시)"""
     msg = str(e).lower()
