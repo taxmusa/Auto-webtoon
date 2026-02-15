@@ -296,7 +296,7 @@ class SmartTranslator:
                 return None
 
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel("gemini-2.0-flash")
+            model = genai.GenerativeModel("gemini-3-flash-preview")
 
             max_retries = 2
             for attempt in range(max_retries + 1):
@@ -336,7 +336,7 @@ class SmartTranslator:
                 return results
 
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel("gemini-2.0-flash")
+            model = genai.GenerativeModel("gemini-3-flash-preview")
 
             # {index: text} → JSON 으로 구성
             batch_map = {str(idx): text for idx, text in items.items()}

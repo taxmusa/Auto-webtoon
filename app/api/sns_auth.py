@@ -411,7 +411,7 @@ class ApiKeySave(BaseModel):
 @router.post("/apikey/save")
 async def save_api_key(body: ApiKeySave):
     """개별 API 키를 .env에 저장"""
-    allowed = {"GEMINI_API_KEY", "OPENAI_API_KEY", "FAL_KEY"}
+    allowed = {"GEMINI_API_KEY"}
     if body.key not in allowed:
         return {"ok": False, "error": f"허용되지 않은 키: {body.key}"}
     if not body.value.strip():
@@ -425,12 +425,8 @@ async def api_key_status():
     """AI API 키 설정 상태 확인 (마스킹)"""
     env = _read_env()
     gemini = env.get("GEMINI_API_KEY", "")
-    openai_key = env.get("OPENAI_API_KEY", "")
-    fal = env.get("FAL_KEY", "")
     return {
         "gemini": {"configured": bool(gemini), "preview": _mask_token(gemini)},
-        "openai": {"configured": bool(openai_key), "preview": _mask_token(openai_key)},
-        "fal": {"configured": bool(fal), "preview": _mask_token(fal)},
     }
 
 
@@ -452,38 +448,6 @@ async def verify_gemini():
             return {"ok": False, "error": f"HTTP {r.status_code}"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
-
-
-@router.get("/apikey/verify/openai")
-async def verify_openai():
-    """OpenAI API 키 유효성 확인"""
-    env = _read_env()
-    key = env.get("OPENAI_API_KEY", "")
-    if not key:
-        return {"ok": False, "error": "미설정"}
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(
-                "https://api.openai.com/v1/models",
-                headers={"Authorization": f"Bearer {key}"}
-            )
-            if r.status_code == 200:
-                return {"ok": True}
-            return {"ok": False, "error": f"HTTP {r.status_code}"}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-
-
-@router.get("/apikey/verify/fal")
-async def verify_fal():
-    """fal.ai API 키 유효성 확인"""
-    env = _read_env()
-    key = env.get("FAL_KEY", "")
-    if not key:
-        return {"ok": False, "error": "미설정"}
-    if len(key) > 10:
-        return {"ok": True, "note": "키 형식 확인됨 (실제 호출 시 검증)"}
-    return {"ok": False, "error": "키가 너무 짧습니다"}
 
 
 @router.get("/system/status")

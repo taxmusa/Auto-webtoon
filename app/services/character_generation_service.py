@@ -53,54 +53,18 @@ async def generate_test_images(
 ) -> List[str]:
     """학습 완료 후 테스트 이미지 3장 자동 생성
 
+    fal.ai 서비스 의존성 제거로 현재 비활성화되었습니다.
+
     Args:
         trigger_word: 학습된 트리거 워드
         lora_url: LoRA 가중치 URL
         lora_scale: LoRA 강도 (기본 0.8)
 
     Returns:
-        생성된 테스트 이미지 URL 리스트
+        빈 리스트 (기능 비활성화)
     """
-    from app.services.image_generator import FluxLoraGenerator
-
-    settings = get_settings()
-    if not settings.fal_key:
-        logger.error("FAL_KEY가 설정되지 않아 테스트 이미지를 생성할 수 없습니다.")
-        return []
-
-    test_prompts = [
-        f"{trigger_word}, front view, confident smile, white background",
-        f"{trigger_word}, sitting at desk, explaining something, office background",
-        f"{trigger_word}, full body, standing, waving hand, simple background",
-    ]
-
-    generator = FluxLoraGenerator(
-        api_key=settings.fal_key,
-        model="flux-lora",
-        lora_url=lora_url,
-        trigger_word=trigger_word,
-    )
-
-    test_urls = []
-    for i, prompt in enumerate(test_prompts):
-        try:
-            result = await generator.generate(
-                prompt=prompt,
-                size="1024x1024",
-            )
-
-            if isinstance(result, bytes):
-                url = await _save_and_get_url(result, 100 + i)
-            else:
-                url = result
-
-            test_urls.append(url)
-            logger.info(f"[테스트] {i + 1}/3 생성 완료")
-
-        except Exception as e:
-            logger.error(f"[테스트] 이미지 {i + 1} 생성 실패: {e}")
-
-    return test_urls
+    logger.warning("LoRA 테스트 이미지 생성은 fal.ai 서비스 의존성 제거로 현재 지원되지 않습니다.")
+    return []
 
 
 async def _save_and_get_url(image_bytes: bytes, cut_id: int) -> str:

@@ -78,7 +78,7 @@
             display: flex;
             justify-content: center;
             gap: 0;
-            max-width: 900px;
+            max-width: 1100px;
             margin: 0 auto;
         }
 
@@ -145,7 +145,7 @@
 
         /* Main Content */
         main {
-            max-width: 900px;
+            max-width: 1100px;
             margin: 2rem auto;
             padding: 0 1rem;
         }
@@ -158,6 +158,159 @@
 
         .step-content.active {
             display: block;
+        }
+
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        /* ── 씬 카드 2단 레이아웃 ── */
+        .scene-card {
+            display: flex;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            margin-bottom: 0.6rem;
+            background: var(--bg-card);
+            overflow: hidden;
+            min-height: 120px;
+        }
+        .scene-card.cover-scene {
+            border: 2px solid var(--primary);
+            background: linear-gradient(135deg, rgba(99,102,241,0.05), rgba(139,92,246,0.05));
+        }
+        .scene-card.warn-scene {
+            border-color: var(--warning);
+        }
+        .scene-card-left {
+            flex: 7;
+            padding: 0.6rem 0.7rem;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+        .scene-card-right {
+            flex: 3;
+            border-left: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem;
+            min-width: 140px;
+            max-width: 250px;
+            background: rgba(0,0,0,0.01);
+        }
+        .scene-img-area {
+            width: 100%;
+            aspect-ratio: 4 / 5;
+            max-height: 280px;
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-input);
+            border: 1px dashed var(--border);
+            position: relative;
+        }
+        .scene-img-area img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 7px;
+        }
+        .scene-img-actions {
+            display: flex;
+            gap: 4px;
+            margin-top: 6px;
+            width: 100%;
+            justify-content: center;
+        }
+        .scene-img-actions button {
+            background: none;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            cursor: pointer;
+            padding: 2px 6px;
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            transition: all 0.15s;
+        }
+        .scene-img-actions button:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+            background: rgba(99,102,241,0.06);
+        }
+        .scene-img-status {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+            text-align: center;
+        }
+        .char-counter {
+            font-size: 0.6rem;
+            color: var(--text-muted);
+            text-align: right;
+            margin-top: 1px;
+        }
+        .char-counter.over {
+            color: var(--danger);
+            font-weight: 600;
+        }
+
+        /* 이미지 생성 컨트롤 바 */
+        .gen-control-bar {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 0.8rem 1rem;
+            margin-top: 1rem;
+        }
+        .gen-control-bar .gen-bar-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 0.5rem;
+        }
+        .gen-control-bar .gen-bar-progress {
+            height: 6px;
+            background: var(--bg-input);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 0.4rem;
+        }
+        .gen-control-bar .gen-bar-fill {
+            height: 100%;
+            background: var(--primary);
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+
+        @media (max-width: 640px) {
+            .scene-card {
+                flex-direction: column;
+            }
+            .scene-card-right {
+                max-width: 100%;
+                border-left: none;
+                border-top: 1px solid var(--border);
+                flex-direction: row;
+                gap: 0.5rem;
+                padding: 0.5rem;
+            }
+            .scene-img-area {
+                width: 80px;
+                height: 80px;
+                aspect-ratio: unset;
+            }
         }
 
         @keyframes spin {
@@ -659,13 +812,11 @@
             <div class="step-line"></div>
             <div class="step" data-step="2" onclick="navigateToStep(2)"><span class="step-num">2</span> 자료수집</div>
             <div class="step-line"></div>
-            <div class="step" data-step="3" onclick="navigateToStep(3)"><span class="step-num">3</span> 스토리</div>
+            <div class="step" data-step="3" onclick="navigateToStep(3)"><span class="step-num">3</span> 스토리+이미지</div>
             <div class="step-line"></div>
-            <div class="step" data-step="4" onclick="navigateToStep(4)"><span class="step-num">4</span> 이미지생성</div>
+            <div class="step" data-step="4" onclick="navigateToStep(4)"><span class="step-num">4</span> 편집</div>
             <div class="step-line"></div>
-            <div class="step" data-step="5" onclick="navigateToStep(5)"><span class="step-num">5</span> 편집</div>
-            <div class="step-line"></div>
-            <div class="step" data-step="6" onclick="navigateToStep(6)"><span class="step-num">6</span> 발행</div>
+            <div class="step" data-step="5" onclick="navigateToStep(5)"><span class="step-num">5</span> 발행</div>
         </div>
     </div>
 
@@ -691,22 +842,24 @@
                     <div class="form-group">
                         <label for="keyword">무엇에 대해 설명하는 웹툰을 만들까요?</label>
                         <div style="margin-bottom: 0.5rem;">
-                            <textarea id="keyword" rows="3" placeholder="예: 증여세 없이 증여하는 법, 육아휴직 신청"
+                            <textarea id="keyword" rows="3" placeholder="예: 재테크 기초 알려주기, 건강한 식습관, 직장인 꿀팁"
                                 style="width:100%; resize:vertical; min-height:60px;"
                                 onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault(); startWorkflow();}"></textarea>
                         </div>
 
                         <!-- AI Model Selection -->
                         <div
-                            style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: var(--text-muted);">
-                            <span>사용할 AI 모델:</span>
+                            style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: var(--text-muted); flex-wrap: wrap;">
+                            <span>자료수집/글 AI 모델:</span>
                             <select id="ai-model-select"
                                 style="padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text);">
-                                <option value="gemini-3-pro-preview">Gemini 3.0 Pro (Preview/최고성능)</option>
-                                <option value="gemini-3-flash-preview" selected>Gemini 3.0 Flash (Preview/빠름)</option>
-                                <option value="gemini-2.5-pro">Gemini 2.5 Pro (Stable/고성능)</option>
-                                <option value="gemini-2.0-flash">Gemini 2.0 Flash (Stable/균형)</option>
+                                <option value="gemini-3-flash-preview" selected>Gemini 3.0 Flash (빠름)</option>
+                                <option value="gemini-3-pro-preview">Gemini 3.0 Pro (고성능)</option>
                             </select>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: var(--text-muted); margin-top: 4px; padding: 4px 8px; background: rgba(99,102,241,0.06); border-radius: 6px; border: 1px solid rgba(99,102,241,0.15);">
+                            <span style="font-weight: 600; color: var(--primary);">이미지 생성 AI:</span>
+                            <span>Gemini 3.0 Pro Image (고정) — 최고 품질의 이미지를 위해 항상 Pro 모델을 사용합니다.</span>
                         </div>
                     </div>
                 </div>
@@ -831,12 +984,23 @@
                 <div style="display:flex; align-items:center; gap:8px;">
                     <label style="font-size:0.78rem; color:var(--text-muted); white-space:nowrap;">캐릭터 이름:</label>
                     <input type="text" id="character-names-input"
-                        value="세무사, 소미, 채범"
-                        placeholder="예: 세무사, 소미, 채범 (쉼표 구분)"
+                        value=""
+                        placeholder="예: 유리, 민수 (쉼표 구분, 비우면 AI 자동 생성)"
                         style="flex:1; padding:7px 10px; font-size:0.83rem; border-radius:6px; border:1px solid var(--border); box-sizing:border-box; background:var(--bg-card); color:var(--text);">
                 </div>
                 <div style="font-size: 0.68rem; color: var(--text-muted); margin-top: 4px;">
                     프리셋 선택 시 캐릭터 이름이 자동 반영됩니다. 직접 수정도 가능합니다. 비워두면 AI가 자동 생성합니다.
+                </div>
+                <!-- 독백 모드 -->
+                <div style="display:flex; align-items:center; gap:8px; margin-top:8px; padding:6px 10px; background:rgba(99,102,241,0.04); border-radius:8px; border:1px solid var(--border);">
+                    <label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-size:0.82rem; white-space:nowrap;">
+                        <input type="checkbox" id="monologue-mode-check" onchange="onMonologueModeChange()">
+                        <span>🎤 독백 모드</span>
+                    </label>
+                    <select id="monologue-char-select" style="display:none; padding:4px 8px; border-radius:6px; border:1px solid var(--border); font-size:0.8rem; background:var(--bg-card); flex:1;">
+                        <option value="">캐릭터 선택...</option>
+                    </select>
+                    <span style="font-size:0.68rem; color:var(--text-muted);" id="monologue-hint">1인 캐릭터만 등장하는 독백 형식</span>
                 </div>
             </div>
 
@@ -896,6 +1060,41 @@
                             <div style="font-size:0.82rem;">AI가 스토리를 생성하면 씬이 여기에 표시됩니다</div>
                         </div>
                     </div>
+
+                    <!-- 이미지 생성 컨트롤 바 (탭3 통합) -->
+                    <div class="gen-control-bar" id="gen-control-bar" style="display:none;">
+                        <div class="gen-bar-header">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span style="font-weight:700; font-size:0.9rem;">🎞️ 이미지 생성</span>
+                                <span id="gen-status-text" style="font-size:0.8rem; color:var(--text-muted);">준비됨</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:6px; font-size:0.78rem;">
+                                <label>비율:</label>
+                                <select id="gen-aspect-ratio" style="padding:2px 6px; border-radius:6px; border:1px solid var(--border); font-size:0.78rem; background:var(--bg-card);">
+                                    <option value="1:1" selected>1:1</option>
+                                    <option value="9:16">9:16</option>
+                                    <option value="4:5">4:5</option>
+                                </select>
+                                <span id="gen-status-count" style="color:var(--primary); font-weight:600;">0/0</span>
+                            </div>
+                        </div>
+                        <div style="display:flex; gap:6px; margin-bottom:0.4rem;" id="gen-control-buttons">
+                            <button class="btn btn-primary" onclick="startImageGeneration()" id="btn-start-gen" style="flex:1; padding:8px; font-size:0.85rem; font-weight:600;">
+                                🎨 전체 이미지 생성
+                            </button>
+                            <button class="btn btn-secondary" onclick="pauseGeneration()" id="btn-pause" style="padding:8px 12px; font-size:0.85rem;">⏸️</button>
+                            <button class="btn" onclick="stopGeneration()" style="padding:8px 12px; font-size:0.85rem; background:var(--danger); color:#fff; border:none; border-radius:8px; cursor:pointer;">⏹️</button>
+                        </div>
+                        <div id="gen-status-sub" style="font-size:0.72rem; color:var(--text-muted); margin-bottom:4px;"></div>
+                        <div class="gen-bar-progress">
+                            <div class="gen-bar-fill" id="gen-progress-bar" style="width:0%;"></div>
+                        </div>
+                        <div id="image-actions" style="display:none; margin-top:0.5rem; gap:6px;">
+                            <button class="btn btn-primary" onclick="goToStep(4)" style="flex:1; padding:8px; font-size:0.85rem;">
+                                ✏️ 이미지 편집 →
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -909,7 +1108,7 @@
                     <!-- 저장 영역 (스토리가 있을 때만 표시) -->
                     <div id="story-save-area" style="display:none; margin-bottom:0.5rem;">
                         <div style="display:flex; gap:4px;">
-                            <input type="text" id="story-save-name" placeholder="저장 이름 입력 (예: 종소세_v2)" 
+                            <input type="text" id="story-save-name" placeholder="저장 이름 입력 (예: 건강팁_v2)" 
                                 style="flex:1; border:1px solid var(--border); border-radius:6px; padding:4px 8px; font-size:0.82rem; background:var(--bg-card);"
                                 onkeydown="if(event.key==='Enter') saveStoryManual();">
                             <button class="btn btn-primary" onclick="saveStoryManual()" style="font-size:0.75rem; padding:4px 12px; flex-shrink:0;">저장</button>
@@ -922,7 +1121,7 @@
 
             <div class="actions" id="story-actions" style="display: none;">
                 <button class="btn btn-secondary" onclick="goToStep(2)">← 이전</button>
-                <button class="btn btn-primary" onclick="approveScenes()">사용자 정의 레이아웃/스타일 설정 →</button>
+                <button class="btn btn-primary" onclick="goToEditFromStory()" id="btn-to-edit">이미지 편집 →</button>
             </div>
         </div>
 
@@ -962,7 +1161,7 @@
                         </div>
                         <div class="form-group">
                             <label>캐릭터 이름 (쉼표 구분)</label>
-                            <input type="text" id="preset-char-names-input" value="세무사, 소미, 채범" placeholder="예: 세무사, 소미, 채범" style="padding:0.75rem;">
+                            <input type="text" id="preset-char-names-input" value="" placeholder="예: 유리, 민수 (쉼표 구분)" style="padding:0.75rem;">
                         </div>
                     </div>
 
@@ -1057,80 +1256,8 @@
         </div>
 
         <!-- Step 4: 이미지 생성 (기존 step-5가 step-4로 이동, 비율 설정 통합) -->
+        <!-- Step 4: 말풍선 & 대사 편집 -->
         <div class="step-content" id="step-4">
-            <div class="card" style="margin-bottom:1rem;">
-                <h2 class="card-title">🎞️ 이미지 생성 설정</h2>
-                <div style="display:flex; gap:2rem; align-items:center; flex-wrap:wrap;">
-                    <div class="form-group" style="margin-bottom:0; flex:1; min-width:200px;">
-                        <label style="font-size:0.85rem; margin-bottom:0.25rem;">이미지 비율</label>
-                        <select id="aspect-ratio" style="padding:0.6rem;">
-                            <option value="1:1" selected>1080x1080 (정사각형 — 권장)</option>
-                            <option value="4:5">1080x1350 (인스타 세로)</option>
-                            <option value="9:16">1080x1920 (릴스/스토리용)</option>
-                        </select>
-                    </div>
-                    <div class="form-group" style="margin-bottom:0; flex:1; min-width:200px;">
-                        <label style="font-size:0.85rem; margin-bottom:0.25rem;">페이지 번호 위치</label>
-                        <select id="page-number-position" style="padding:0.6rem;">
-                            <option value="hide" selected>표시 안 함 (기본)</option>
-                            <option value="bottom_right">우측 하단</option>
-                            <option value="bottom_center">중앙 하단</option>
-                        </select>
-                    </div>
-                    <div style="display:flex; gap:1rem; align-items:center; flex-wrap:wrap;">
-                        <div id="series-gen-selector" style="display:none;">
-                            <label style="font-size:0.85rem; margin-bottom:0.25rem;">생성 범위</label>
-                            <select id="target-series" style="padding:0.6rem;" onchange="updateEstTime()">
-                                <option value="all">전체 시리즈</option>
-                            </select>
-                        </div>
-                        <span style="font-size:0.85rem; color:var(--text-muted);">예상: <b id="image-est-time">2</b>분</span>
-                        <button class="btn btn-primary" onclick="startImageGeneration()">이미지 생성 시작</button>
-                    </div>
-                </div>
-            </div>
-
-                <!-- 이미지 생성 진행 상태 -->
-                <div id="gen-status-bar" class="card" style="display:none; margin-bottom:1rem;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
-                        <div>
-                            <span id="gen-status-text" style="font-size:1.1rem; font-weight:700;">이미지 생성 중...</span>
-                            <span id="gen-status-count" style="font-size:0.9rem; color:var(--text-muted); margin-left:0.5rem;">0/0</span>
-                        </div>
-                        <div style="display:flex; gap:0.5rem;" id="gen-control-buttons">
-                            <button class="btn btn-secondary" onclick="pauseGeneration()" id="btn-pause" style="padding:6px 14px; font-size:0.85rem;">일시정지</button>
-                            <button class="btn btn-secondary" onclick="stopGeneration()" id="btn-stop" style="padding:6px 14px; font-size:0.85rem; border-color:var(--danger); color:var(--danger);">중단</button>
-                        </div>
-                </div>
-                <div style="background:var(--bg-input); border-radius:10px; height:10px; overflow:hidden; border:1px solid var(--border);">
-                    <div id="gen-progress-bar" style="background:linear-gradient(90deg,var(--primary),#7c3aed); height:100%; width:0%; transition:width 0.5s; border-radius:10px;"></div>
-                </div>
-                <div id="gen-status-sub" style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">준비 중...</div>
-            </div>
-
-            <!-- 이미지 생성 결과 그리드 -->
-            <div class="card">
-                <h2 class="card-title">이미지 생성 결과</h2>
-                <div id="images-container" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:1rem;">
-                    <div class="empty-state" id="images-empty" style="grid-column:1/-1; text-align:center; padding:3rem 1rem; color:var(--text-muted);">
-                        <div style="font-size:2.5rem; margin-bottom:0.75rem;">🎨</div>
-                        <div style="font-weight:600; margin-bottom:0.3rem;">이미지가 아직 없습니다</div>
-                        <div style="font-size:0.82rem;">씬을 확정하면 이미지 생성을 시작할 수 있습니다</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="actions" id="image-actions" style="display:none;">
-                <button class="btn btn-secondary" onclick="goToStep(3)">← 이전 (스토리)</button>
-                <div style="display:flex; gap:0.5rem;">
-                    <button class="btn btn-primary" onclick="goToEditStage()">이미지 편집 →</button>
-                </div>
-            </div>
-        </div>
-
-
-        <!-- Step 5: 말풍선 & 대사 편집 (기존 step-6 → step-5) -->
-        <div class="step-content" id="step-5">
             <div class="card" style="padding: 1.25rem;">
                 <h2 class="card-title" style="margin-bottom: 0.25rem;">💬 말풍선 & 대사 편집</h2>
                 <p class="card-desc" style="margin-bottom: 1rem; font-size: 0.85rem; color: var(--text-muted);">
@@ -1243,7 +1370,7 @@
 
             <!-- 하단 액션 -->
             <div class="actions" style="margin-top: 1rem; display: flex; justify-content: space-between; align-items: center;">
-                <button class="btn btn-secondary" onclick="goToStep(4)">← 이전 (이미지생성)</button>
+                <button class="btn btn-secondary" onclick="goToStep(3)">← 이전 (스토리)</button>
                 <div style="display: flex; gap: 0.5rem;">
                     <button class="btn btn-secondary" onclick="exportWithBubbles()" id="bubble-export-btn">최종 이미지 내보내기</button>
                     <button class="btn btn-primary" onclick="proceedFromEditStage()">다음 단계 (캡션) →</button>
@@ -1251,8 +1378,8 @@
             </div>
         </div>
 
-        <!-- Step 6: 캡션 생성 + 최종 발행 (기존 step-7 → step-6) -->
-        <div class="step-content" id="step-6">
+        <!-- Step 5: 캡션 생성 + 최종 발행 -->
+        <div class="step-content" id="step-5">
             <!-- 시리즈 선택 탭 (시리즈 2개 이상일 때만 표시) -->
             <div id="publish-series-tabs" style="display:none; margin-bottom:1rem;">
                 <div style="display:flex; gap:0.5rem; flex-wrap:wrap;" id="publish-series-tab-btns"></div>
@@ -1382,7 +1509,7 @@
             </div>
 
             <div class="actions" style="margin-top: 2rem;">
-                <button class="btn btn-secondary" onclick="goToStep(6)">← 이전 단계</button>
+                <button class="btn btn-secondary" onclick="goToStep(4)">← 이전 (편집)</button>
             </div>
         </div>
 
@@ -1443,25 +1570,25 @@
                     <details style="margin-bottom: 1rem;">
                         <summary style="cursor:pointer; font-size:0.85rem; font-weight:600; color:var(--text-muted);">고급 옵션 ▾</summary>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 0.75rem;">
-                            <div>
-                                <label style="font-size: 0.8rem; font-weight: 600;">배경색</label>
-                                <input type="color" id="carousel-bg-color" value="#FFFFFF" style="width:100%; height:36px; border:1px solid var(--border); border-radius:6px;">
-                            </div>
-                            <div>
-                                <label style="font-size: 0.8rem; font-weight: 600;">글자색</label>
-                                <input type="color" id="carousel-text-color" value="#111111" style="width:100%; height:36px; border:1px solid var(--border); border-radius:6px;">
-                            </div>
-                            <div>
-                                <label style="font-size: 0.8rem; font-weight: 600;">강조색</label>
-                                <input type="color" id="carousel-accent-color" value="#6366f1" style="width:100%; height:36px; border:1px solid var(--border); border-radius:6px;">
-                            </div>
-                            <div>
-                                <label style="font-size: 0.8rem; font-weight: 600;">폰트</label>
-                                <select id="carousel-font" style="width:100%; padding: 6px 10px;">
-                                    <option value="Nanum Gothic">나눔고딕</option>
-                                    <option value="Do Hyeon">도현</option>
-                                    <option value="Jua">주아</option>
-                                    <option value="Black Han Sans">블랙한산스</option>
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: 600;">배경색</label>
+                            <input type="color" id="carousel-bg-color" value="#FFFFFF" style="width:100%; height:36px; border:1px solid var(--border); border-radius:6px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: 600;">글자색</label>
+                            <input type="color" id="carousel-text-color" value="#111111" style="width:100%; height:36px; border:1px solid var(--border); border-radius:6px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: 600;">강조색</label>
+                            <input type="color" id="carousel-accent-color" value="#6366f1" style="width:100%; height:36px; border:1px solid var(--border); border-radius:6px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: 600;">폰트</label>
+                            <select id="carousel-font" style="width:100%; padding: 6px 10px;">
+                                <option value="Nanum Gothic">나눔고딕</option>
+                                <option value="Do Hyeon">도현</option>
+                                <option value="Jua">주아</option>
+                                <option value="Black Han Sans">블랙한산스</option>
                                     <option value="Nanum Pen Script">나눔펜</option>
                                     <option value="Gaegu">개구</option>
                                     <option value="Noto Sans KR">노토산스</option>
@@ -1469,8 +1596,8 @@
                                     <option value="Gothic A1">고딕A1</option>
                                     <option value="Sunflower">선플라워</option>
                                     <option value="Poor Story">푸어스토리</option>
-                                </select>
-                            </div>
+                            </select>
+                        </div>
                             <div>
                                 <label style="font-size: 0.8rem; font-weight: 600;">제목 크기</label>
                                 <select id="carousel-title-size" style="width:100%; padding: 6px 10px;">
@@ -1478,7 +1605,7 @@
                                     <option value="medium" selected>보통</option>
                                     <option value="small">작은</option>
                                 </select>
-                            </div>
+                    </div>
                             <div>
                                 <label style="font-size: 0.8rem; font-weight: 600;">여백</label>
                                 <select id="carousel-spacing" style="width:100%; padding: 6px 10px;">
@@ -1568,7 +1695,7 @@
                     </div>
                     <!-- 그리드 뷰 (p3-8) -->
                     <div id="carousel-grid-view" style="display:none;">
-                        <div id="carousel-preview-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.75rem;"></div>
+                    <div id="carousel-preview-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.75rem;"></div>
                     </div>
                     <!-- 렌더링 진행률 (p3-11) -->
                     <div id="carousel-render-progress" style="display:none; margin-top:0.75rem;">
@@ -1596,7 +1723,7 @@
                     </div>
                     <div class="form-group">
                         <label>#️⃣ 해시태그</label>
-                        <textarea id="carousel-hashtags" rows="2" placeholder="#세무 #절세팁" style="width:100%;"></textarea>
+                        <textarea id="carousel-hashtags" rows="2" placeholder="#웹툰 #정보 #꿀팁" style="width:100%;"></textarea>
                     </div>
                     <div style="display: flex; gap: 0.5rem; flex-wrap:wrap;">
                         <button class="btn btn-primary" onclick="generateCarouselCaption()" style="flex:1;">✨ AI 캡션 생성</button>
@@ -1661,25 +1788,25 @@
                     <details style="margin-bottom: 1rem;">
                         <summary style="cursor:pointer; font-size:0.85rem; font-weight:600; color:var(--text-muted);">고급 옵션 ▾</summary>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 0.75rem;">
-                            <div>
-                                <label style="font-size: 0.8rem; font-weight: 600;">배경색</label>
-                                <input type="color" id="cardnews-bg-color" value="#1a1a2e" style="width:100%; height:36px; border:1px solid var(--border); border-radius:6px;">
-                            </div>
-                            <div>
-                                <label style="font-size: 0.8rem; font-weight: 600;">글자색</label>
-                                <input type="color" id="cardnews-text-color" value="#FFFFFF" style="width:100%; height:36px; border:1px solid var(--border); border-radius:6px;">
-                            </div>
-                            <div>
-                                <label style="font-size: 0.8rem; font-weight: 600;">강조색</label>
-                                <input type="color" id="cardnews-accent-color" value="#e94560" style="width:100%; height:36px; border:1px solid var(--border); border-radius:6px;">
-                            </div>
-                            <div>
-                                <label style="font-size: 0.8rem; font-weight: 600;">폰트</label>
-                                <select id="cardnews-font" style="width:100%; padding: 6px 10px;">
-                                    <option value="Nanum Gothic">나눔고딕</option>
-                                    <option value="Do Hyeon">도현</option>
-                                    <option value="Jua">주아</option>
-                                    <option value="Black Han Sans">블랙한산스</option>
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: 600;">배경색</label>
+                            <input type="color" id="cardnews-bg-color" value="#1a1a2e" style="width:100%; height:36px; border:1px solid var(--border); border-radius:6px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: 600;">글자색</label>
+                            <input type="color" id="cardnews-text-color" value="#FFFFFF" style="width:100%; height:36px; border:1px solid var(--border); border-radius:6px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: 600;">강조색</label>
+                            <input type="color" id="cardnews-accent-color" value="#e94560" style="width:100%; height:36px; border:1px solid var(--border); border-radius:6px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: 600;">폰트</label>
+                            <select id="cardnews-font" style="width:100%; padding: 6px 10px;">
+                                <option value="Nanum Gothic">나눔고딕</option>
+                                <option value="Do Hyeon">도현</option>
+                                <option value="Jua">주아</option>
+                                <option value="Black Han Sans">블랙한산스</option>
                                     <option value="Nanum Pen Script">나눔펜</option>
                                     <option value="Gaegu">개구</option>
                                     <option value="Noto Sans KR">노토산스</option>
@@ -1687,8 +1814,8 @@
                                     <option value="Gothic A1">고딕A1</option>
                                     <option value="Sunflower">선플라워</option>
                                     <option value="Poor Story">푸어스토리</option>
-                                </select>
-                            </div>
+                            </select>
+                        </div>
                             <div>
                                 <label style="font-size: 0.8rem; font-weight: 600;">제목 크기</label>
                                 <select id="cardnews-title-size" style="width:100%; padding: 6px 10px;">
@@ -1696,7 +1823,7 @@
                                     <option value="medium" selected>보통</option>
                                     <option value="small">작은</option>
                                 </select>
-                            </div>
+                    </div>
                             <div>
                                 <label style="font-size: 0.8rem; font-weight: 600;">여백</label>
                                 <select id="cardnews-spacing" style="width:100%; padding: 6px 10px;">
@@ -1783,7 +1910,7 @@
                         <div id="cardnews-swipe-dots" style="text-align:center;padding:8px;"></div>
                     </div>
                     <div id="cardnews-grid-view" style="display:none;">
-                        <div id="cardnews-preview-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.75rem;"></div>
+                    <div id="cardnews-preview-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.75rem;"></div>
                     </div>
                     <div id="cardnews-render-progress" style="display:none; margin-top:0.75rem;">
                         <div style="background:var(--border);border-radius:4px;height:6px;overflow:hidden;">
@@ -1809,7 +1936,7 @@
                     </div>
                     <div class="form-group">
                         <label>#️⃣ 해시태그</label>
-                        <textarea id="cardnews-hashtags" rows="2" placeholder="#세무 #카드뉴스" style="width:100%;"></textarea>
+                        <textarea id="cardnews-hashtags" rows="2" placeholder="#카드뉴스 #정보 #꿀팁" style="width:100%;"></textarea>
                     </div>
                     <div style="display: flex; gap: 0.5rem; flex-wrap:wrap;">
                         <button class="btn btn-primary" onclick="generateCardNewsCaption()" style="flex:1;">✨ AI 캡션 생성</button>
@@ -1936,7 +2063,7 @@
             const model = document.getElementById('ai-model-select').value;
 
             if (!keyword) {
-                alert('키워드를 입력해주세요.');
+                showToast('키워드를 입력해주세요.', 'warning');
                 return;
             }
 
@@ -1982,7 +2109,7 @@
 
             } catch (e) {
                 console.error("Detect Field Error:", e);
-                alert('분야 감지 오류: ' + e.message);
+                showToast('분야 감지 오류: ' + e.message, 'error');
                 btn.innerText = originalText;
                 btn.disabled = false;
             }
@@ -2003,7 +2130,7 @@
                 // 수동 모드: 사용자가 입력한 텍스트를 파싱
                 const manualContent = document.getElementById('manual-script').value.trim();
                 if (!manualContent) {
-                    alert('시나리오 또는 텍스트 내용을 입력해주세요.');
+                    showToast('시나리오 또는 텍스트 내용을 입력해주세요.', 'warning');
                     return;
                 }
 
@@ -2032,7 +2159,7 @@
                     btn.disabled = false;
                 } catch (e) {
                     console.error(e);
-                    alert('수동 모드 시작 오류: ' + e.message);
+                    showToast('수동 모드 시작 오류: ' + e.message, 'error');
                     btn.innerText = '다음 단계: 스토리 직접 구성 →';
                     btn.disabled = false;
                 }
@@ -2041,7 +2168,7 @@
 
             const keyword = document.getElementById('keyword').value.trim();
             if (!keyword) {
-                alert('키워드를 입력해주세요.');
+                showToast('키워드를 입력해주세요.', 'warning');
                 return;
             }
 
@@ -2122,7 +2249,7 @@
                 reviewArea.style.display = 'block';
                 actionsEl.style.display = 'flex';
             } catch (e) {
-                alert('내용 파싱 오류: ' + e.message);
+                showToast('내용 파싱 오류: ' + e.message, 'error');
                 loadingEl.style.display = 'none';
             }
         }
@@ -2531,7 +2658,7 @@
             const statusEl = document.getElementById(`${type}-status`);
             if (statusEl) { statusEl.style.display = 'block'; statusEl.innerHTML = `⏳ AI가 ${cfg.label} 텍스트를 생성 중...`; }
 
-            const topic = collectedData.map(d => d.title || d.text || '').join(' ').substring(0, 500) || '세무 정보';
+            const topic = collectedData.map(d => d.title || d.text || '').join(' ').substring(0, 500) || '일반 정보';
             const settings = getContentSettings(type);
             const countEl = document.getElementById(cfg.countId);
             const count = parseInt(countEl?.value || '5');
@@ -2607,7 +2734,7 @@
         async function renderContentImages(type) {
             const cfg = contentConfig[type];
             const state = contentState[type];
-            if (!state.sessionId) return alert(`${cfg.label} 텍스트를 먼저 생성해주세요.`);
+            if (!state.sessionId) { showToast(`${cfg.label} 텍스트를 먼저 생성해주세요.`, 'warning'); return; }
 
             const statusEl = document.getElementById(`${type}-status`);
             if (statusEl) { statusEl.style.display = 'block'; statusEl.innerHTML = `⏳ Playwright로 이미지 렌더링 중...`; }
@@ -2673,16 +2800,16 @@
 
             // 그리드 뷰
             if (grid) {
-                grid.innerHTML = images.map((url, i) => `
+            grid.innerHTML = images.map((url, i) => `
                     <div style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden; position:relative;" class="preview-card">
                         <img src="${url}?t=${ts}" style="width:100%; display:block;" alt="${cfg.label} ${i+1}">
-                        <div style="text-align:center; padding:4px; font-size:0.75rem; color:var(--text-muted);">${i+1}/${images.length}</div>
+                    <div style="text-align:center; padding:4px; font-size:0.75rem; color:var(--text-muted);">${i+1}/${images.length}</div>
                         <div class="hover-rerender" onclick="rerenderSingle('${type}',${i})"
                             style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);display:none;align-items:center;justify-content:center;cursor:pointer;color:#fff;font-size:0.85rem;border-radius:8px;">
                             🔄 재렌더링
                         </div>
-                    </div>
-                `).join('');
+                </div>
+            `).join('');
                 // 호버 이벤트 (p3-12)
                 grid.querySelectorAll('.preview-card').forEach(card => {
                     card.addEventListener('mouseenter', () => card.querySelector('.hover-rerender').style.display = 'flex');
@@ -3112,7 +3239,7 @@
             const sceneCount = parseInt(document.getElementById('total-scene-count').value);
 
             try {
-                const storyModel = document.getElementById('ai-model-select') ? document.getElementById('ai-model-select').value : 'gemini-2.0-flash';
+                const storyModel = document.getElementById('ai-model-select') ? document.getElementById('ai-model-select').value : 'gemini-3-flash-preview';
                 const charNamesInput = document.getElementById('character-names-input');
                 const charNames = charNamesInput ? charNamesInput.value.trim() : '';
                 // collected_data를 안전하게 직렬화 (너무 큰 데이터 방지)
@@ -3128,6 +3255,12 @@
                     console.warn('collected_data 직렬화 실패, 서버 데이터 사용:', cdErr);
                 }
 
+                // 독백 모드 확인
+                const monologueCheck = document.getElementById('monologue-mode-check');
+                const monologueCharSelect = document.getElementById('monologue-char-select');
+                const isMonologue = monologueCheck ? monologueCheck.checked : false;
+                const monologueChar = (isMonologue && monologueCharSelect) ? monologueCharSelect.value : '';
+
                 const res = await fetch('/api/workflow/generate-story', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -3135,10 +3268,12 @@
                         session_id: sessionId,
                         scene_count: sceneCount,
                         questioner_type: '일반인',
-                        expert_type: '세무사',
+                        expert_type: '전문가',
                         model: storyModel,
                         character_names: charNames,
-                        collected_data: safeCollectedData
+                        collected_data: safeCollectedData,
+                        monologue_mode: isMonologue,
+                        monologue_character: monologueChar
                     })
                 });
 
@@ -3180,7 +3315,7 @@
                 actionsEl.style.display = 'flex';
             } catch (e) {
                 console.error('스토리 생성 오류:', e);
-                alert('스토리 생성 오류: ' + e.message);
+                showToast('스토리 생성 오류: ' + e.message, 'error');
                 loadingEl.style.display = 'none';
                 // 실패 시 생성 버튼 다시 표시
                 if (genStoryBtn) genStoryBtn.style.display = 'block';
@@ -3478,68 +3613,111 @@
                     seriesHeader = '<div style="background:var(--primary); color:#fff; padding:6px 14px; border-radius:8px; margin-bottom:0.5rem; font-size:0.85rem; font-weight:700;">📚 시리즈 ' + epNum + ' (' + sc + '장)</div>';
                 }
                 prevSeriesIdx = curSeriesIdx;
+
+                // 이미지 상태 복원 (이미 생성된 이미지가 있으면 표시)
+                const existingImg = (window._sceneImages && window._sceneImages[idx]) || null;
+                const imgContent = existingImg
+                    ? `<img src="${existingImg}" alt="씬 ${s.scene_number}">`
+                    : `<div style="text-align:center; color:var(--text-muted); font-size:0.7rem;">
+                        <div style="font-size:1.5rem; margin-bottom:4px;">🖼️</div>대기 중</div>`;
+                const imgStatus = existingImg ? '<span style="color:var(--success);">✅ 완료</span>' : '';
+
+                const descLen = (s.scene_description || '').length;
+                const narLen = (s.narration || '').length;
+
                 return seriesHeader + `
-                <div class="card" style="margin-bottom: 1rem; border: ${isCover ? '2px solid var(--primary)' : '1px solid ' + (densityWarnings.length > 0 ? 'var(--warning)' : 'var(--border)')}; ${isCover ? 'background: linear-gradient(135deg, rgba(99,102,241,0.05), rgba(139,92,246,0.05));' : ''}">
-                    <!-- 씬 헤더 -->
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
-                        <span style="font-weight: 700; font-size: 0.85rem;">
-                            ${isCover 
-                                ? '<span style="background:var(--primary); color:#fff; padding:2px 8px; border-radius:10px; font-size:0.72rem; margin-right:4px;">📌 표지</span> 썸네일' 
-                                : '씬 ' + s.scene_number}
-                        </span>
-                        <div style="display:flex; gap:4px;">
-                            <button onclick="regenerateScene(${idx})" 
-                                style="background:none; border:1px solid var(--primary); color:var(--primary); cursor:pointer; padding:2px 8px; border-radius:6px; font-size:0.7rem;" title="이 씬만 다시 생성">🔄 재생성</button>
-                            <button onclick="deleteScene(${idx})" 
-                                style="background:none; border:1px solid var(--danger); color:var(--danger); cursor:pointer; padding:2px 8px; border-radius:6px; font-size:0.7rem;" title="씬 삭제">삭제</button>
+                <div class="scene-card ${isCover ? 'cover-scene' : ''} ${densityWarnings.length > 0 ? 'warn-scene' : ''}" id="scene-card-${idx}">
+                    <!-- 왼쪽: 텍스트 편집 영역 -->
+                    <div class="scene-card-left">
+                        <!-- 씬 헤더 -->
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span style="font-weight:700; font-size:0.85rem;">
+                                ${isCover 
+                                    ? '<span style="background:var(--primary); color:#fff; padding:2px 8px; border-radius:10px; font-size:0.72rem; margin-right:4px;">📌 표지</span> 썸네일' 
+                                    : '씬 ' + s.scene_number}
+                            </span>
+                            <div style="display:flex; gap:4px;">
+                                <button onclick="regenerateScene(${idx})" 
+                                    style="background:none; border:1px solid var(--primary); color:var(--primary); cursor:pointer; padding:2px 8px; border-radius:6px; font-size:0.68rem; font-weight:600;" title="이 씬만 다시 생성">씬 재생성</button>
+                                <button onclick="deleteScene(${idx})" 
+                                    style="background:none; border:1px solid var(--danger); color:var(--danger); cursor:pointer; padding:2px 8px; border-radius:6px; font-size:0.68rem; font-weight:600;" title="씬 삭제">삭제</button>
+                            </div>
                         </div>
-                    </div>
 
-                    <!-- 씬 설명 (인라인 textarea) -->
-                    <div style="margin-bottom: 0.4rem;">
-                        <div style="font-size:0.65rem; color:var(--text-muted); margin-bottom:2px;">🎬 씬 설명</div>
-                        <textarea onchange="updateSceneDesc(${idx}, this.value)"
-                            style="width:100%; border:1px solid var(--border); border-radius:6px; padding:5px 8px; font-size:0.82rem; background:var(--bg-card); resize:vertical; min-height:38px; font-family:inherit; box-sizing:border-box;"
-                            rows="2">${(s.scene_description||'').replace(/</g,'&lt;')}</textarea>
-                    </div>
-
-                    <!-- 대사 목록 -->
-                    ${s.dialogues.map((d, dIdx) => `
-                        <div style="background: var(--bg-input); padding: 0.35rem 0.5rem; border-radius: 6px; margin-bottom: 0.3rem; font-size: 0.82rem; display:flex; align-items:center; gap:4px;">
-                            ${renderSpeakerSelect(idx, dIdx, d.character)}
-                            <input type="text" value="${(d.text||'').replace(/"/g,'&quot;')}"
-                                onchange="updateDialogueText(${idx}, ${dIdx}, this.value)"
-                                style="flex:1; border:1px solid var(--border); border-radius:6px; padding:3px 6px; font-size:0.82rem; background:var(--bg-card); min-width:0;"
-                                placeholder="대사 입력">
-                            ${renderEmotionSelect(idx, dIdx, d.emotion)}
-                            <button onclick="deleteDialogue(${idx}, ${dIdx})" 
-                                style="background:none; border:none; color:var(--danger); cursor:pointer; font-size:1rem; padding:0 4px; line-height:1; flex-shrink:0;" title="대사 삭제">×</button>
+                        <!-- 씬 설명 + 글자수 카운터 -->
+                        <div>
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <span style="font-size:0.65rem; color:var(--text-muted);">🎬 씬 설명</span>
+                                <span class="char-counter ${descLen > 150 ? 'over' : ''}">${descLen}/150</span>
+                            </div>
+                            <textarea onchange="updateSceneDesc(${idx}, this.value)" oninput="this.previousElementSibling.querySelector('.char-counter').textContent=this.value.length+'/150'; if(this.value.length>150) this.previousElementSibling.querySelector('.char-counter').classList.add('over'); else this.previousElementSibling.querySelector('.char-counter').classList.remove('over');"
+                                style="width:100%; border:1px solid var(--border); border-radius:6px; padding:4px 7px; font-size:0.8rem; background:var(--bg-card); resize:vertical; min-height:32px; font-family:inherit; box-sizing:border-box;"
+                                rows="2">${(s.scene_description||'').replace(/</g,'&lt;')}</textarea>
                         </div>
-                    `).join('')}
 
-                    <!-- 대사 추가 (인라인) -->
-                    <div style="background: rgba(99,102,241,0.05); border: 1.5px dashed var(--primary); border-radius: 6px; padding: 0.35rem 0.5rem; margin-top: 0.3rem; display:flex; align-items:center; gap:4px;">
-                        ${renderSpeakerSelect(idx, -1, '')}
-                        <input type="text" id="new-dialogue-text-${idx}" placeholder="새 대사 입력 후 Enter"
-                            onkeydown="if(event.key==='Enter'){addDialogueInline(${idx});}"
-                            style="flex:1; border:1px solid var(--border); border-radius:6px; padding:3px 6px; font-size:0.82rem; background:var(--bg-card); min-width:0;">
-                        ${renderEmotionSelect(idx, -1, '일반')}
-                        <button onclick="addDialogueInline(${idx})"
-                            style="background:var(--primary); color:#fff; border:none; cursor:pointer; font-size:0.72rem; padding:3px 8px; border-radius:6px; font-weight:600; flex-shrink:0;">추가</button>
+                        <!-- 대사 목록 -->
+                        ${s.dialogues.map((d, dIdx) => {
+                            const dLen = (d.text || '').length;
+                            return `
+                            <div style="background:var(--bg-input); padding:0.3rem 0.4rem; border-radius:6px; font-size:0.8rem; display:flex; align-items:flex-start; gap:3px;">
+                                <div style="padding-top:4px;">${renderSpeakerSelect(idx, dIdx, d.character)}</div>
+                                <textarea onchange="updateDialogueText(${idx}, ${dIdx}, this.value)"
+                                    style="flex:1; border:1px solid var(--border); border-radius:6px; padding:4px 6px; font-size:0.8rem; background:var(--bg-card); min-width:0; resize:vertical; min-height:36px; font-family:inherit; line-height:1.4; box-sizing:border-box;"
+                                    rows="2" placeholder="대사 입력">${(d.text||'').replace(/</g,'&lt;')}</textarea>
+                                <div style="display:flex; flex-direction:column; align-items:center; gap:2px; padding-top:4px;">
+                                    <span class="char-counter ${dLen > 50 ? 'over' : ''}" style="min-width:30px;">${dLen}/50</span>
+                                    ${renderEmotionSelect(idx, dIdx, d.emotion)}
+                                    <button onclick="deleteDialogue(${idx}, ${dIdx})" 
+                                        style="background:none; border:none; color:var(--danger); cursor:pointer; font-size:0.75rem; padding:0 3px; line-height:1; flex-shrink:0;" title="대사 삭제">삭제</button>
+                                </div>
+                            </div>`;
+                        }).join('')}
+
+                        <!-- 대사 추가 (인라인) -->
+                        <div style="background:rgba(99,102,241,0.05); border:1.5px dashed var(--primary); border-radius:6px; padding:0.3rem 0.4rem; display:flex; align-items:flex-start; gap:3px;">
+                            <div style="padding-top:4px;">${renderSpeakerSelect(idx, -1, '')}</div>
+                            <textarea id="new-dialogue-text-${idx}" placeholder="새 대사 입력 후 Enter"
+                                onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault(); addDialogueInline(${idx});}"
+                                style="flex:1; border:1px solid var(--border); border-radius:6px; padding:4px 6px; font-size:0.8rem; background:var(--bg-card); min-width:0; resize:vertical; min-height:36px; font-family:inherit; line-height:1.4; box-sizing:border-box;"
+                                rows="2"></textarea>
+                            <div style="display:flex; flex-direction:column; align-items:center; gap:2px; padding-top:4px;">
+                                ${renderEmotionSelect(idx, -1, '일반')}
+                                <button onclick="addDialogueInline(${idx})"
+                                    style="background:var(--primary); color:#fff; border:none; cursor:pointer; font-size:0.68rem; padding:3px 8px; border-radius:6px; font-weight:600; flex-shrink:0;">추가</button>
+                            </div>
+                        </div>
+
+                        <!-- 나레이션 + 글자수 카운터 -->
+                        <div>
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <span style="font-size:0.65rem; color:var(--text-muted);">💬 나레이션</span>
+                                <span class="char-counter ${narLen > 60 ? 'over' : ''}">${narLen}/60</span>
+                            </div>
+                            <input type="text" value="${(s.narration||'').replace(/"/g,'&quot;')}"
+                                onchange="updateNarration(${idx}, this.value)"
+                                style="width:100%; border:1px solid var(--border); border-radius:6px; padding:3px 7px; font-size:0.8rem; background:var(--bg-card); font-style:italic; box-sizing:border-box;"
+                                placeholder="나레이션 입력 (선택사항)">
+                        </div>
+                        
+                        ${densityWarnings.map(w => `<div class="rule-warning" style="font-size:0.72rem;">⚠️ ${w}</div>`).join('')}
                     </div>
 
-                    <!-- 나레이션 (인라인) -->
-                    <div style="margin-top: 0.4rem;">
-                        <div style="font-size:0.65rem; color:var(--text-muted); margin-bottom:2px;">💬 나레이션</div>
-                        <input type="text" value="${(s.narration||'').replace(/"/g,'&quot;')}"
-                            onchange="updateNarration(${idx}, this.value)"
-                            style="width:100%; border:1px solid var(--border); border-radius:6px; padding:4px 8px; font-size:0.82rem; background:var(--bg-card); font-style:italic; box-sizing:border-box;"
-                            placeholder="나레이션 입력 (선택사항)">
+                    <!-- 오른쪽: 이미지 프리뷰 -->
+                    <div class="scene-card-right">
+                        <div class="scene-img-area" id="scene-img-area-${idx}">
+                            <div id="scene-placeholder-${idx}">${imgContent}</div>
+                        </div>
+                        <div class="scene-img-actions">
+                            <button onclick="regenerateOneImage(${idx}, this)" title="이미지 생성">이미지 생성</button>
+                            <button onclick="regenerateOneImage(${idx}, this)" title="재생성">재생성</button>
+                        </div>
+                        <div class="scene-img-actions" style="margin-top:2px;">
+                            <button onclick="undoImage(${idx})" id="undo-btn-${idx}"
+                                style="display:none; background:none; border:1px solid var(--warning); color:var(--warning); font-size:0.65rem;"
+                                title="이전 이미지로 복원">↩ 되돌리기</button>
+                        </div>
+                        <div class="scene-img-status" id="scene-status-${idx}">${imgStatus}</div>
                     </div>
-                    
-                    ${densityWarnings.map(w => `
-                        <div class="rule-warning">⚠️ ${w}</div>
-                    `).join('')}
                 </div>
             `}).join('');
         }
@@ -3552,6 +3730,87 @@
         // 나레이션 인라인 수정
         function updateNarration(idx, value) {
             storyData.scenes[idx].narration = value.trim();
+        }
+
+        // ── 독백 모드 UI 핸들러 ──
+        function onMonologueModeChange() {
+            const check = document.getElementById('monologue-mode-check');
+            const select = document.getElementById('monologue-char-select');
+            const hint = document.getElementById('monologue-hint');
+            if (check.checked) {
+                updateMonologueCharList();
+                select.style.display = 'block';
+                hint.style.display = 'none';
+            } else {
+                select.style.display = 'none';
+                hint.style.display = 'inline';
+            }
+        }
+
+        function updateMonologueCharList() {
+            const input = document.getElementById('character-names-input');
+            const select = document.getElementById('monologue-char-select');
+            if (!input || !select) return;
+            const names = input.value.split(',').map(n => n.trim()).filter(n => n);
+            select.innerHTML = '<option value="">캐릭터 선택...</option>' +
+                names.map(n => `<option value="${n}">${n}</option>`).join('');
+            // 이름이 1개면 자동 선택
+            if (names.length === 1) {
+                select.value = names[0];
+            }
+        }
+
+        // 캐릭터 이름 입력 변경 시 독백 모드 자동 감지
+        document.addEventListener('DOMContentLoaded', function() {
+            const charInput = document.getElementById('character-names-input');
+            if (charInput) {
+                charInput.addEventListener('input', function() {
+                    const names = this.value.split(',').map(n => n.trim()).filter(n => n);
+                    const check = document.getElementById('monologue-mode-check');
+                    if (names.length === 1 && !check.checked) {
+                        check.checked = true;
+                        onMonologueModeChange();
+                        showToast('캐릭터 1명 감지 — 독백 모드가 자동 활성화됩니다', 'info');
+                    } else if (names.length > 1 && check.checked) {
+                        // 여러 명이면 자동 해제하지 않음 (사용자가 의도적으로 켰을 수 있음)
+                        updateMonologueCharList();
+                    }
+                });
+            }
+        });
+
+        // ★ 프론트엔드 편집 내용을 백엔드 세션에 일괄 동기화
+        async function syncScenesToBackend() {
+            if (!sessionId || !storyData || !storyData.scenes) return false;
+            try {
+                const scenesPayload = storyData.scenes.map(s => ({
+                    scene_number: s.scene_number,
+                    scene_description: s.scene_description || '',
+                    image_prompt: s.image_prompt || null,
+                    dialogues: (s.dialogues || []).map(d => ({
+                        character: d.character || '',
+                        text: d.text || '',
+                        emotion: d.emotion || null
+                    })),
+                    narration: s.narration || ''
+                }));
+                const res = await fetch('/api/workflow/update-scenes-bulk', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, scenes: scenesPayload })
+                });
+                if (!res.ok) {
+                    const errText = await res.text();
+                    console.error('씬 동기화 실패:', errText);
+                    return false;
+                }
+                const data = await res.json();
+                console.log(`씬 동기화 완료: ${data.updated_count}개 씬`);
+                return true;
+            } catch (e) {
+                console.error('씬 동기화 오류:', e);
+                return false;
+            }
         }
 
         // 말하는 사람 변경 (드롭다운)
@@ -3601,16 +3860,6 @@
             showToast(`${charName}의 대사 추가됨`, 'success');
         }
 
-        // 기존 팝업 방식 — 호환용 유지
-        function editDialogue(sceneIdx, dialogueIdx) {
-            const dialogue = storyData.scenes[sceneIdx].dialogues[dialogueIdx];
-            const newText = prompt(`${dialogue.character}의 대사:`, dialogue.text);
-            if (newText !== null && newText.trim()) {
-                storyData.scenes[sceneIdx].dialogues[dialogueIdx].text = newText;
-                renderScenes(storyData.scenes);
-            }
-        }
-
         // 대사 삭제
         function deleteDialogue(sceneIdx, dialogueIdx) {
             const d = storyData.scenes[sceneIdx].dialogues[dialogueIdx];
@@ -3618,38 +3867,6 @@
             storyData.scenes[sceneIdx].dialogues.splice(dialogueIdx, 1);
             renderScenes(storyData.scenes);
             showToast('대사가 삭제되었습니다.', 'success');
-        }
-
-        // 대사 추가
-        function addDialogue(sceneIdx) {
-            // 사용 가능한 캐릭터 목록
-            const chars = storyData.characters ? storyData.characters.map(c => c.name || c) : [];
-            let charName = '';
-            if (chars.length > 0) {
-                const charList = chars.map((c, i) => `${i + 1}. ${c}`).join('\n');
-                const choice = prompt(`대사할 인물 선택 (번호 입력):\n${charList}\n\n또는 직접 이름 입력:`);
-                if (choice === null) return;
-                const num = parseInt(choice);
-                charName = (num >= 1 && num <= chars.length) ? chars[num - 1] : choice.trim();
-            } else {
-                charName = prompt('인물 이름:');
-                if (!charName || !charName.trim()) return;
-                charName = charName.trim();
-            }
-            if (!charName) return;
-
-            const text = prompt(`${charName}의 대사:`);
-            if (!text || !text.trim()) return;
-
-            const emotion = prompt('감정 (예: 웃으며, 진지하게, 놀라며):', '일반') || '일반';
-
-            storyData.scenes[sceneIdx].dialogues.push({
-                character: charName,
-                text: text.trim(),
-                emotion: emotion.trim()
-            });
-            renderScenes(storyData.scenes);
-            showToast(`${charName}의 대사가 추가되었습니다.`, 'success');
         }
 
         // 씬 등장인물 토글 (원클릭 ON/OFF)
@@ -3681,61 +3898,6 @@
                 });
                 renderScenes(storyData.scenes);
                 showToast(`"${charName}" ON — 씬 ${scene.scene_number}에 추가됨 (대사를 클릭하여 수정)`, 'success');
-            }
-        }
-
-        // 기존 호환용 — 더 이상 UI에서 직접 호출하지 않음
-        function addCharacterToScene(sceneIdx) {
-            const chars = storyData.characters ? storyData.characters.map(c => c.name || c) : [];
-            const existingChars = [...new Set(storyData.scenes[sceneIdx].dialogues.map(d => d.character))];
-            const availableChars = chars.filter(c => !existingChars.includes(c));
-            
-            let charName = '';
-            if (availableChars.length > 0) {
-                const charList = availableChars.map((c, i) => `${i + 1}. ${c}`).join('\n');
-                const choice = prompt(`추가할 인물 선택 (번호 입력):\n${charList}\n\n또는 직접 이름 입력:`);
-                if (choice === null) return;
-                const num = parseInt(choice);
-                charName = (num >= 1 && num <= availableChars.length) ? availableChars[num - 1] : choice.trim();
-            } else {
-                charName = prompt('추가할 인물 이름:');
-                if (!charName || !charName.trim()) return;
-                charName = charName.trim();
-            }
-            if (!charName) return;
-
-            const text = prompt(`${charName}의 첫 대사 (비워두면 대사 없이 등장만):`);
-            
-            if (text && text.trim()) {
-                const emotion = prompt('감정 (예: 웃으며, 진지하게):', '일반') || '일반';
-                storyData.scenes[sceneIdx].dialogues.push({
-                    character: charName,
-                    text: text.trim(),
-                    emotion: emotion.trim()
-                });
-            }
-
-            renderScenes(storyData.scenes);
-            showToast(`씬 ${storyData.scenes[sceneIdx].scene_number}에 "${charName}" 추가됨`, 'success');
-        }
-
-        // 나레이션 수정
-        function editNarration(sceneIdx) {
-            const scene = storyData.scenes[sceneIdx];
-            const newNarration = prompt('나레이션 (비우면 삭제):', scene.narration || '');
-            if (newNarration !== null) {
-                storyData.scenes[sceneIdx].narration = newNarration.trim() || '';
-                renderScenes(storyData.scenes);
-            }
-        }
-
-        // 나레이션 추가
-        function addNarration(sceneIdx) {
-            const narration = prompt('나레이션 입력:');
-            if (narration && narration.trim()) {
-                storyData.scenes[sceneIdx].narration = narration.trim();
-                renderScenes(storyData.scenes);
-                showToast('나레이션이 추가되었습니다.', 'success');
             }
         }
 
@@ -3786,9 +3948,11 @@
             // 씬 삭제
             storyData.scenes.splice(idx, 1);
 
-            // 씬 번호 재정렬
+            // 씬 번호 재정렬 (표지 scene_number=0은 유지)
+            const hasCover = storyData.scenes.length > 0 && storyData.scenes[0].scene_number === 0;
             storyData.scenes.forEach((scene, index) => {
-                scene.scene_number = index + 1;
+                if (index === 0 && hasCover) return; // 표지(0번)는 번호 유지
+                scene.scene_number = hasCover ? index : index + 1;
             });
 
             renderScenes(storyData.scenes);
@@ -3906,23 +4070,32 @@
         async function saveStoryManual() {
             const nameEl = document.getElementById('story-save-name');
             const saveName = (nameEl ? nameEl.value.trim() : '') || `스토리_${new Date().toLocaleString('ko-KR')}`;
-            if (!sessionId || !storyData) {
-                showToast('저장할 스토리가 없습니다.', 'error');
+            if (!storyData) {
+                showToast('저장할 스토리가 없습니다. 먼저 스토리를 생성하세요.', 'error');
                 return;
             }
             try {
+                // 세션이 유효하면 session_id로, 만료되었으면 storyData 직접 전달
+                const payload = { save_name: saveName };
+                if (sessionId) {
+                    payload.session_id = sessionId;
+                }
+                // 세션 만료 대비: storyData도 항상 함께 전달
+                payload.story_data = storyData;
+                payload.keyword = storyData.title || '';
+
                 const res = await fetch('/api/workflow/story/save', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ session_id: sessionId, save_name: saveName })
+                    body: JSON.stringify(payload)
                 });
                 const data = await res.json();
-                if (data.success) {
+                if (res.ok && data.success) {
                     showToast(`"${saveName}" 저장 완료`, 'success');
                     if (nameEl) nameEl.value = '';
                     loadSavedStories();
                 } else {
-                    showToast('저장 실패: ' + (data.detail || ''), 'error');
+                    showToast('저장 실패: ' + (data.detail || data.message || '알 수 없는 오류'), 'error');
                 }
             } catch (e) {
                 showToast('저장 오류: ' + e.message, 'error');
@@ -3976,10 +4149,16 @@
                 const res = await fetch('/api/workflow/history/load', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ session_id: sessionId, filename })
+                    body: JSON.stringify({ session_id: sessionId || null, filename })
                 });
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    showToast('불러오기 실패: ' + (errData.detail || `서버 오류 ${res.status}`), 'error');
+                    return;
+                }
                 const data = await res.json();
                 if (data.success) {
+                    // 새 세션 ID 반영 (서버에서 세션 생성/복원)
                     if (data.session_id) sessionId = data.session_id;
                     storyData = data.story;
                     if (data.collected_data) collectedData = data.collected_data;
@@ -3994,7 +4173,7 @@
                     if (genBtn) genBtn.style.display = 'none';
                     showToast('스토리 불러오기 완료', 'success');
                 } else {
-                    showToast('불러오기 실패', 'error');
+                    showToast('불러오기 실패: ' + (data.detail || ''), 'error');
                 }
             } catch (e) {
                 showToast('불러오기 오류: ' + e.message, 'error');
@@ -4005,22 +4184,28 @@
         async function saveAsNewName(originalFilename, originalName) {
             const newName = prompt('새 저장 이름을 입력하세요:', originalName + '_수정');
             if (!newName || !newName.trim()) return;
-            if (!sessionId || !storyData) {
+            if (!storyData) {
                 showToast('현재 스토리가 없습니다. 먼저 불러오기 후 저장하세요.', 'error');
                 return;
             }
             try {
+                // 세션 만료 대비: storyData 직접 전달
+                const payload = { save_name: newName.trim() };
+                if (sessionId) payload.session_id = sessionId;
+                payload.story_data = storyData;
+                payload.keyword = storyData.title || '';
+
                 const res = await fetch('/api/workflow/story/save', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ session_id: sessionId, save_name: newName.trim() })
+                    body: JSON.stringify(payload)
                 });
                 const data = await res.json();
-                if (data.success) {
+                if (res.ok && data.success) {
                     showToast(`"${newName.trim()}" 저장 완료`, 'success');
                     loadSavedStories();
                 } else {
-                    showToast('저장 실패: ' + (data.detail || ''), 'error');
+                    showToast('저장 실패: ' + (data.detail || data.message || ''), 'error');
                 }
             } catch (e) {
                 showToast('저장 오류: ' + e.message, 'error');
@@ -4040,6 +4225,9 @@
         }
 
         async function approveScenes() {
+            // ★ 스토리 편집 내용을 백엔드에 동기화 (step 4 진입 전)
+            await syncScenesToBackend();
+
             goToStep(4);
             const sceneCountEl = document.getElementById('image-scene-count');
             if (sceneCountEl) sceneCountEl.innerText = storyData.scenes.length;
@@ -4105,47 +4293,115 @@
             return '/' + localPath.replace(/\\/g, '/');
         }
 
+        // 스토리탭 → 편집탭으로 이동 (동기화 후)
+        async function goToEditFromStory() {
+            await syncScenesToBackend();
+            await applyPresetReferencesToSession();
+            goToStep(4);
+        }
+
+        // 씬 카드 이미지 영역 업데이트 (탭3 통합용)
+        function updateSceneImage(idx, state, imgData) {
+            const imgArea = document.getElementById(`scene-img-area-${idx}`);
+            const placeholder = document.getElementById(`scene-placeholder-${idx}`);
+            const statusEl = document.getElementById(`scene-status-${idx}`);
+            const card = document.getElementById(`scene-card-${idx}`);
+            if (!imgArea) return;
+
+            if (state === 'generating') {
+                const startTime = Date.now();
+                if (card && !card._genTimer) {
+                    card._genStartTime = startTime;
+                    card._genTimer = setInterval(() => {
+                        const elapsed = Math.floor((Date.now() - card._genStartTime) / 1000);
+                        const timerEl = document.getElementById(`scene-timer-${idx}`);
+                        if (timerEl) timerEl.innerText = `${elapsed}초`;
+                    }, 1000);
+                }
+                if (placeholder) {
+                    placeholder.innerHTML = `
+                        <div class="spinner" style="width:20px;height:20px;border-width:2px;margin-bottom:4px;"></div>
+                        <div style="font-size:0.65rem;color:var(--primary);font-weight:600;">생성 중</div>
+                        <div id="scene-timer-${idx}" style="font-size:0.6rem;color:var(--text-muted);">0초</div>`;
+                }
+                if (statusEl) statusEl.innerHTML = '<span style="color:var(--primary);">🎨 생성 중...</span>';
+                if (card) card.style.borderColor = 'var(--primary)';
+
+            } else if (state === 'done' && imgData) {
+                if (card && card._genTimer) { clearInterval(card._genTimer); card._genTimer = null; }
+                const elapsed = card && card._genStartTime ? Math.floor((Date.now() - card._genStartTime) / 1000) : 0;
+                const url = getImageUrl(imgData.local_path);
+                // 이미지 캐시 저장 (renderScenes 재호출 시 복원용)
+                if (!window._sceneImages) window._sceneImages = {};
+                window._sceneImages[idx] = url;
+                imgArea.innerHTML = `<img src="${url}" alt="씬 ${idx}">`;
+                if (statusEl) statusEl.innerHTML = `<span style="color:var(--success);">✅ ${elapsed}초</span>`;
+                if (card) card.style.borderColor = 'var(--success)';
+
+            } else if (state === 'error') {
+                if (card && card._genTimer) { clearInterval(card._genTimer); card._genTimer = null; }
+                const errElapsed = card && card._genStartTime ? Math.floor((Date.now() - card._genStartTime) / 1000) : 0;
+                if (placeholder) {
+                    placeholder.innerHTML = `
+                        <div style="text-align:center;">
+                            <span style="font-size:1.5rem;">⚠️</span>
+                            <div style="font-size:0.65rem;color:var(--danger);margin-top:2px;">실패 (${errElapsed}초)</div>
+                        </div>`;
+                }
+                if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">❌ 오류</span>';
+                if (card) card.style.borderColor = 'var(--danger)';
+
+            } else if (state === 'stopped') {
+                if (card && card._genTimer) { clearInterval(card._genTimer); card._genTimer = null; }
+                if (placeholder) {
+                    placeholder.innerHTML = `
+                        <div style="text-align:center;">
+                            <div style="font-size:1.2rem;">⏹️</div>
+                            <div style="font-size:0.65rem;color:var(--text-muted);">중단</div>
+                        </div>`;
+                }
+                if (statusEl) statusEl.innerText = '⏹️ 중단';
+                if (card) card.style.borderColor = 'var(--border)';
+            }
+        }
+
         async function startImageGeneration() {
-            // step-4에 이미 있으므로 탭 이동 불필요 (이미 step-4)
+            // 유효성 검사
+            if (!storyData || !storyData.scenes || storyData.scenes.length === 0) {
+                showToast('생성할 씬이 없습니다.', 'warning');
+                return;
+            }
+            // 빈 씬 설명 경고
+            const emptyScenes = storyData.scenes.filter(s => !(s.scene_description || '').trim());
+            if (emptyScenes.length > 0) {
+                showToast(`⚠️ ${emptyScenes.length}개 씬에 설명이 비어있습니다. 이미지 품질이 낮을 수 있습니다.`, 'warning');
+            }
+
             genIsStopped = false;
             genIsPaused = false;
 
+            // 스토리 편집 내용 동기화
+            const syncOk = await syncScenesToBackend();
+            if (!syncOk) {
+                if (!confirm('스토리 편집 내용을 서버에 동기화하지 못했습니다.\n원본 스토리로 이미지를 생성할까요?')) {
+                    return;
+                }
+            }
+
+            // 프리셋 레퍼런스 적용
+            await applyPresetReferencesToSession();
+
             const sceneCount = storyData.scenes.length;
-            const statusBar = document.getElementById('gen-status-bar');
+
+            // 컨트롤 바 UI 초기화
+            const controlBar = document.getElementById('gen-control-bar');
             const controlBtns = document.getElementById('gen-control-buttons');
             const actionsEl = document.getElementById('image-actions');
-            actionsEl.style.display = 'none';
-            statusBar.style.display = 'block';
+            controlBar.style.display = 'block';
             controlBtns.style.display = 'flex';
-
-            // 초기 그리드: 모든 씬을 "대기 중" 카드로 표시 (시리즈 경계 포함)
-            const container = document.getElementById('images-container');
-            let gridHtml = '';
-            let prevSeries = -1;
-            for (let i = 0; i < sceneCount; i++) {
-                // 시리즈 경계 헤더 삽입
-                if (seriesConfig.total > 1) {
-                    const curSeries = getSeriesForScene(i);
-                    if (curSeries !== prevSeries && curSeries >= 0) {
-                        const epCount = seriesConfig.scenesPerSeries[curSeries] || 0;
-                        gridHtml += '<div style="grid-column:1/-1; padding:0.5rem 0.75rem; background:linear-gradient(90deg,var(--primary),#7c3aed); color:#fff; border-radius:8px; font-size:0.85rem; font-weight:700; margin-top:' + (curSeries > 0 ? '0.5rem' : '0') + ';">시리즈 ' + (curSeries+1) + ' (' + epCount + '장)</div>';
-                        prevSeries = curSeries;
-                    }
-                }
-                const sn = storyData.scenes[i] ? storyData.scenes[i].scene_number : (i + 1);
-                const isCover = sn === 0;
-                const label = isCover ? '📌 표지' : '씬 ' + sn;
-                gridHtml += '<div class="card" id="scene-card-' + i + '" style="padding:0.5rem; position:relative; min-height:220px; ' + (isCover ? 'border:2px solid var(--primary);' : '') + '">'
-                    + '<div id="scene-img-area-' + i + '" style="width:100%; aspect-ratio:1/1; background:var(--bg-input); border-radius:8px; display:flex; align-items:center; justify-content:center; margin-bottom:0.5rem; position:relative; overflow:hidden;">'
-                    + '<div id="scene-placeholder-' + i + '" style="text-align:center;">'
-                    + '<div style="font-size:1.5rem; margin-bottom:4px;">⏳</div>'
-                    + '<div style="font-size:0.75rem; color:var(--text-muted);">대기 중</div>'
-                    + '</div></div>'
-                    + '<div style="font-size:0.8rem; font-weight:600;">' + label + '</div>'
-                    + '<div id="scene-status-' + i + '" style="font-size:0.7rem; color:var(--text-muted); margin-top:2px;">대기 중</div>'
-                    + '</div>';
-            }
-            container.innerHTML = gridHtml;
+            actionsEl.style.display = 'none';
+            document.getElementById('btn-start-gen').disabled = true;
+            document.getElementById('btn-start-gen').innerText = '⏳ 생성 중...';
 
             // 진행 상태 초기화
             document.getElementById('gen-status-text').innerText = '🎨 이미지 생성 중...';
@@ -4153,128 +4409,63 @@
             document.getElementById('gen-progress-bar').style.width = '0%';
             document.getElementById('gen-status-sub').innerText = '첫 번째 씬을 생성하고 있습니다...';
 
-            // Gemini 3.0 Preview 고정 (모델 선택 UI 제거)
-            const model = 'nano-banana-pro';
-            const overrides = {
-                character_style_prompt: "",
-                background_style_prompt: "",
-                style_prompt: "",
-                additional_instructions: ""
-            };
+            // 씬 카드 이미지 영역 초기화
+            for (let i = 0; i < sceneCount; i++) {
+                const placeholder = document.getElementById(`scene-placeholder-${i}`);
+                if (placeholder) {
+                    placeholder.innerHTML = `<div style="text-align:center; color:var(--text-muted); font-size:0.7rem;">
+                        <div style="font-size:1.2rem; margin-bottom:2px;">⏳</div>대기 중</div>`;
+                }
+                const statusEl = document.getElementById(`scene-status-${i}`);
+                if (statusEl) statusEl.innerText = '';
+            }
 
-            const ratio = document.getElementById('aspect-ratio').value;
-            const targetSeriesEl = document.getElementById('target-series');
-            const targetSeries = targetSeriesEl ? targetSeriesEl.value : 'all';
+            const model = 'nano-banana-pro';
+            const ratio = document.getElementById('gen-aspect-ratio').value;
 
             try {
-                // 현재 "생성 중" 표시: 씬 1
-                updateSceneCard(0, 'generating');
+                // 첫 번째 씬 "생성 중" 표시
+                updateSceneImage(0, 'generating');
 
-                // fire-and-forget: 백엔드에 생성 요청
                 const reqBody = {
                     session_id: sessionId,
                     character_style_id: null,
                     background_style_id: null,
                     trained_character_id: null,
                     sub_style: "",
-                    manual_overrides: overrides,
+                    manual_overrides: { character_style_prompt: "", background_style_prompt: "", style_prompt: "", additional_instructions: "" },
                     model: model,
-                    aspect_ratio: ratio
+                    aspect_ratio: ratio,
+                    use_reference_images: true,
+                    scene_chaining: true
                 };
-                if (targetSeries !== 'all') {
-                    reqBody.target_series = parseInt(targetSeries);
-                }
+
                 fetch('/api/workflow/generate-images', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(reqBody)
-                }).catch(e => console.error('이미지 생성 백엔드 오류:', e));
+                }).catch(e => {
+                    console.error('이미지 생성 백엔드 오류:', e);
+                    showToast('이미지 생성 요청 실패: ' + e.message, 'error');
+                });
 
-                // 즉시 폴링 시작
                 checkImageProgress(sceneCount);
             } catch (e) {
-                alert('이미지 생성 시작 오류: ' + e.message);
+                showToast('이미지 생성 시작 오류: ' + e.message, 'error');
+                document.getElementById('btn-start-gen').disabled = false;
+                document.getElementById('btn-start-gen').innerText = '🎨 전체 이미지 생성';
             }
         }
 
+        // 하위 호환 래퍼 (기존 코드에서 호출할 수 있으므로 유지)
         function updateSceneCard(idx, state, imgData) {
-            const placeholder = document.getElementById(`scene-placeholder-${idx}`);
-            const imgArea = document.getElementById(`scene-img-area-${idx}`);
-            const statusEl = document.getElementById(`scene-status-${idx}`);
-            const card = document.getElementById(`scene-card-${idx}`);
-            if (!imgArea) return;
-
-            if (state === 'generating') {
-                // 경과 시간 타이머 시작
-                const startTime = Date.now();
-                if (!card._genTimer) {
-                    card._genStartTime = startTime;
-                    card._genTimer = setInterval(() => {
-                        const elapsed = Math.floor((Date.now() - card._genStartTime) / 1000);
-                        const timerEl = document.getElementById(`scene-timer-${idx}`);
-                        if (timerEl) timerEl.innerText = `${elapsed}초 경과`;
-                    }, 1000);
-                }
-                if (placeholder) {
-                    placeholder.innerHTML = `
-                        <div class="spinner" style="width:24px;height:24px;border-width:3px;margin-bottom:4px;"></div>
-                        <div style="font-size:0.75rem;color:var(--primary);font-weight:600;">생성 중...</div>
-                        <div id="scene-timer-${idx}" style="font-size:0.65rem;color:var(--text-muted);margin-top:2px;">0초 경과</div>`;
-                }
-                if (statusEl) statusEl.innerText = '🎨 생성 중...';
-                if (card) card.style.borderColor = 'var(--primary)';
-            } else if (state === 'done' && imgData) {
-                // 타이머 정리
-                if (card._genTimer) { clearInterval(card._genTimer); card._genTimer = null; }
-                const elapsed = card._genStartTime ? Math.floor((Date.now() - card._genStartTime) / 1000) : 0;
-                const url = getImageUrl(imgData.local_path);
-                imgArea.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" id="gen-img-${idx}">`;
-                if (statusEl) statusEl.innerHTML = `<span style="color:var(--success);">✅ 완료 (${elapsed}초)</span>`;
-                if (card) {
-                    card.style.borderColor = 'var(--success)';
-                    // 재생성 버튼 추가
-                    let btnEl = card.querySelector('.regen-btn');
-                    if (!btnEl) {
-                        const btn = document.createElement('button');
-                        btn.className = 'btn btn-secondary regen-btn';
-                        btn.style.cssText = 'width:100%;padding:4px;font-size:0.75rem;margin-top:0.5rem;';
-                        btn.innerText = '🔄 재생성';
-                        btn.onclick = () => regenerateOneImage(idx);
-                        card.appendChild(btn);
-                    }
-                }
-            } else if (state === 'error') {
-                // 타이머 정리
-                if (card._genTimer) { clearInterval(card._genTimer); card._genTimer = null; }
-                const errElapsed = card._genStartTime ? Math.floor((Date.now() - card._genStartTime) / 1000) : 0;
-                imgArea.innerHTML = `<div style="text-align:center;"><span style="font-size:2rem;">⚠️</span><div style="font-size:0.75rem;color:var(--danger);margin-top:4px;">생성 실패 (${errElapsed}초)</div></div>`;
-                if (statusEl) statusEl.innerHTML = `<span style="color:var(--danger);">❌ 오류</span>`;
-                if (card) {
-                    card.style.borderColor = 'var(--danger)';
-                    let btnEl = card.querySelector('.regen-btn');
-                    if (!btnEl) {
-                        const btn = document.createElement('button');
-                        btn.className = 'btn btn-primary regen-btn';
-                        btn.style.cssText = 'width:100%;padding:4px;font-size:0.75rem;margin-top:0.5rem;';
-                        btn.innerText = '🔄 재생성';
-                        btn.onclick = () => regenerateOneImage(idx);
-                        card.appendChild(btn);
-                    }
-                }
-            } else if (state === 'stopped') {
-                if (placeholder) {
-                    placeholder.innerHTML = `
-                        <div style="font-size:1.5rem;margin-bottom:4px;">⏹️</div>
-                        <div style="font-size:0.75rem;color:var(--text-muted);">중단됨</div>`;
-                }
-                if (statusEl) statusEl.innerText = '⏹️ 중단됨';
-                if (card) card.style.borderColor = 'var(--border)';
-            }
+            updateSceneImage(idx, state, imgData);
         }
 
         function checkImageProgress(total) {
             let prevCount = 0;
             let pollCount = 0;
+            let consecutiveErrors = 0;  // 연속 실패 카운터
 
             const statusText = document.getElementById('gen-status-text');
             const statusCount = document.getElementById('gen-status-count');
@@ -4292,7 +4483,10 @@
                 pollCount++;
                 try {
                     const res = await fetch(`/api/workflow/session/${sessionId}`);
+                    if (!res.ok) throw new Error(`서버 응답 오류 (${res.status})`);
                     const session = await res.json();
+                    consecutiveErrors = 0;  // 성공 시 리셋
+
                     const allImages = session.images || [];
                     const doneCount = allImages.length;  // 생성완료 + 에러 합산
                     const generated = allImages.filter(img => img.status === 'generated');
@@ -4316,8 +4510,8 @@
 
                     prevCount = doneCount;
 
-                    // 상단 바 업데이트
-                    const pct = total > 0 ? Math.round((genCount / total) * 100) : 0;
+                    // 상단 바 업데이트 (에러 포함한 전체 진행률)
+                    const pct = total > 0 ? Math.round((doneCount / total) * 100) : 0;
                     progressBar.style.width = `${pct}%`;
                     statusCount.innerText = `${genCount}/${total}`;
 
@@ -4342,9 +4536,26 @@
                         progressBar.style.width = '100%';
                         controlBtns.style.display = 'none';
                         actionsEl.style.display = 'flex';
+                        // 생성 버튼 복원
+                        const startBtn = document.getElementById('btn-start-gen');
+                        if (startBtn) { startBtn.disabled = false; startBtn.innerText = '🎨 전체 이미지 생성'; }
                     }
                 } catch (e) {
                     console.error('진행률 확인 오류:', e);
+                    consecutiveErrors++;
+                    // 연속 5회 실패 시 경고, 10회 실패 시 폴링 중단
+                    if (consecutiveErrors === 5) {
+                        statusSub.innerText = '⚠️ 서버 연결이 불안정합니다. 재시도 중...';
+                    }
+                    if (consecutiveErrors >= 10) {
+                        clearInterval(genPollInterval);
+                        genPollInterval = null;
+                        statusText.innerText = '⚠️ 서버 연결이 끊어졌습니다';
+                        statusSub.innerText = '네트워크를 확인하고 페이지를 새로고침하세요. 이미 생성된 이미지는 서버에 보존됩니다.';
+                        controlBtns.style.display = 'none';
+                        actionsEl.style.display = 'flex';
+                        showToast('서버 연결 실패 — 진행률 확인이 중단되었습니다', 'error');
+                    }
                 }
             }, 2500);
         }
@@ -4386,13 +4597,16 @@
             }
 
             document.getElementById('gen-status-text').innerText = '⏹️ 생성이 중단되었습니다';
-            document.getElementById('gen-status-sub').innerText = '이미 생성된 이미지는 아래에서 확인할 수 있습니다';
+            document.getElementById('gen-status-sub').innerText = '이미 생성된 이미지는 씬 카드에서 확인할 수 있습니다';
             document.getElementById('gen-control-buttons').style.display = 'none';
             document.getElementById('image-actions').style.display = 'flex';
+            const startBtn = document.getElementById('btn-start-gen');
+            if (startBtn) { startBtn.disabled = false; startBtn.innerText = '🎨 전체 이미지 생성'; }
         }
 
-        async function regenerateOneImage(sceneIndex) {
-            const btn = event.target;
+        async function regenerateOneImage(sceneIndex, btnElement) {
+            const btn = btnElement || document.querySelector(`#scene-card-${sceneIndex} .regen-btn`);
+            if (!btn) return;
             const origText = btn.innerText;
             btn.innerText = '⏳ 재생성 중...';
             btn.disabled = true;
@@ -4416,22 +4630,67 @@
                 const data = await res.json();
                 if (data.image && data.image.local_path) {
                     updateSceneCard(sceneIndex, 'done', data.image);
+                    // 되돌리기 버튼 표시/숨김
+                    const undoBtn = document.getElementById(`undo-btn-${sceneIndex}`);
+                    if (undoBtn) {
+                        const histCount = data.history_count || (data.image.image_history ? data.image.image_history.length : 0);
+                        undoBtn.style.display = histCount > 0 ? 'inline-block' : 'none';
+                    }
                 } else {
                     throw new Error('이미지 경로가 없습니다');
                 }
             } catch (e) {
                 updateSceneCard(sceneIndex, 'error');
-                alert('재생성 실패: ' + e.message);
+                showToast('재생성 실패: ' + e.message, 'error');
             } finally {
                 btn.innerText = origText;
                 btn.disabled = false;
             }
         }
 
-        // --- 캡션 생성 (Step 6 편집 → Step 7 캡션/발행) ---
+        // --- 이미지 되돌리기 ---
+        async function undoImage(sceneIndex) {
+            const undoBtn = document.getElementById(`undo-btn-${sceneIndex}`);
+            if (!undoBtn) return;
+            
+            const origText = undoBtn.innerText;
+            undoBtn.innerText = '↩ 복원 중...';
+            undoBtn.disabled = true;
+            
+            try {
+                const res = await fetch('/api/workflow/undo-image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, scene_index: sceneIndex })
+                });
+                
+                if (!res.ok) {
+                    const errText = await res.text();
+                    throw new Error(`되돌리기 실패 (${res.status}): ${errText}`);
+                }
+                
+                const data = await res.json();
+                if (data.success && data.image) {
+                    updateSceneCard(sceneIndex, 'done', data.image);
+                    showToast('이전 이미지로 복원되었습니다', 'success');
+                    
+                    // 남은 히스토리가 없으면 버튼 숨김
+                    if (data.remaining_history <= 0) {
+                        undoBtn.style.display = 'none';
+                    }
+                }
+            } catch (e) {
+                showToast('되돌리기 실패: ' + e.message, 'error');
+            } finally {
+                undoBtn.innerText = origText;
+                undoBtn.disabled = false;
+            }
+        }
+
+        // --- 캡션 생성 (편집 → 발행) ---
         async function generateCaption() {
-            // 먼저 Step 7으로 이동하여 로딩 UI 표시
-            goToStep(7);
+            // 먼저 발행 탭으로 이동하여 로딩 UI 표시
+            goToStep(5);
             const loadingEl = document.getElementById('loading-caption');
             const captionArea = document.getElementById('caption-publish-area');
             loadingEl.style.display = 'block';
@@ -4457,7 +4716,7 @@
                 initPublishSeriesTabs();
                 updateInstaPreview();
             } catch (e) {
-                alert('캡션 생성 오류: ' + e.message);
+                showToast('캡션 생성 오류: ' + e.message, 'error');
                 loadingEl.style.display = 'none';
                 if (captionArea) captionArea.style.display = 'grid';
             }
@@ -4522,7 +4781,7 @@
 
         function downloadSeriesImages() {
             var imgs = getSeriesImages();
-            if (!imgs.length) { alert('다운로드할 이미지가 없습니다.'); return; }
+            if (!imgs.length) { showToast('다운로드할 이미지가 없습니다.', 'warning'); return; }
             var prefix = publishCurrentSeries > 0 ? 'series' + publishCurrentSeries + '_' : '';
             imgs.forEach(function(img, i) {
                 var a = document.createElement('a');
@@ -4575,7 +4834,7 @@
         }
 
         async function publishToInstagram() {
-            if (!sessionId) { alert('세션이 없습니다.'); return; }
+            if (!sessionId) { showToast('세션이 없습니다.', 'error'); return; }
             const hook = document.getElementById('final-hook').value || '';
             const body = document.getElementById('final-body').value || '';
             const tip = document.getElementById('final-tip').value || '';
@@ -4603,10 +4862,10 @@
                 if (data.success) {
                     showToast('인스타그램 발행 완료!', 'success');
                 } else {
-                    alert('발행 실패: ' + (data.error || '알 수 없음'));
+                    showToast('발행 실패: ' + (data.error || '알 수 없음'), 'error');
                 }
             } catch (e) {
-                alert('발행 오류: ' + e.message);
+                showToast('발행 오류: ' + e.message, 'error');
             }
         }
 
@@ -4681,7 +4940,7 @@
         }
 
         async function schedulePublish() {
-            if (!sessionId) { alert('세션이 없습니다.'); return; }
+            if (!sessionId) { showToast('세션이 없습니다.', 'error'); return; }
             const dtInput = document.getElementById('schedule-datetime');
             if (!dtInput || !dtInput.value) {
                 showToast('예약 발행 날짜/시간을 선택해주세요.', 'warning');
@@ -4730,10 +4989,10 @@
                     showToast(`📅 ${timeStr}에 예약 발행 등록 완료!`, 'success');
                     dtInput.value = '';
                 } else {
-                    alert('예약 발행 실패: ' + (data.error || '알 수 없음'));
+                    showToast('예약 발행 실패: ' + (data.error || '알 수 없음'), 'error');
                 }
             } catch (e) {
-                alert('예약 발행 오류: ' + e.message);
+                showToast('예약 발행 오류: ' + e.message, 'error');
             }
         }
 
@@ -4777,7 +5036,7 @@
                 renderDataItems();
             }
 
-            // Step 3: 스토리
+            // Step 3: 스토리+이미지
             if (step === 3) {
                 document.getElementById('loading-story').style.display = 'none';
                 document.getElementById('story-review-area').style.display = 'block';
@@ -4789,25 +5048,30 @@
                     renderCharacters();
                     renderScenes(storyData.scenes);
                 }
+                // 편집 버튼: 이미지가 1개 이상 있을 때만 활성화
+                const editBtn = document.getElementById('btn-to-edit');
+                if (editBtn) {
+                    const hasImages = window._sceneImages && Object.keys(window._sceneImages).length > 0;
+                    editBtn.disabled = !hasImages;
+                    editBtn.title = hasImages ? '' : '먼저 이미지를 생성하세요';
+                }
                 // 프리셋 갤러리 로드
                 if (typeof refreshStoryPresetSelector === 'function') refreshStoryPresetSelector();
             }
 
-            // Step 4: 이미지 생성 결과
-            if (step === 4) {
-                const hasImages = document.getElementById('images-container') && document.getElementById('images-container').children.length > 0;
-                if (hasImages && !genPollInterval) {
-                    document.getElementById('image-actions').style.display = 'flex';
-                }
+            // Step 3: 이미지 생성 컨트롤 바 표시 (스토리가 있을 때)
+            if (step === 3 && storyData && storyData.scenes && storyData.scenes.length > 0) {
+                const genBar = document.getElementById('gen-control-bar');
+                if (genBar) genBar.style.display = 'block';
             }
 
-            // Step 5: 말풍선 편집 (기존 step-6 → step-5)
-            if (step === 5) {
+            // Step 4: 말풍선 편집
+            if (step === 4) {
                 initBubbleEditor();
             }
 
-            // Step 6: 캡션 + 발행 (기존 step-7 → step-6)
-            if (step === 6) {
+            // Step 5: 캡션 + 발행
+            if (step === 5) {
                 updateInstaPreview();
                 if (typeof checkPublishConnection === 'function') checkPublishConnection();
             }
@@ -4877,7 +5141,7 @@
         // 드래그 상태 관리
         let bubbleDragState = null;
 
-        function goToEditStage() { goToStep(5); }
+        function goToEditStage() { goToStep(4); }
 
         // ★ 편집 탭 진입 시 초기화
         async function initBubbleEditor() {
@@ -5341,7 +5605,7 @@
         function undoBubbles() {
             const idx = bubbleCurrentScene;
             if (!bubbleHistory[idx] || bubbleHistory[idx].length === 0) {
-                alert('되돌릴 내용이 없습니다.');
+                showToast('되돌릴 내용이 없습니다.', 'info');
                 return;
             }
             const prev = bubbleHistory[idx].pop();
@@ -5489,7 +5753,7 @@
 
         // ── 최종 내보내기 ──
         async function exportWithBubbles() {
-            if (!sessionId) return alert('세션이 없습니다.');
+            if (!sessionId) { showToast('세션이 없습니다.', 'error'); return; }
             // 현재 씬 먼저 저장
             await saveBubbleLayerToServer();
             // 모든 씬 저장
@@ -5517,7 +5781,7 @@
                     throw new Error(data.detail || '내보내기 실패');
                 }
             } catch(e) {
-                alert('내보내기 실패: ' + e.message);
+                showToast('내보내기 실패: ' + e.message, 'error');
                 btn.disabled = false; btn.innerText = '📥 최종 이미지 내보내기';
             }
         }
@@ -5532,7 +5796,7 @@
                 });
                 const data = await res.json();
                 if (data.success) renderBubbleEditor();
-            } catch (e) { alert('톤 조절 실패: ' + e.message); }
+            } catch (e) { showToast('톤 조절 실패: ' + e.message, 'error'); }
         }
 
         async function proceedFromEditStage() {
@@ -5640,7 +5904,7 @@
                         throw new Error("Failed to create temporary session");
                     }
                 } catch (e) {
-                    alert('세션 생성 실패: 자동 미리보기를 위해 세션을 시작할 수 없습니다. ' + e.message);
+                    showToast('세션 생성 실패: ' + e.message, 'error');
                     btn.innerText = '샘플 미리보기 생성';
                     btn.disabled = false;
                     previewContainer.innerHTML = '<div style="color:red; padding:1rem;">Session Error</div>';
@@ -5702,20 +5966,20 @@
                         console.log("Preview generated with prompt:", data.prompt_used);
                     } else {
                         const errHtml = '<div style="color:red; padding:1rem;">에러가 발생했습니다.</div>';
-                        alert('Preview generation failed: ' + (data.error || 'Unknown error'));
+                        showToast('미리보기 생성 실패: ' + (data.error || '알 수 없는 오류'), 'error');
                         if (manualResultContainer) manualResultContainer.innerHTML = errHtml;
                     }
                 } else if (res.status === 504) {
                     stopTimer();
                     const err = await res.json().catch(() => ({}));
                     const errMsg = err.detail || '요청 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.';
-                    alert('미리보기 시간 초과: ' + errMsg);
+                    showToast('미리보기 시간 초과: ' + errMsg, 'warning');
                     if (manualResultContainer) manualResultContainer.innerHTML = `<div style="color:var(--warning); padding:1rem; font-size:0.85rem;">${errMsg}</div>`;
                 } else {
                     stopTimer();
                     const err = await res.json().catch(() => ({}));
                     const errMsg = (typeof err.detail === 'object' ? JSON.stringify(err.detail) : (err.detail || 'Unknown error'));
-                    alert('Preview error: ' + errMsg);
+                    showToast('미리보기 오류: ' + errMsg, 'error');
                     if (manualResultContainer) manualResultContainer.innerHTML = `<div style="color:red; padding:1rem; font-size:0.8rem;">${errMsg}</div>`;
                 }
             } catch (e) {
@@ -5734,7 +5998,7 @@
                     msg = "서버와 연결할 수 없습니다. 서버가 켜져 있는지 확인하거나 잠시 후 다시 시도해주세요.";
                 }
                 if (!wasManualCancel || seconds >= 125) {
-                    alert('미리보기 실패: ' + msg);
+                    showToast('미리보기 실패: ' + msg, 'error');
                 }
                 if (manualResultContainer) manualResultContainer.innerHTML = `<div style="color:${wasManualCancel && seconds < 125 ? 'var(--text-muted)' : 'red'}; padding:1rem;">${msg}</div>`;
             }
@@ -5880,7 +6144,7 @@
         document.getElementById('preset-editor').style.display = 'block';
         document.getElementById('preset-editor-title').innerText = '새 프리셋 만들기';
         document.getElementById('preset-name-input').value = '';
-        document.getElementById('preset-char-names-input').value = '세무사, 소미, 채범';
+        document.getElementById('preset-char-names-input').value = '';
 
         ['character', 'method', 'style'].forEach(t => {
             const preview = document.getElementById(`ref-preview-${t}`);
@@ -6367,7 +6631,7 @@
                 body: JSON.stringify({ dirname: dirname })
             });
             const data = await res.json();
-            if (!data.success) { alert('불러오기 실패: ' + (data.detail || '')); return; }
+            if (!data.success) { showToast('불러오기 실패: ' + (data.detail || ''), 'error'); return; }
 
             sessionId = data.session_id;
             if (data.story) {
@@ -6393,12 +6657,12 @@
             }
             showToast('프로젝트 "' + data.project_name + '" 불러오기 완료', 'success');
         } catch(e) {
-            alert('불러오기 오류: ' + e.message);
+            showToast('불러오기 오류: ' + e.message, 'error');
         }
     }
 
     async function saveCurrentProject() {
-        if (!sessionId) { alert('저장할 세션이 없습니다.'); return; }
+        if (!sessionId) { showToast('저장할 세션이 없습니다.', 'warning'); return; }
         const name = prompt('프로젝트 이름을 입력하세요:', storyData ? (storyData.title || '') : '');
         if (!name) return;
         try {
@@ -6411,9 +6675,9 @@
             if (data.success) {
                 showToast('프로젝트 저장 완료 (이미지 ' + data.image_count + '개)', 'success');
             } else {
-                alert('저장 실패: ' + (data.detail || ''));
+                showToast('저장 실패: ' + (data.detail || ''), 'error');
             }
-        } catch(e) { alert('저장 오류: ' + e.message); }
+        } catch(e) { showToast('저장 오류: ' + e.message, 'error'); }
     }
 
     async function deleteProject(dirname) {
@@ -6422,7 +6686,7 @@
             await fetch('/api/workflow/project/delete/' + dirname, { method: 'DELETE' });
             showToast('프로젝트 삭제됨', 'info');
             refreshProjectList();
-        } catch(e) { alert('삭제 오류: ' + e.message); }
+        } catch(e) { showToast('삭제 오류: ' + e.message, 'error'); }
     }
 
     </script>

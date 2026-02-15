@@ -23,20 +23,17 @@ class GeminiService:
         settings = get_settings()
         if settings.gemini_api_key:
             genai.configure(api_key=settings.gemini_api_key)
-        self.model = genai.GenerativeModel("gemini-2.0-flash")
+        self.model = genai.GenerativeModel("gemini-3-flash-preview")
 
-    async def detect_field(self, keyword: str, model: str = "gemini-2.0-flash") -> FieldInfo:
+    async def detect_field(self, keyword: str, model: str = "gemini-3-flash-preview") -> FieldInfo:
         """AI를 사용하여 키워드에서 분야, 기준 년도, 법정 검증 필요성 자동 감지 - 모델 fallback 지원"""
         import logging
         import datetime
         logger = logging.getLogger(__name__)
         current_year_str = str(datetime.datetime.now().year)
         
-        # Fallback 모델 순서 정의
+        # Fallback 모델 순서 정의 (3.0 계열만 사용)
         FALLBACK_MODELS = {
-            "gemini-2.0-flash": ["gemini-2.5-flash", "gemini-3-flash-preview"],
-            "gemini-2.5-pro": ["gemini-2.5-flash", "gemini-3-pro-preview"],
-            "gemini-2.5-flash": ["gemini-3-flash-preview"],
             "gemini-3-pro-preview": ["gemini-3-flash-preview"],
             "gemini-3-flash-preview": []
         }
@@ -47,17 +44,18 @@ class GeminiService:
         현재 시각은 {current_year_str}년입니다. 특별한 언급이 없으면 기준 년도는 {current_year_str}년으로 설정하세요.
         
         [분석 항목]
-        1. field: 세무, 법률, 노무, 회계, 부동산정책, 일반 중 하나
-           - 특히 '세금', '절세', '증여', '상속', '공제', '연말정산', '부가세', '종소세' 등 세금 관련 키워드는 반드시 "세무"로 분류하세요.
+        1. field: 세무, 법률, 노무, 회계, 부동산정책, 의학, 금융, 교육, 기술, 일반 중 하나
+           - 키워드의 핵심 주제를 기반으로 가장 적합한 분야를 선택하세요.
         2. target_year: 해당 키워드와 관련된 기준 년도 (예: 2025, 2026). 
            - 키워드에 년도가 명시되어 있으면 그 년도를 따르고, 없으면 현재 년도({current_year_str})를 기본값으로 합니다.
         3. requires_legal_verification: 정확한 법령/규정 확인이 필수적인지 여부 (true/false)
-           - 세금 계산, 법적 절차 등은 반드시 true로 설정
+           - 법률, 세금, 의료 등 정확성이 중요한 분야는 true로 설정
         4. reason: 왜 그렇게 판단했는지에 대한 짧은 근거 (한국어)
         
         [예시]
+        키워드: "건강한 식습관" -> field: "일반", target_year: "{current_year_str}"
+        키워드: "주식 투자 입문" -> field: "금융", target_year: "{current_year_str}"
         키워드: "2025년 상속세 개정안" -> field: "세무", target_year: "2025"
-        키워드: "증여세 절세 방법" -> field: "세무", target_year: "{current_year_str}"
         
         [출력 형식]
         {{
@@ -96,16 +94,13 @@ class GeminiService:
         logger.error(f"[detect_field] 모든 모델 실패")
         return FieldInfo(field=SpecializedField.GENERAL, target_year=current_year_str)
 
-    async def collect_data(self, keyword: str, field_info: FieldInfo, model: str = "gemini-2.0-flash") -> list:
+    async def collect_data(self, keyword: str, field_info: FieldInfo, model: str = "gemini-3-flash-preview") -> list:
         """주제와 관련된 상세 자료 수집 (제목 + 본문) - 모델 fallback 지원"""
         import logging
         logger = logging.getLogger(__name__)
         
-        # Fallback 모델 순서 정의
+        # Fallback 모델 순서 정의 (3.0 계열만 사용)
         FALLBACK_MODELS = {
-            "gemini-2.0-flash": ["gemini-2.5-flash", "gemini-3-flash-preview"],
-            "gemini-2.5-pro": ["gemini-2.5-flash", "gemini-3-pro-preview"],
-            "gemini-2.5-flash": ["gemini-3-flash-preview"],
             "gemini-3-pro-preview": ["gemini-3-flash-preview"],
             "gemini-3-flash-preview": []
         }
@@ -121,7 +116,7 @@ class GeminiService:
         [핵심 지침]
         1. 기준 년도: 무조건 최신 {current_year_str}년 (또는 그 이후) 정보를 기준으로 작성하세요.
            - 사용자가 특정 년도를 명시하지 않았다면, 자동으로 {current_year_str}년 개정 내용을 적용해야 합니다.
-        2. 분야 자동 판단: 키워드를 보고 세무, 법률, 부동산 등 전문 분야라면 해당 전문 지식을 바탕으로 작성하세요.
+        2. 분야 자동 판단: 키워드를 보고 해당 분야의 전문 지식을 바탕으로 작성하세요.
            (입력된 분야 참고: {field_info.field.value}, 기준 년도: {field_info.target_year})
         
         [요청 사항]
@@ -164,19 +159,32 @@ class GeminiService:
         return [{"title": keyword, "content": f"정보를 불러오지 못했습니다. ({last_error}) 다시 시도해 주세요."}]
 
     @staticmethod
-    def _build_character_names_prompt(character_names: str) -> str:
-        """캐릭터 이름 지정 프롬프트 생성"""
+    def _build_character_names_prompt(character_names: str, monologue_mode: bool = False, monologue_character: str = "") -> str:
+        """캐릭터 이름 지정 프롬프트 생성 (독백 모드 지원)"""
         if not character_names or not character_names.strip():
             return ""
         names = [n.strip() for n in character_names.split(",") if n.strip()]
         if not names:
             return ""
-        names_str = ", ".join(names)
-        return (
-            "\n[등장인물 이름 지정 - 필수]\n"
-            f"다음 이름을 반드시 사용하세요. 다른 이름을 만들지 마세요: {names_str}\n"
-            "첫 번째 이름이 메인 역할(전문가)이고, 나머지는 보조 역할입니다.\n"
-        )
+
+        # 독백 모드: 자동 감지 (이름 1개) 또는 명시적 선택
+        is_monologue = monologue_mode or len(names) == 1
+        mono_char = monologue_character.strip() if monologue_character else (names[0] if len(names) == 1 else "")
+
+        if is_monologue and mono_char:
+            return (
+                f"\n[등장인물 - 독백 모드 - 필수]\n"
+                f"캐릭터는 '{mono_char}' 1명만 등장합니다. 다른 캐릭터를 절대 만들지 마세요.\n"
+                f"'{mono_char}'가 시청자(독자)에게 직접 설명하는 1인 독백 형식입니다.\n"
+                f"대화 상대 없이 혼자서 모든 내용을 설명합니다.\n"
+            )
+        else:
+            names_str = ", ".join(names)
+            return (
+                "\n[등장인물 이름 지정 - 필수]\n"
+                f"다음 이름을 반드시 사용하세요. 다른 이름을 만들지 마세요: {names_str}\n"
+                "첫 번째 이름이 메인 역할(전문가)이고, 나머지는 보조 역할입니다.\n"
+            )
 
     async def generate_story(
         self,
@@ -186,8 +194,10 @@ class GeminiService:
         scene_count: int = 8,
         character_settings: Optional[CharacterSettings] = None,
         rule_settings: Optional[RuleSettings] = None,
-        model: str = "gemini-2.0-flash",
-        character_names: str = ""
+        model: str = "gemini-3-flash-preview",
+        character_names: str = "",
+        monologue_mode: bool = False,
+        monologue_character: str = ""
     ) -> Story:
         """규칙 기반 스토리 생성 - 모델 fallback 지원"""
         import logging
@@ -197,22 +207,39 @@ class GeminiService:
             character_settings = CharacterSettings()
         if not rule_settings:
             rule_settings = RuleSettings()
+
+        # 독백 모드 판단: 명시적 활성화 또는 이름 1개
+        char_names_list = [n.strip() for n in character_names.split(",") if n.strip()] if character_names else []
+        is_monologue = monologue_mode or len(char_names_list) == 1
         
-        # Fallback 모델 순서 정의 (사용자 선택 모델 우선)
+        # Fallback 모델 순서 정의 (3.0 계열만 사용)
         FALLBACK_MODELS = {
-            "gemini-2.0-flash": ["gemini-2.5-flash", "gemini-3-flash-preview"],
-            "gemini-2.5-pro": ["gemini-2.5-flash", "gemini-3-pro-preview"],
-            "gemini-2.5-flash": ["gemini-3-flash-preview"],
             "gemini-3-pro-preview": ["gemini-3-flash-preview"],
-            "gemini-3-flash-preview": ["gemini-2.5-flash"]
+            "gemini-3-flash-preview": []
         }
-        models_to_try = [model] + FALLBACK_MODELS.get(model, ["gemini-2.5-flash", "gemini-3-flash-preview"])
+        models_to_try = [model] + FALLBACK_MODELS.get(model, ["gemini-3-flash-preview"])
             
         data_str = "\n".join([f"- {d['title']}: {d['content']}" for d in collected_data])
         
         # 대사 길이 증가 (충분한 설명을 위해)
         max_dialogue = max(rule_settings.max_dialogue_len, 50)
         max_narration = max(rule_settings.max_narration_len, 60)
+        
+        # 독백/대화 모드 분기 텍스트 (f-string 중첩 방지)
+        if is_monologue:
+            structure_text = (
+                "- 캐릭터가 혼자 시청자(독자)에게 직접 설명하는 1인 독백 형식입니다.\n"
+                "- 대화 상대 없이 모든 씬에서 1명의 캐릭터만 등장합니다. 두 번째 캐릭터를 절대 만들지 마세요.\n"
+                '- 각 씬의 대사는 시청자에게 말하듯 자연스럽게 작성하세요. 예: "여러분, 이거 알면 완전 달라져요!"\n'
+                "- 각 씬마다 캐릭터의 감정을 한글로 지정하세요."
+            )
+        else:
+            structure_text = (
+                "- 캐릭터들이 실제 대화하는 형식으로 자연스럽게 설명하세요.\n"
+                "- 각 씬마다 캐릭터의 감정을 한글로 지정하세요 (일반/웃으며/밝게/진지하게/놀라며/화내며/슬프게/걱정하며/당황하며/자신있게/속삭이며/소리치며/궁금해하며/감탄하며/고민하며/장난스럽게/뿌듯하게/차분하게/다급하게/부끄러워하며)."
+            )
+        
+        char_names_prompt = self._build_character_names_prompt(character_names, monologue_mode, monologue_character)
         
         prompt = f"""당신은 전문 웹툰 스토리 작가입니다. 다음 자료를 바탕으로 웹툰 스토리를 작성하세요.
 
@@ -222,12 +249,12 @@ class GeminiService:
 [캐릭터 설정]
 - 질문자 유형: {character_settings.questioner_type}
 - 전문가 유형: {character_settings.expert_type}
-{self._build_character_names_prompt(character_names)}
+{char_names_prompt}
 
 [중요 지침 - 대화 품질]
 1. **전문가 대사는 충분히 설명해야 합니다!** 
-   - "연 4.6% 이자가 법정." (X) → 너무 짧음
-   - "연 4.6% 이율로 이자를 지급해야 증여로 보지 않아요." (O) → 적절함
+   - "그건 안 돼요." (X) → 너무 짧음
+   - "그 방법은 이런 이유로 효과적이에요. 구체적으로 설명해 드릴게요." (O) → 적절함
 2. 질문자는 짧게, 전문가는 충분히 설명하는 형태로 작성하세요.
 3. 내용이 많으면 2~3개 씬에 나눠서 설명해도 됩니다. 억지로 한 씬에 압축하지 마세요.
 
@@ -240,7 +267,7 @@ class GeminiService:
 [표지 씬 — 반드시 scene_number: 0으로 생성]
 - 표지(썸네일)는 scene_number를 반드시 0으로 설정하세요.
 - 주인공(첫 번째 캐릭터) 1명만 등장합니다.
-- 대사는 딱 1개: 전체 스토리를 대변하는 임팩트 있고 호기심을 유발하는 한 마디 (예: "종합소득세, 사실 어렵지 않습니다!", "이거 모르면 세금 폭탄 맞습니다")
+- 대사는 딱 1개: 전체 스토리를 대변하는 임팩트 있고 호기심을 유발하는 한 마디 (예: "이거 알면 인생이 달라져요!", "모르면 손해! 지금 알려드릴게요")
 - 나레이션은 없습니다.
 - image_prompt: 주인공을 중심으로 한 시선을 끄는 포즈. 정면 또는 약간 측면 앵글. 배경은 주제와 어울리는 심플한 배경. 미디엄 샷 또는 클로즈업.
 - 표정과 감정은 스토리 주제에 맞게 자유롭게 선택 (놀란, 궁금한, 자신감 있는, 당황한, 진지한 등 — 주제가 충격적이면 놀란 표정, 꿀팁이면 자신감, 경고성이면 걱정 등)
@@ -248,13 +275,12 @@ class GeminiService:
 
 [지침 - 나레이션 스타일]
 - 나레이션은 완전한 문장보다는 '핵심 요약 스타일'(개조식, 명사형 종결)로 작성하세요.
-- 예시: "단순히 차용증만으로는 부족했습니다." (X) -> "단순히 차용증만으로는 부족." (O)
-- 예시: "실제 상환 내역이 중요합니다." (X) -> "실제 상환 내역이 중요." (O)
+- 예시: "이것만으로는 충분하지 않았습니다." (X) -> "이것만으로는 부족." (O)
+- 예시: "핵심 포인트를 기억해야 합니다." (X) -> "핵심 포인트 기억." (O)
 - 군더더기 없는 짧고 간결한 문체를 사용하세요.
 
 [필수 구조]
-- 캐릭터들이 실제 대화하는 형식으로 자연스럽게 설명하세요.
-- 각 씬마다 캐릭터의 감정을 한글로 지정하세요 (일반/웃으며/밝게/진지하게/놀라며/화내며/슬프게/걱정하며/당황하며/자신있게/속삭이며/소리치며/궁금해하며/감탄하며/고민하며/장난스럽게/뿌듯하게/차분하게/다급하게/부끄러워하며).
+{structure_text}
 - 전문적인 내용도 이해하기 쉽게 풀어서 설명하세요.
 
 [이미지 프롬프트 — 매우 중요]
@@ -273,12 +299,12 @@ image_prompt 작성 규칙:
 9. **80~150자** 범위로 작성
 
 image_prompt 좋은 예시:
-- "웹툰 스타일. 밝은 사무실 내부. 세무사가 책상 앞에 앉아 서류를 펼치며 설명하고 있다. 맞은편에 젊은 여성이 걱정스러운 표정으로 앉아 있다. 책상 위에 계산기와 서류가 놓여 있다. 형광등 조명, 미디엄 샷."
+- "웹툰 스타일. 밝은 사무실 내부. 전문가가 책상 앞에 앉아 서류를 펼치며 설명하고 있다. 맞은편에 젊은 여성이 궁금한 표정으로 앉아 있다. 책상 위에 노트북과 서류가 놓여 있다. 형광등 조명, 미디엄 샷."
 - "웹툰 스타일. 카페 내부, 따뜻한 조명. 두 사람이 마주 앉아 대화 중. 전문가는 자신감 있는 미소로 손으로 제스처를 하고, 질문자는 고개를 갸웃하며 궁금해하는 표정. 배경에 커피잔과 창밖 풍경. 미디엄 와이드 샷."
 
 image_prompt 나쁜 예시:
-- "세무사가 설명합니다" (X — 너무 짧고 시각 정보 없음)
-- "세무사: '이자율은 4.6%입니다'" (X — 대사가 포함됨)
+- "전문가가 설명합니다" (X — 너무 짧고 시각 정보 없음)
+- "전문가: '이 방법이 좋습니다'" (X — 대사가 포함됨)
 
 [캐릭터 외모 — 매우 중요]
 각 캐릭터에 대해 visual_identity를 반드시 포함하세요.
@@ -546,7 +572,7 @@ image_prompt 나쁜 예시:
 
         # Fallback 모델 순서 (사용자 요청: 3.0 Pro 등 고성능 모델 전용)
         # model_list.txt 확인 결과 1.5-pro는 없음. 2.5-pro 사용.
-        models_to_try = ["gemini-3-pro-preview", "gemini-2.5-pro", "gemini-2.0-flash"]
+        models_to_try = ["gemini-3-pro-preview", "gemini-3-flash-preview"]
 
         for try_model in models_to_try:
             try:

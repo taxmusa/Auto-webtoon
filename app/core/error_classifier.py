@@ -150,40 +150,6 @@ def classify_openai_error(e: Exception) -> DiagnosticError:
     )
 
 
-def classify_fal_error(e: Exception) -> DiagnosticError:
-    """fal.ai API 에러 분류"""
-    msg = str(e).lower()
-
-    if "unauthorized" in msg or "invalid" in msg or "401" in msg:
-        return DiagnosticError(
-            ErrorType.AUTH_INVALID, "fal.ai",
-            "fal.ai API 키가 유효하지 않습니다.",
-            "설정 → AI API 키에서 FAL_KEY를 확인하세요.",
-            "/settings",
-            detail=str(e)[:200],
-        )
-    if "insufficient" in msg or "402" in msg or "credit" in msg:
-        return DiagnosticError(
-            ErrorType.CREDITS_EXHAUSTED, "fal.ai",
-            "fal.ai 크레딧이 부족합니다.",
-            "fal.ai 대시보드에서 크레딧을 충전하세요.",
-            detail=str(e)[:200],
-        )
-    if isinstance(e, (ConnectionError, TimeoutError)) or "timeout" in msg:
-        return DiagnosticError(
-            ErrorType.NETWORK, "fal.ai",
-            "fal.ai 서버에 연결할 수 없습니다.",
-            "인터넷 연결을 확인하세요.",
-            detail=str(e)[:200],
-        )
-    return DiagnosticError(
-        ErrorType.UNKNOWN, "fal.ai",
-        "fal.ai에서 오류가 발생했습니다.",
-        "에러 상세를 확인하고 다시 시도하세요.",
-        detail=str(e)[:300],
-    )
-
-
 def classify_instagram_error(e: Exception, error_data: dict = None) -> DiagnosticError:
     """Instagram Graph API 에러 분류"""
     msg = str(e).lower()

@@ -4,6 +4,7 @@
 """
 from app.models.models import Scene, CharacterProfile, CharacterStyle, BackgroundStyle, ManualPromptOverrides, VisualIdentity
 from typing import List, Optional
+from app.services.prompt_rules import clean_scene_description as _clean_scene_desc
 
 # ==========================================
 # SUB_STYLES DEFINITION (정책: STYLE_CONSISTENCY_POLICY.md §5)
@@ -317,7 +318,9 @@ Characters in this scene:
     # 3. [RULES] — 금지 사항 (간결하게)
     # =====================================================
     parts.append("""[RULES]
-- Generate a SINGLE scene illustration. Do NOT split into multiple panels or comic grid.
+- Generate exactly ONE single-scene illustration with ONE composition.
+- Do NOT repeat or duplicate the character. Do NOT create a character sheet, turnaround, or multiple views.
+- No grids, no multi-panel layouts, no tiled images.
 - No text, letters, numbers, logos, watermarks, UI elements in the image.
 - No speech bubbles or dialogue boxes.
 - Show characters fully — do not crop heads or bodies out of frame.
@@ -333,112 +336,6 @@ Characters in this scene:
 """)
 
     return "\n".join(parts)
-
-
-# ==========================================
-# Flux Kontext 프롬프트 최적화
-# ==========================================
-
-def _extract_section(full_prompt: str, section_name: str) -> str:
-    """프롬프트에서 특정 섹션의 핵심 내용만 추출 (메타/지시문 제외, 순수 내용만)
-    
-    ★ 필터링 규칙:
-    - [헤더], CRITICAL, GUARD, FROZEN, DO NOT, MUST, VERIFY 등 지시문 제거
-    - "This is", "The following" 같은 메타 설명 제거
-    - 순수 스타일/내용 설명만 추출
-    """
-    if section_name not in full_prompt:
-        return ""
-    start = full_prompt.index(section_name)
-    header_end = full_prompt.find("\n", start)
-    if header_end == -1:
-        return ""
-    rest = full_prompt[header_end + 1:]
-    end_idx = rest.find("\n[")
-    block = rest[:end_idx] if end_idx != -1 else rest[:500]
-    
-    # 지시문·메타 키워드 필터
-    _SKIP_KEYWORDS = {
-        "CRITICAL", "GUARD", "DO NOT", "FROZEN", "MUST", "VERIFY", "LOCKED",
-        "ABSOLUTE", "HIGHEST PRIORITY", "NON-NEGOTIABLE", "This is a MULTI",
-        "The following", "Before generating", "If a character", "If you are",
-        "maintain this", "consistency is", "Any deviation",
-        "✓", "- If", "check:", "rules:", "MANDATORY",
-    }
-    
-    lines = []
-    for l in block.split("\n"):
-        stripped = l.strip()
-        if not stripped:
-            continue
-        if stripped.startswith("[") or stripped.startswith("-"):
-            continue
-        # 지시문 키워드 포함 줄 스킵
-        upper = stripped.upper()
-        if any(kw.upper() in upper for kw in _SKIP_KEYWORDS):
-            continue
-        lines.append(stripped)
-    
-    return " ".join(lines[:3])
-
-
-def _build_character_anchor(characters, active_chars=None) -> str:
-    """캐릭터 외모의 핵심 속성만 초단문으로 추출 (Flux용)
-    
-    ★ 보안 설계: 안경은 명시적으로 2회 언급 (Flux가 높은 확률로 무시하므로)
-    예: "Minsu: dark brown short hair, fair skin, no glasses, beige sweater"
-    """
-    anchors = []
-    chars = active_chars or characters[:2]
-    for char in chars:
-        vi = char.visual_identity
-        if not vi:
-            continue
-        parts = []
-        # 머리 (가장 중요한 시각 속성)
-        if vi.hair_color and vi.hair_style:
-            parts.append(f"{vi.hair_color} {vi.hair_style}")
-        elif vi.hair_style:
-            parts.append(vi.hair_style)
-        # 성별/나이 (화풍에 영향)
-        if vi.gender:
-            parts.append(vi.gender)
-        # 피부
-        if vi.skin_tone:
-            parts.append(f"{vi.skin_tone} skin")
-        # 안경 (★ 명시적 강조 — Flux가 무시하기 쉬움)
-        glasses = (vi.glasses or "").strip().lower()
-        if not glasses or glasses == "none" or "no glass" in glasses:
-            parts.append("without glasses")
-            parts.append("bare eyes")  # 이중 강조
-        else:
-            parts.append(glasses)
-        # 옷 (핵심만)
-        if vi.outfit:
-            outfit_short = vi.outfit[:50].strip()
-            parts.append(outfit_short)
-        
-        if parts:
-            anchors.append(f"{char.name}: {', '.join(parts)}")
-    
-    return "; ".join(anchors)
-
-
-# 모든 Flux 프롬프트에 포함되는 절대 금지 (간결하지만 강력)
-_FLUX_ANTI_TEXT_PREFIX = (
-    "No text, no speech bubbles, no words, no letters, "
-    "no logos, no watermarks, no writing, no symbols, no marks, no icons. "
-    "Pure illustration only. "
-)
-
-# 마스터 규칙 import (씬 설명 정제)
-from app.services.prompt_rules import clean_scene_description as _clean_scene_desc
-
-# 레이아웃 지시 (간결)
-_FLUX_LAYOUT_SUFFIX = (
-    "Leave top 25% of image empty for text overlay. "
-    "Characters in lower-center, medium shot, not filling the frame. "
-)
 
 
 def build_character_reference_prompt(
@@ -522,108 +419,6 @@ def build_character_reference_prompt(
     return " ".join(parts)
 
 
-def optimize_for_flux_kontext(full_prompt: str, scene_description: str = "", 
-                               is_reference: bool = False,
-                               characters=None) -> str:
-    """Flux에 최적화된 프롬프트 생성
-    
-    ★ 핵심 설계 원칙 (CRS 참조 방식 v4):
-    
-    [text2img 모드 - CRS 없을 때 폴백]:
-      1. 아트 스타일 → 맨 앞 (스타일 확립)
-      2. 씬 설명 (캐릭터+장면 확립)
-      3. 캐릭터 앵커
-    
-    [img2img 모드 - 모든 씬 (CRS 참조)]:
-      1. ★ 씬 설명이 최우선! (CRS가 캐릭터를 유지하니까)
-      2. 아트 스타일
-      3. 캐릭터 외모 유지 지시 (간결하게)
-      → 프롬프트 = "무엇을 그릴 것인가" 에 집중
-    """
-    parts = []
-    
-    # ★ 씬 설명 정제 — 대사/텍스트/숫자 제거 (마스터 규칙)
-    scene_description = _clean_scene_desc(scene_description) if scene_description else ""
-    
-    # 공통: 아트 스타일 추출
-    style_text = _extract_section(full_prompt, "[GLOBAL ART STYLE")
-    sub_text = _extract_section(full_prompt, "[RENDERING STYLE")
-    bg_text = _extract_section(full_prompt, "[BACKGROUND STYLE")
-    char_anchor = _build_character_anchor(characters) if characters else ""
-    
-    # ── 배경 일관성 강제 ──
-    _DEFAULT_BG = "Clean, well-lit modern indoor room background with neutral warm tones"
-    effective_bg = bg_text if bg_text else _DEFAULT_BG
-    
-    if is_reference:
-        # ═══════════════════════════════════════════
-        # IMG2IMG 모드 (모든 씬, CRS 참조):
-        # CRS가 캐릭터 외모를 유지하므로,
-        # 프롬프트는 "이번 씬에서 무엇이 일어나는가"에 집중
-        # ═══════════════════════════════════════════
-        
-        # ── 1. 씬 설명 = 프롬프트 최상단 (가장 중요!) ──
-        if scene_description:
-            parts.append(f"NEW SCENE: {scene_description[:300]}.")
-        
-        # ── 2. 장면 변경 강제 지시 ──
-        parts.append(
-            "Draw a COMPLETELY DIFFERENT scene from the reference image. "
-            "MUST CHANGE: pose, body position, camera angle, background, scene composition. "
-            "The reference is ONLY for character face and outfit — ignore everything else."
-        )
-        
-        # ── 3. 아트 스타일 (간결하게) ──
-        if style_text:
-            parts.append(f"Style: {style_text[:150]}.")
-        
-        # ── 4. 캐릭터 외모 유지 (CRS 기반, 간결하게) ──
-        parts.append(
-            "Keep character appearances from reference: same face, hair, skin, outfit."
-        )
-        
-        # ── 5. 배경 일관성 ──
-        parts.append(f"Background: {effective_bg}.")
-        
-        # ── 6. 금지사항 ──
-        parts.append("No text, no speech bubbles, no logos.")
-        
-    else:
-        # ═══════════════════════════════════════════
-        # TEXT2IMG 모드 (씬 1): 기준 캐릭터 + 스타일 확립
-        # ═══════════════════════════════════════════
-        
-        # ── 1. 아트 스타일 (맨 앞, 전체 길이) ──
-        if style_text:
-            parts.append(f"Art style: {style_text}.")
-        
-        if sub_text:
-            parts.append(sub_text[:150])
-        
-        # ── 2. 씬 설명 ──
-        if scene_description:
-            parts.append(f"Scene: {scene_description[:250]}.")
-        
-        # ── 3. 텍스트/로고 금지 ──
-        parts.append("No text, no speech bubbles, no logos, no watermarks. Pure illustration.")
-        
-        # ── 4. 캐릭터 앵커 ──
-        if char_anchor:
-            parts.append(f"Characters: {char_anchor}.")
-        
-        # ── 5. 배경 (일관성 강제) ──
-        parts.append(f"Background: {effective_bg[:80]}.")
-    
-    # 공통: 레이아웃
-    parts.append(_FLUX_LAYOUT_SUFFIX)
-    parts.append("No glasses unless specified.")
-    
-    return " ".join(parts)
-
-
-# (optimize_for_flux_lora 함수 제거됨 — LoRA 기능 삭제)
-
-
 # ==========================================
 # 씬 체이닝 유틸리티
 # ==========================================
@@ -667,7 +462,7 @@ def build_reference_prompt_instructions(
     has_method: bool = False,
     has_style: bool = False,
 ) -> str:
-    """3종 레퍼런스 존재 여부에 따른 프롬프트 지시문 생성 (Flux용 텍스트 지시)"""
+    """3종 레퍼런스 존재 여부에 따른 프롬프트 지시문 생성"""
     if not any([has_character, has_method, has_style]):
         return ""
 

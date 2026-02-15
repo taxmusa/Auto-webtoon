@@ -17,7 +17,6 @@ class Settings(BaseSettings):
     # AI API 키
     openai_api_key: Optional[str] = Field(default=None, alias="OPENAI_API_KEY")
     gemini_api_key: Optional[str] = Field(default=None, alias="GEMINI_API_KEY")
-    fal_key: Optional[str] = Field(default=None, alias="FAL_KEY")
     
     # 이미지 호스팅 - Cloudinary
     cloudinary_cloud_name: Optional[str] = Field(default=None, alias="CLOUDINARY_CLOUD_NAME")
@@ -34,8 +33,8 @@ class Settings(BaseSettings):
         return v.strip() if v and isinstance(v, str) else v
     
     # 기본 설정
-    default_ai_model: str = "gemini-2.5-flash"
-    default_image_model: str = "dall-e-3"
+    default_ai_model: str = "gemini-3-flash-preview"
+    default_image_model: str = "nano-banana-pro"
     max_scenes_per_series: int = 10
     
     # 폰트 경로
@@ -76,6 +75,7 @@ CHARACTER_DESCRIPTIONS = {
     "일반인": "young korean person, casual attire, friendly expression, confused or curious look",
     "사업자": "korean business owner in their 30s-40s, semi-formal attire, thoughtful expression",
     "직장인": "korean office worker in business casual, tired but attentive expression",
+    "전문가": "korean professional in smart casual attire, confident and knowledgeable expression",
     "세무사": "middle-aged korean professional, glasses, neat suit, kind and knowledgeable appearance",
     "변호사": "korean lawyer in formal suit, confident and professional expression",
     "노무사": "korean labor consultant, smart casual attire, approachable expression",

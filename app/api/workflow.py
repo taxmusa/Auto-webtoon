@@ -1,6 +1,6 @@
 """
 워크플로우 API 라우터
-세무 웹툰 생성 전체 흐름 관리
+웹툰 생성 전체 흐름 관리
 """
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
@@ -39,48 +39,10 @@ stop_signals: dict[str, bool] = {}
 
 
 def _resolve_api_key(model_name: str) -> str:
-    """모델명에 따라 적절한 API 키를 반환하는 헬퍼"""
+    """Gemini API 키를 반환하는 헬퍼"""
     from app.core.config import get_settings
     settings = get_settings()
-    if "flux" in model_name:
-        return settings.fal_key or ""
-    elif "gpt" in model_name or "dall-e" in model_name:
-        return settings.openai_api_key or ""
-    else:
-        return settings.gemini_api_key or ""
-
-
-async def _translate_scenes_to_english(scenes):
-    """Flux 모델용: 모든 씬의 한국어 설명을 영어로 일괄 번역.
-    
-    SmartTranslator를 사용하여 캐시/사전/AI 3단계로 번역.
-    캐시 누적으로 같은 표현은 다시 AI를 호출하지 않음.
-    """
-    import re
-
-    # 한국어 포함 씬만 수집
-    korean_scenes = []
-    for s in scenes:
-        if re.search(r'[\uac00-\ud7af]', s.scene_description or ''):
-            korean_scenes.append(s)
-    
-    if not korean_scenes:
-        return  # 이미 전부 영어
-
-    try:
-        from app.services.smart_translator import translate_prompts_batch
-        
-        texts = [s.scene_description for s in korean_scenes]
-        translated = translate_prompts_batch(texts)
-        
-        for s, t in zip(korean_scenes, translated):
-            if t and len(t) > 5:
-                s.scene_description = t
-        
-        logger.info(f"[번역] {len(korean_scenes)}개 씬 설명 한→영 번역 완료 (SmartTranslator)")
-
-    except Exception as e:
-        logger.warning(f"[번역] 씬 일괄 번역 실패 (개별 번역으로 폴백): {e}")
+    return settings.gemini_api_key or ""
 
 
 # ============================================
@@ -90,7 +52,7 @@ async def _translate_scenes_to_english(scenes):
 class StartWorkflowRequest(BaseModel):
     mode: str = "auto"  # auto | manual
     keyword: Optional[str] = None
-    model: str = "gemini-3.0-flash"
+    model: str = "gemini-3-flash-preview"
 
 
 class StartWorkflowResponse(BaseModel):
@@ -105,9 +67,11 @@ class GenerateStoryRequest(BaseModel):
     questioner_type: str = "curious_beginner"
     expert_type: str = "friendly_expert"
     scene_count: int = 8
-    model: str = "gemini-2.0-flash"
+    model: str = "gemini-3-flash-preview"
     character_names: str = ""  # 쉼표 구분 등장인물 이름 (빈 문자열이면 AI 자동 생성)
     collected_data: Optional[List[dict]] = None  # 프론트엔드에서 수정된 수집 데이터
+    monologue_mode: bool = False  # 독백 모드 (1인 캐릭터만 등장)
+    monologue_character: str = ""  # 독백 시 사용할 캐릭터 이름
 
 
 class UpdateSceneRequest(BaseModel):
@@ -243,7 +207,9 @@ async def generate_story(request: GenerateStoryRequest):
             character_settings=character_settings,
             rule_settings=rule_settings,
             model=request.model,
-            character_names=request.character_names
+            character_names=request.character_names,
+            monologue_mode=request.monologue_mode,
+            monologue_character=request.monologue_character
         )
         
         if not story:
@@ -314,10 +280,57 @@ async def update_scene(request: UpdateSceneRequest):
         raise HTTPException(status_code=500, detail=f"씬 수정 실패: {str(e)}")
 
 
+class BulkUpdateScenesRequest(BaseModel):
+    session_id: str
+    scenes: List[dict]  # [{scene_number, scene_description, image_prompt, dialogues, narration}, ...]
+
+
+@router.post("/update-scenes-bulk")
+async def update_scenes_bulk(request: BulkUpdateScenesRequest):
+    """씬 일괄 수정 — 프론트엔드에서 편집한 모든 씬을 한 번에 동기화"""
+    session = sessions.get(request.session_id)
+    if not session or not session.story:
+        raise HTTPException(status_code=404, detail="Session or story not found")
+    
+    try:
+        updated_count = 0
+        for scene_data in request.scenes:
+            sn = scene_data.get("scene_number")
+            if sn is None:
+                continue
+            for scene in session.story.scenes:
+                if scene.scene_number == sn:
+                    if "scene_description" in scene_data and scene_data["scene_description"]:
+                        scene.scene_description = scene_data["scene_description"]
+                    if "image_prompt" in scene_data and scene_data["image_prompt"] is not None:
+                        scene.image_prompt = scene_data["image_prompt"]
+                    if "dialogues" in scene_data and scene_data["dialogues"]:
+                        from app.models.models import Dialogue
+                        scene.dialogues = [
+                            Dialogue(
+                                character=d.get("character", ""),
+                                text=d.get("text", ""),
+                                emotion=d.get("emotion", None)
+                            )
+                            for d in scene_data["dialogues"]
+                        ]
+                    if "narration" in scene_data and scene_data["narration"] is not None:
+                        scene.narration = scene_data["narration"]
+                    scene.status = "approved"
+                    updated_count += 1
+                    break
+        
+        logger.info(f"[update-scenes-bulk] 세션 {request.session_id}: {updated_count}개 씬 일괄 업데이트 완료")
+        return {"success": True, "updated_count": updated_count}
+    except Exception as e:
+        logger.error(f"[update-scenes-bulk] 일괄 수정 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"씬 일괄 수정 실패: {str(e)}")
+
+
 class RegenerateImagePromptRequest(BaseModel):
     session_id: str
     scene_number: int
-    model: str = "gemini-2.0-flash"
+    model: str = "gemini-3-flash-preview"
 
 
 @router.post("/regenerate-image-prompt")
@@ -449,33 +462,14 @@ async def generate_preview(request: GeneratePreviewRequest):
             sub_style_name=request.sub_style
         )
         
-        # ★ Flux 모델 선택 시 프롬프트 최적화 적용
-        is_flux = "flux" in (request.model or "").lower()
-        if is_flux:
-            from app.services.prompt_builder import optimize_for_flux_kontext
-            # image_prompt가 있으면 우선 사용 (시각 묘사 전용)
-            _scene_desc_for_flux = target_scene.image_prompt or target_scene.scene_description
-            prompt = optimize_for_flux_kontext(
-                prompt,
-                scene_description=_scene_desc_for_flux,
-                is_reference=False,
-                characters=characters
-            )
-            logger.info(f"[PREVIEW] Flux 최적화 적용됨 → {len(prompt)}자")
-        
         api_key = _resolve_api_key(request.model)
         generator = get_generator(request.model, api_key)
 
         print(f"[PREVIEW] model={request.model}, prompt_len={len(prompt)}자, api_key={'SET' if api_key else 'MISSING'}")
         logger.info(f"미리보기 생성 시작 (model={request.model}, prompt_len={len(prompt)}자)")
         
-        seed = None
-        if is_flux:
-            import random
-            seed = random.randint(1, 2**31 - 1)
-        
         image_data = await asyncio.wait_for(
-            generator.generate(prompt, size="1024x1024", quality="standard", seed=seed),
+            generator.generate(prompt, size="1024x1024", quality="standard"),
             timeout=95.0
         )
 
@@ -517,7 +511,6 @@ async def generate_images(request: GenerateImagesRequest):
         session.settings.image.manual_overrides = ManualPromptOverrides(**request.manual_overrides)
 
     import asyncio
-    import random
         
     # Load styles
     char_style = get_character_style(request.character_style_id) if request.character_style_id else None
@@ -525,32 +518,11 @@ async def generate_images(request: GenerateImagesRequest):
     overrides = session.settings.image.manual_overrides
     sub_style = request.sub_style
 
-    # Select generator — 모델별 API 키 자동 선택
+    # Select generator — API 키 자동 선택
     api_key = _resolve_api_key(request.model)
     generator = get_generator(request.model, api_key)
     
-    # Flux Kontext 여부 판별 (참조 이미지 기반 일관성)
-    is_flux_kontext = "flux-kontext" in request.model
-    
     generated_images = []
-    
-    # Flux 모델: 세션당 기본 seed 생성 (캐릭터 일관성 + 씬별 변형)
-    is_flux = "flux" in request.model
-    if is_flux:
-        # 기존 세션에 seed가 있으면 재사용, 없으면 새로 생성
-        if session.settings.image.flux_seed:
-            base_seed = session.settings.image.flux_seed
-            logger.info(f"[Flux] 기존 세션 base_seed 재사용: {base_seed}")
-        else:
-            base_seed = random.randint(1, 2**31 - 100000)  # 씬 오프셋 여유
-            session.settings.image.flux_seed = base_seed
-            logger.info(f"[Flux] 새 세션 base_seed 생성: {base_seed}")
-    else:
-        base_seed = None
-    
-    # Flux 모델이면 씬 설명을 미리 영어로 번역 (한 번만)
-    if is_flux and session.story and session.story.scenes:
-        await _translate_scenes_to_english(session.story.scenes)
     
     # ★★★ 씬 설명 전처리: 숫자/인포그래픽 → 시각적 비유 변환 ★★★
     # "1.5억 증여" 같은 텍스트를 AI가 깨진 글자로 그리지 않도록
@@ -565,9 +537,8 @@ async def generate_images(request: GenerateImagesRequest):
         except Exception as pp_err:
             logger.warning(f"[전처리] 씬 설명 전처리 실패, 원본 유지: {pp_err}")
 
-    # ★★★ 3종 레퍼런스 이미지 로드 + CRS 폴백 ★★★
-    # 1. 사용자가 설정한 Character/Method/Style 레퍼런스를 로드
-    # 2. Character.jpg가 없으면 기존 CRS 자동 생성으로 폴백
+    # ★★★ 3종 레퍼런스 이미지 로드 ★★★
+    # 사용자가 설정한 Character/Method/Style 레퍼런스를 로드
     from app.services.reference_service import ReferenceService
     from app.services.prompt_builder import build_scene_chaining_context
     
@@ -588,39 +559,6 @@ async def generate_images(request: GenerateImagesRequest):
     model_lower = request.model.lower() if request.model else ""
     is_gemini = any(k in model_lower for k in ["gemini", "nano-banana"])
     
-    # Character.jpg 없으면 기존 CRS 자동 생성 (Flux 계열만)
-    if not character_ref_bytes and (is_flux or is_flux_kontext):
-        try:
-            from app.services.prompt_builder import build_character_reference_prompt
-            
-            ref_prompt = build_character_reference_prompt(
-                characters=session.story.characters,
-                character_style=char_style,
-                sub_style_name=sub_style
-            )
-            
-            ref_seed = base_seed if base_seed else None
-            size = "1024x1536" if request.aspect_ratio in ("4:5", "9:16") else "1024x1024"
-            
-            logger.info("[레퍼런스] Character.jpg 없음 → CRS 자동 생성으로 폴백...")
-            character_ref_bytes = await generator.generate(
-                ref_prompt, reference_images=None, size=size, seed=ref_seed
-            )
-            
-            if isinstance(character_ref_bytes, bytes):
-                ref_path = os.path.join("output", f"character_ref_{session.session_id[:8]}.png")
-                os.makedirs("output", exist_ok=True)
-                with open(ref_path, "wb") as f:
-                    f.write(character_ref_bytes)
-                logger.info(f"[레퍼런스] CRS 자동 생성 저장: {ref_path}")
-            else:
-                character_ref_bytes = None
-                logger.warning("[레퍼런스] CRS 자동 생성 실패 — text2img 폴백")
-                
-        except Exception as ref_err:
-            logger.warning(f"[레퍼런스] CRS 자동 생성 실패, text2img 폴백: {ref_err}")
-            character_ref_bytes = None
-
     # 레퍼런스 상태 로그
     ref_status = []
     if character_ref_bytes: ref_status.append("Character")
@@ -639,19 +577,14 @@ async def generate_images(request: GenerateImagesRequest):
         if style_ref_bytes:
             style_ref_bytes = PILImg.open(BIO(style_ref_bytes))
 
-    async def generate_single_scene(scene, scene_seed=None, ref_image_bytes=None,
+    # ★ 속도 최적화: 루프 밖에서 1회만 계산
+    scene_size = "1024x1536" if request.aspect_ratio in ("4:5", "9:16") else "1024x1024"
+    os.makedirs("output", exist_ok=True)
+    async def generate_single_scene(scene, ref_image_bytes=None,
                                      method_bytes=None, style_bytes=None,
                                      prev_scene_image=None, prev_scene_summaries=None):
-        """단일 씬 이미지 생성 — 3종 레퍼런스 + 씬 체이닝 지원
-        
-        모델별 레퍼런스 사용:
-        - Gemini: 3종 레퍼런스 + 이전 씬 → contents에 모두 전달
-        - Flux Kontext: Character.jpg → img2img CRS
-        - DALL-E: 프롬프트만 (이미지 참조 불가)
-        """
+        """단일 씬 이미지 생성 — 3종 레퍼런스 + 씬 체이닝 지원"""
         try:
-            from app.services.prompt_builder import optimize_for_flux_kontext
-            
             prompt = build_styled_prompt(
                 scene=scene,
                 characters=session.story.characters,
@@ -661,68 +594,34 @@ async def generate_images(request: GenerateImagesRequest):
                 sub_style_name=sub_style
             )
             
-            size = "1024x1536" if request.aspect_ratio in ("4:5", "9:16") else "1024x1024"
+            size = scene_size
             
-            # ★ 모델별 분기
-            if is_gemini:
-                # Gemini: 3종 레퍼런스 + 이전 씬 체이닝을 모두 활용
-                # 일관성 체이닝: prev_scene_number 전달하여 라벨에 장면 번호 포함
-                _prev_sn = scene.scene_number - 1 if prev_scene_image else None
-                image_data = await generator.generate(
-                    prompt,
-                    reference_images=[ref_image_bytes] if ref_image_bytes else None,
-                    size=size,
-                    seed=scene_seed,
-                    method_image=method_bytes,
-                    style_image=style_bytes,
-                    prev_scene_image=prev_scene_image,
-                    prev_scene_summaries=prev_scene_summaries,
-                    prev_scene_number=_prev_sn
-                )
-                ref_count = sum(1 for x in [ref_image_bytes, method_bytes, style_bytes] if x)
-                logger.info(f"[Gemini] 씬 {scene.scene_number}: {ref_count}종 레퍼런스"
-                            f"{' + 씬체이닝' if prev_scene_image else ''}")
+            # Gemini: 3종 레퍼런스 + 이전 씬 체이닝을 모두 활용
+            # 일관성 체이닝: prev_scene_number 전달하여 라벨에 장면 번호 포함
+            _prev_sn = scene.scene_number - 1 if prev_scene_image else None
+            image_data = await generator.generate(
+                prompt,
+                reference_images=[ref_image_bytes] if ref_image_bytes else None,
+                size=size,
+                method_image=method_bytes,
+                style_image=style_bytes,
+                prev_scene_image=prev_scene_image,
+                prev_scene_summaries=prev_scene_summaries,
+                prev_scene_number=_prev_sn
+            )
+            ref_count = sum(1 for x in [ref_image_bytes, method_bytes, style_bytes] if x)
+            logger.info(f"[Gemini] 씬 {scene.scene_number}: {ref_count}종 레퍼런스"
+                        f"{' + 씬체이닝' if prev_scene_image else ''}")
             
-            elif is_flux_kontext or is_flux:
-                # Flux: 프롬프트 최적화 + Character CRS img2img
-                # image_prompt가 있으면 우선 사용 (시각 묘사 전용)
-                _scene_desc_flux = getattr(scene, 'image_prompt', None) or scene.scene_description
-                prompt = optimize_for_flux_kontext(
-                    prompt,
-                    scene_description=_scene_desc_flux,
-                    is_reference=(ref_image_bytes is not None),
-                    characters=session.story.characters
-                )
-                
-                if ref_image_bytes:
-                    image_data = await generator.generate(
-                        prompt,
-                        reference_images=[ref_image_bytes],
-                        size=size,
-                        seed=scene_seed
-                    )
-                    logger.info(f"[Flux] 씬 {scene.scene_number}: img2img (Character 참조)")
-                else:
-                    image_data = await generator.generate(
-                        prompt, reference_images=None, size=size, seed=scene_seed
-                    )
-                    logger.info(f"[Flux] 씬 {scene.scene_number}: text2img (독립 생성)")
-            
-            else:
-                # DALL-E 등: 프롬프트만 사용
-                image_data = await generator.generate(
-                    prompt, reference_images=None, size=size, seed=scene_seed
-                )
-                logger.info(f"[기타] 씬 {scene.scene_number}: text2img")
-            
-            # 파일 저장
+            # 파일 저장 (비동기 I/O)
             filename = f"scene_{scene.scene_number}_{uuid.uuid4().hex[:6]}.png"
             filepath = os.path.join("output", filename)
-            os.makedirs("output", exist_ok=True)
             
             if isinstance(image_data, bytes):
-                with open(filepath, "wb") as f:
-                    f.write(image_data)
+                def _save_file():
+                    with open(filepath, "wb") as f:
+                        f.write(image_data)
+                await asyncio.to_thread(_save_file)
             
             return {
                 "scene_number": scene.scene_number,
@@ -742,10 +641,8 @@ async def generate_images(request: GenerateImagesRequest):
 
     # ★★★ 레퍼런스 + 씬 체이닝 통합 생성 루프 ★★★
     #
-    # [모델별 전략]
+    # [전략]
     #   Gemini: 3종 레퍼런스 + 이전 씬 이미지/요약 → 최고 일관성
-    #   Flux Kontext: Character CRS → img2img → 캐릭터 일관성
-    #   DALL-E: 프롬프트만 → 텍스트 기반 일관성
     #
     # [씬 체이닝]
     #   씬 2+부터 직전 씬 이미지 + 이전 씬 텍스트 요약 전달
@@ -772,9 +669,6 @@ async def generate_images(request: GenerateImagesRequest):
                         f"({len(session.images)}/{len(session.story.scenes)} 완료)")
             break
         
-        # 씬별 seed
-        scene_seed = (base_seed + scene.scene_number * 1000) if base_seed else None
-        
         # 씬 체이닝: 직전 씬 이미지 + 이전 씬 텍스트 요약
         prev_scene_image = None
         prev_scene_summaries = None
@@ -796,15 +690,13 @@ async def generate_images(request: GenerateImagesRequest):
         if prev_scene_image: mode_parts.append("체이닝")
         mode_str = f"레퍼런스({'+'.join(mode_parts)})" if mode_parts else "독립 생성"
         
-        logger.info(f"[생성] 씬 {scene.scene_number}/{len(session.story.scenes)} — "
-                     f"seed={scene_seed}, {mode_str}")
+        logger.info(f"[생성] 씬 {scene.scene_number}/{len(session.story.scenes)} — {mode_str}")
         
         res = await generate_single_scene(
             scene,
-            scene_seed=scene_seed,
             ref_image_bytes=character_ref_bytes,
-            method_bytes=method_ref_bytes if is_gemini else None,
-            style_bytes=style_ref_bytes if is_gemini else None,
+            method_bytes=method_ref_bytes,
+            style_bytes=style_ref_bytes,
             prev_scene_image=prev_scene_image,
             prev_scene_summaries=prev_scene_summaries
         )
@@ -912,7 +804,7 @@ async def generate_common_caption(request: CommonCaptionRequest):
     from app.core.config import get_settings as _gs
     api_key = _gs().gemini_api_key or ""
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    model = genai.GenerativeModel("gemini-3-flash-preview")
 
     type_label = {
         "webtoon": "인스타그램 웹툰",
@@ -959,7 +851,7 @@ async def generate_common_caption(request: CommonCaptionRequest):
         return {
             "hook": f"{request.topic} 알아보기",
             "body": "자세한 내용은 캐러셀을 넘겨보세요!",
-            "hashtags": "#세무 #절세 #정보",
+            "hashtags": "#웹툰 #정보 #꿀팁",
         }
 
 
@@ -968,7 +860,7 @@ async def generate_common_caption(request: CommonCaptionRequest):
 # ============================================
 
 class TestModelRequest(BaseModel):
-    model: str = "gemini-2.0-flash"
+    model: str = "gemini-3-flash-preview"
 
 
 @router.post("/test-model")
@@ -1005,7 +897,7 @@ async def test_model(request: TestModelRequest):
 class CollectDataRequest(BaseModel):
     session_id: str
     keyword: str
-    model: str = "gemini-2.0-flash"
+    model: str = "gemini-3-flash-preview"
 
 
 @router.post("/collect-data")
@@ -1135,7 +1027,7 @@ async def parse_manual_content(request: ParseManualContentRequest):
 class RegenerateSceneRequest(BaseModel):
     session_id: str
     scene_index: int
-    model: str = "gemini-2.0-flash"
+    model: str = "gemini-3-flash-preview"
 
 
 @router.post("/regenerate-scene")
@@ -1198,18 +1090,31 @@ JSON 형식으로 응답:
 class RegenerateImageRequest(BaseModel):
     session_id: str
     scene_index: int
-    model: str = "dall-e-3"
+    model: str = "nano-banana-pro"  # Gemini 3.0 Preview 고정 (프론트엔드와 일치)
 
 
 @router.post("/regenerate-image")
 async def regenerate_image(request: RegenerateImageRequest):
     """이미지 재생성 — 메인 생성과 동일한 generator + prompt_builder 방식"""
     session = sessions.get(request.session_id)
-    if not session or not session.story or not session.images:
-        raise HTTPException(status_code=404, detail="Session, story, or images not found")
+    if not session or not session.story:
+        raise HTTPException(status_code=404, detail="Session or story not found")
     
     if request.scene_index >= len(session.story.scenes):
         raise HTTPException(status_code=400, detail="Invalid scene index")
+    
+    # images가 없으면 빈 리스트로 초기화
+    if not session.images:
+        session.images = [
+            GeneratedImage(scene_number=s.scene_number, prompt_used="", status="pending")
+            for s in session.story.scenes
+        ]
+    # images 길이가 부족하면 확장
+    while len(session.images) < len(session.story.scenes):
+        s = session.story.scenes[len(session.images)]
+        session.images.append(
+            GeneratedImage(scene_number=s.scene_number, prompt_used="", status="pending")
+        )
     
     scene = session.story.scenes[request.scene_index]
     
@@ -1245,101 +1150,72 @@ async def regenerate_image(request: RegenerateImageRequest):
     try:
         size = "1024x1024"  # 1:1 정사각형 기본
         
-        model_lower = model_name.lower()
-        is_gemini = any(k in model_lower for k in ["gemini", "nano-banana"])
-        is_flux_kontext = "flux-kontext" in model_name
-        is_flux_regen = "flux" in model_name
-        ref_images = None
+        # ★ Gemini 재생성: 3종 레퍼런스 + 씬 체이닝 지원
+        from app.services.reference_service import ReferenceService
+        from app.services.prompt_builder import build_scene_chaining_context
         
-        if is_gemini:
-            # ★ Gemini 재생성: 3종 레퍼런스 + 씬 체이닝 지원
-            from app.services.reference_service import ReferenceService
-            from app.services.prompt_builder import build_scene_chaining_context
-            
-            ref_service = ReferenceService(request.session_id)
-            logger.info(f"[재생성] 세션 디렉토리: {ref_service.ref_dir}")
-            ref_data = ref_service.load_for_model(model_name)
-            character_ref = ref_data.get("character")
-            method_ref = ref_data.get("method")
-            style_ref = ref_data.get("style")
-            logger.info(f"[재생성] Character: {len(character_ref) if character_ref else 'None'}bytes, "
-                        f"Method: {len(method_ref) if method_ref else 'None'}bytes, "
-                        f"Style: {len(style_ref) if style_ref else 'None'}bytes")
-            
-            # 씬 체이닝: 직전 씬 이미지 + 이전 씬 요약
-            prev_scene_image = None
-            prev_scene_summaries = None
-            prev_scene_number = None
-            
-            if scene.scene_number > 1:
-                summaries, prev_sn = build_scene_chaining_context(
-                    session.story.scenes, scene.scene_number
-                )
-                prev_scene_summaries = summaries if summaries else None
-                prev_scene_number = prev_sn
-                
-                # 직전 씬 이미지 로드
-                if prev_sn and session.images:
-                    for img_entry in session.images:
-                        if (img_entry.scene_number == prev_sn and 
-                            img_entry.status == "generated" and 
-                            img_entry.local_path and os.path.exists(img_entry.local_path)):
-                            with open(img_entry.local_path, "rb") as rf:
-                                prev_scene_image = rf.read()
-                            break
-            
-            ref_count = sum(1 for x in [character_ref, method_ref, style_ref] if x)
-            logger.info(f"[재생성] 씬 {scene.scene_number}: {ref_count}종 레퍼런스"
-                        f"{' + 씬체이닝' if prev_scene_image else ''}")
-            
-            image_data = await generator.generate(
-                prompt,
-                reference_images=[character_ref] if character_ref else None,
-                size=size,
-                method_image=method_ref,
-                style_image=style_ref,
-                prev_scene_image=prev_scene_image,
-                prev_scene_summaries=prev_scene_summaries,
-                prev_scene_number=prev_scene_number
+        ref_service = ReferenceService(request.session_id)
+        logger.info(f"[재생성] 세션 디렉토리: {ref_service.ref_dir}")
+        ref_data = ref_service.load_for_model(model_name)
+        character_ref = ref_data.get("character")
+        method_ref = ref_data.get("method")
+        style_ref = ref_data.get("style")
+        logger.info(f"[재생성] Character: {len(character_ref) if character_ref else 'None'}bytes, "
+                    f"Method: {len(method_ref) if method_ref else 'None'}bytes, "
+                    f"Style: {len(style_ref) if style_ref else 'None'}bytes")
+        
+        # 씬 체이닝: 직전 씬 이미지 + 이전 씬 요약
+        prev_scene_image = None
+        prev_scene_summaries = None
+        prev_scene_number = None
+        
+        if scene.scene_number > 1:
+            summaries, prev_sn = build_scene_chaining_context(
+                session.story.scenes, scene.scene_number
             )
-        elif is_flux_kontext:
-            # ★ 재생성: 현재 씬의 기존 이미지를 참조로 전달 (캐릭터 외모 유지)
-            if session.images and request.scene_index < len(session.images):
-                current_img = session.images[request.scene_index]
-                if current_img.local_path and os.path.exists(current_img.local_path):
-                    with open(current_img.local_path, "rb") as rf:
-                        ref_images = [rf.read()]
-                    logger.info(f"[재생성] 씬 {scene.scene_number}: 기존 이미지를 참조로 사용 (캐릭터 외모 유지)")
+            prev_scene_summaries = summaries if summaries else None
+            prev_scene_number = prev_sn
             
-            from app.services.prompt_builder import optimize_for_flux_kontext
-            _regen_desc = getattr(scene, 'image_prompt', None) or scene.scene_description
-            prompt = optimize_for_flux_kontext(
-                prompt,
-                scene_description=_regen_desc,
-                is_reference=bool(ref_images),
-                characters=session.story.characters
+            # 직전 씬 이미지 로드
+            if prev_sn and session.images:
+                for img_entry in session.images:
+                    if (img_entry.scene_number == prev_sn and 
+                        img_entry.status == "generated" and 
+                        img_entry.local_path and os.path.exists(img_entry.local_path)):
+                        with open(img_entry.local_path, "rb") as rf:
+                            prev_scene_image = rf.read()
+                        break
+        
+        ref_count = sum(1 for x in [character_ref, method_ref, style_ref] if x)
+        logger.info(f"[재생성] 씬 {scene.scene_number}: {ref_count}종 레퍼런스"
+                    f"{' + 씬체이닝' if prev_scene_image else ''}")
+        
+        image_data = await generator.generate(
+            prompt,
+            reference_images=[character_ref] if character_ref else None,
+            size=size,
+            method_image=method_ref,
+            style_image=style_ref,
+            prev_scene_image=prev_scene_image,
+            prev_scene_summaries=prev_scene_summaries,
+            prev_scene_number=prev_scene_number
+        )
+        
+        # ── 재생성 전 기존 이미지 히스토리 저장 ──
+        from app.services.image_editor import get_history_manager
+        old_img = session.images[request.scene_index]
+        old_history = list(old_img.image_history) if old_img.image_history else []
+        old_prompts = list(old_img.prompt_history) if old_img.prompt_history else []
+        
+        if old_img.local_path and old_img.status == "generated" and os.path.exists(old_img.local_path):
+            history_mgr = get_history_manager()
+            hist_path = history_mgr.save_to_history(
+                old_img.local_path, request.session_id, scene.scene_number
             )
-            
-            base_seed = session.settings.image.flux_seed if is_flux_regen else None
-            regen_seed = (base_seed + scene.scene_number * 1000) if base_seed else None
-            image_data = await generator.generate(prompt, reference_images=ref_images, size=size, seed=regen_seed)
-        elif is_flux_regen:
-            # flux-dev 등 일반 Flux: text2img 최적화
-            from app.services.prompt_builder import optimize_for_flux_kontext
-            _regen_desc2 = getattr(scene, 'image_prompt', None) or scene.scene_description
-            prompt = optimize_for_flux_kontext(
-                prompt,
-                scene_description=_regen_desc2,
-                is_reference=False,
-                characters=session.story.characters
-            )
-            
-            base_seed = session.settings.image.flux_seed if is_flux_regen else None
-            regen_seed = (base_seed + scene.scene_number * 1000) if base_seed else None
-            image_data = await generator.generate(prompt, reference_images=ref_images, size=size, seed=regen_seed)
-        else:
-            # DALL-E 등: 프롬프트만 사용
-            image_data = await generator.generate(prompt, reference_images=None, size=size)
+            old_history.append(hist_path)
+            if old_img.prompt_used:
+                old_prompts.append(old_img.prompt_used)
+            logger.info(f"[재생성] 이전 이미지 히스토리 저장: {hist_path} (총 {len(old_history)}개)")
         
         # 파일 저장
         filename = f"scene_{scene.scene_number}_{uuid.uuid4().hex[:6]}.png"
@@ -1354,13 +1230,62 @@ async def regenerate_image(request: RegenerateImageRequest):
             scene_number=scene.scene_number,
             prompt_used=prompt,
             local_path=filepath,
-            status="generated"
+            status="generated",
+            image_history=old_history,
+            prompt_history=old_prompts,
         )
         session.images[request.scene_index] = new_img
-        return {"image": new_img.model_dump()}
+        return {
+            "image": new_img.model_dump(),
+            "history_count": len(old_history),
+        }
     except Exception as e:
         print(f"[REGEN ERROR] scene {scene.scene_number}: {e}")
         raise HTTPException(status_code=500, detail=f"재생성 실패: {str(e)}")
+
+
+# ============================================
+# 이미지 되돌리기 API
+# ============================================
+
+class UndoImageRequest(BaseModel):
+    session_id: str
+    scene_index: int
+
+@router.post("/undo-image")
+async def undo_image(request: UndoImageRequest):
+    """씬 검토 단계에서 이미지 되돌리기 (마지막 히스토리로 복원)"""
+    session = sessions.get(request.session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다")
+    
+    if not session.images or request.scene_index >= len(session.images):
+        raise HTTPException(status_code=400, detail="유효하지 않은 씬 인덱스입니다")
+    
+    target = session.images[request.scene_index]
+    
+    if not target.image_history:
+        raise HTTPException(status_code=400, detail="되돌릴 이력이 없습니다")
+    
+    # 마지막 히스토리에서 복원
+    prev_path = target.image_history.pop()
+    prev_prompt = target.prompt_history.pop() if target.prompt_history else target.prompt_used
+    
+    if not os.path.exists(prev_path):
+        raise HTTPException(status_code=404, detail="이전 이미지 파일을 찾을 수 없습니다")
+    
+    # 현재 이미지 경로를 이전 이미지로 교체
+    old_local = target.local_path
+    target.local_path = prev_path
+    target.prompt_used = prev_prompt
+    
+    logger.info(f"[되돌리기] 씬 {target.scene_number}: {old_local} → {prev_path} (남은 히스토리: {len(target.image_history)}개)")
+    
+    return {
+        "success": True,
+        "image": target.model_dump(),
+        "remaining_history": len(target.image_history),
+    }
 
 
 # ============================================
@@ -1503,25 +1428,35 @@ async def publish(request: PublishRequest):
 # ============================================
 
 class ManualSaveStoryRequest(BaseModel):
-    session_id: str
+    session_id: Optional[str] = None
     save_name: str  # 사용자 지정 저장 이름
+    story_data: Optional[dict] = None  # 세션이 없을 때 프론트엔드에서 직접 전달
+    keyword: Optional[str] = None
 
 
 @router.post("/story/save")
 async def save_story_manual(request: ManualSaveStoryRequest):
-    """스토리 수동 저장 (사용자 이름 지정)"""
-    session = sessions.get(request.session_id)
-    if not session or not session.story:
-        raise HTTPException(status_code=404, detail="세션 또는 스토리를 찾을 수 없습니다")
+    """스토리 수동 저장 (사용자 이름 지정) — 세션이 없어도 프론트에서 직접 데이터 전달 가능"""
+    session = sessions.get(request.session_id) if request.session_id else None
+    
+    # 세션에서 데이터 가져오기 또는 프론트엔드 직접 전달 데이터 사용
+    if session and session.story:
+        story_dict = session.story.model_dump()
+        keyword = session.keyword
+        collected_data = session.collected_data
+        char_settings = session.settings.character.model_dump() if session.settings else None
+    elif request.story_data:
+        story_dict = request.story_data
+        keyword = request.keyword or ""
+        collected_data = None
+        char_settings = None
+    else:
+        raise HTTPException(status_code=404, detail="저장할 스토리가 없습니다. 세션이 만료되었을 수 있습니다.")
 
     save_dir = "output/stories"
     os.makedirs(save_dir, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    safe_name = "".join([c for c in request.save_name if c.isalnum() or c in (' ', '_', '-', '가-힣')]).strip()
-    if not safe_name:
-        safe_name = "unnamed"
-    # 한글 파일명 허용
     import re
     safe_name = re.sub(r'[^\w\s가-힣-]', '', request.save_name).strip()
     if not safe_name:
@@ -1532,10 +1467,10 @@ async def save_story_manual(request: ManualSaveStoryRequest):
     data = {
         "timestamp": datetime.now().isoformat(),
         "save_name": request.save_name,
-        "keyword": session.keyword,
-        "story": session.story.model_dump(),
-        "collected_data": session.collected_data,
-        "character_settings": session.settings.character.model_dump() if session.settings else None
+        "keyword": keyword,
+        "story": story_dict,
+        "collected_data": collected_data,
+        "character_settings": char_settings
     }
 
     with open(filepath, "w", encoding="utf-8") as f:
@@ -2489,7 +2424,7 @@ async def save_project(request: ProjectSaveRequest):
     images_dir = os.path.join(project_dir, "images")
     os.makedirs(images_dir, exist_ok=True)
 
-    # 이미지 파일 복사
+    # 이미지 파일 복사 (현재 이미지 + 히스토리 이미지)
     image_files = []
     if session.images:
         for img in session.images:
@@ -2497,8 +2432,17 @@ async def save_project(request: ProjectSaveRequest):
             if src and os.path.exists(src):
                 fname = os.path.basename(src)
                 dst = os.path.join(images_dir, fname)
-                shutil.copy2(src, dst)
+                if not os.path.exists(dst):
+                    shutil.copy2(src, dst)
                 image_files.append(fname)
+            # 히스토리 이미지도 복사
+            hist_list = img.image_history if hasattr(img, 'image_history') else []
+            for hist_path in hist_list:
+                if hist_path and os.path.exists(hist_path):
+                    hfname = os.path.basename(hist_path)
+                    hdst = os.path.join(images_dir, hfname)
+                    if not os.path.exists(hdst):
+                        shutil.copy2(hist_path, hdst)
 
     # 메타데이터 구성
     project_data = {
@@ -2591,12 +2535,36 @@ async def load_project(request: dict):
     if data.get("story"):
         session.story = Story(**data["story"])
 
-    # 이미지 복원
+    # 이미지 복원 (경로를 프로젝트 디렉토리 기준으로 업데이트)
+    project_images_dir = os.path.join("output", "projects", dirname, "images")
     if data.get("images"):
         session.images = []
         for img_data in data["images"]:
             try:
-                session.images.append(GeneratedImage(**img_data) if isinstance(img_data, dict) else img_data)
+                if isinstance(img_data, dict):
+                    # local_path를 프로젝트 images 폴더 기준으로 업데이트
+                    if img_data.get("local_path"):
+                        fname = os.path.basename(img_data["local_path"])
+                        proj_img = os.path.join(project_images_dir, fname)
+                        if os.path.exists(proj_img):
+                            img_data["local_path"] = proj_img
+                    # original_path도 동일하게 처리
+                    if img_data.get("original_path"):
+                        orig_fname = os.path.basename(img_data["original_path"])
+                        orig_proj = os.path.join(project_images_dir, orig_fname)
+                        if os.path.exists(orig_proj):
+                            img_data["original_path"] = orig_proj
+                    # image_history 경로도 업데이트
+                    if img_data.get("image_history"):
+                        updated_hist = []
+                        for hp in img_data["image_history"]:
+                            hfname = os.path.basename(hp)
+                            hproj = os.path.join(project_images_dir, hfname)
+                            updated_hist.append(hproj if os.path.exists(hproj) else hp)
+                        img_data["image_history"] = updated_hist
+                    session.images.append(GeneratedImage(**img_data))
+                else:
+                    session.images.append(img_data)
             except Exception:
                 session.images.append(img_data)
 

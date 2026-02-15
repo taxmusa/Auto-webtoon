@@ -1,6 +1,6 @@
 """
 데이터 모델 정의 - Pydantic 기반
-세무 웹툰 자동화 시스템의 핵심 데이터 구조
+웹툰 자동 생성 시스템의 핵심 데이터 구조
 """
 from pydantic import BaseModel, Field
 from typing import List, Optional
@@ -426,7 +426,7 @@ class TextSettings(BaseModel):
 class CharacterSettings(BaseModel):
     """캐릭터 설정"""
     questioner_type: str = "일반인"     # 일반인 | 사업자 | 직장인
-    expert_type: str = "세무사"         # 세무사 | 변호사 | 노무사 | 회계사
+    expert_type: str = "전문가"         # 전문가 | 세무사 | 변호사 | 노무사 | 회계사
     presets: List[CharacterProfile] = Field(default_factory=list) # 저장된 프리셋
     auto_emotion: bool = True
 
@@ -446,16 +446,13 @@ class ImageSettings(BaseModel):
     style: ImageStyle = ImageStyle.WEBTOON
     sub_style: SubStyle = SubStyle.NORMAL
     use_mascot: bool = True
-    model: str = "dall-e-3"
+    model: str = "nano-banana-pro"
     add_next_episode_tag: bool = True   # "다음 화에 계속" 태그 추가
     
     # Style System 2.0
     character_style_id: Optional[str] = None
     background_style_id: Optional[str] = None
     manual_overrides: Optional[ManualPromptOverrides] = None
-    
-    # Flux 캐릭터 일관성: 세션당 고정 seed
-    flux_seed: Optional[int] = None
     
     # 3종 레퍼런스 이미지 (Character/Method/Style)
     reference_images: ReferenceImageSet = Field(default_factory=ReferenceImageSet)
@@ -472,9 +469,9 @@ class OutputSettings(BaseModel):
 
 class AISettings(BaseModel):
     """AI 엔진 설정"""
-    data_model: str = "gemini-2.0-flash"
-    story_model: str = "gemini-2.0-flash"
-    image_model: str = "dall-e-3"
+    data_model: str = "gemini-3-flash-preview"
+    story_model: str = "gemini-3-flash-preview"
+    image_model: str = "nano-banana-pro"
     auto_detect_field: bool = True
 
 

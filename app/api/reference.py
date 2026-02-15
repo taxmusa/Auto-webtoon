@@ -79,7 +79,7 @@ class TestPreviewRequest(BaseModel):
 
 class StatusRequest(BaseModel):
     """상태 조회용"""
-    model_name: str = "flux-kontext-dev"
+    model_name: str = "nano-banana-pro"
 
 
 # ============================================
@@ -422,7 +422,7 @@ async def test_preview(req: TestPreviewRequest):
 # ============================================
 
 @router.get("/status/info")
-async def get_reference_status(session_id: Optional[str] = None, model_name: str = "flux-kontext-dev"):
+async def get_reference_status(session_id: Optional[str] = None, model_name: str = "nano-banana-pro"):
     """3종 레퍼런스 존재 여부 + 모델별 사용 안내 반환"""
     service = ReferenceService(session_id)
     status = service.get_status()
