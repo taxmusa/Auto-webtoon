@@ -1452,6 +1452,11 @@ async def save_story_manual(request: ManualSaveStoryRequest):
         char_settings = None
     else:
         raise HTTPException(status_code=404, detail="저장할 스토리가 없습니다. 세션이 만료되었을 수 있습니다.")
+    
+    # 이미지 데이터 수집 (세션에 생성된 이미지가 있는 경우)
+    images_data = None
+    if session and session.images:
+        images_data = [img.model_dump(mode='json') for img in session.images]
 
     save_dir = "output/stories"
     os.makedirs(save_dir, exist_ok=True)
@@ -1470,7 +1475,8 @@ async def save_story_manual(request: ManualSaveStoryRequest):
         "keyword": keyword,
         "story": story_dict,
         "collected_data": collected_data,
-        "character_settings": char_settings
+        "character_settings": char_settings,
+        "images": images_data  # 생성된 이미지 정보 포함
     }
 
     with open(filepath, "w", encoding="utf-8") as f:
@@ -1559,13 +1565,32 @@ async def load_story_history(request: LoadStoryRequest):
             session.collected_data = data["collected_data"]
             
         # 이미지 데이터 복원 (있다면)
-        # 이전 저장 파일에는 이미지가 없을 수 있음 (UserRequest: "직전 내용으로 산출되게 해줘" implies loading state)
+        images_list = []
+        if data.get("images"):
+            for img_data in data["images"]:
+                try:
+                    # local_path가 유효한지 확인 (파일 존재 여부)
+                    local_path = img_data.get("local_path")
+                    if local_path and os.path.exists(local_path):
+                        img = GeneratedImage(**img_data)
+                        session.images.append(img)
+                        images_list.append(img.model_dump())
+                    else:
+                        # 파일은 없지만 메타데이터는 보존
+                        img = GeneratedImage(**img_data)
+                        img.status = "missing"
+                        session.images.append(img)
+                        images_list.append(img.model_dump())
+                        logger.warning(f"[history/load] 이미지 파일 없음: {local_path}")
+                except Exception as img_err:
+                    logger.error(f"[history/load] 이미지 복원 실패: {img_err}")
         
         return {
             "success": True,
             "session_id": session.session_id, # Return the (possibly new) session ID
             "story": session.story.model_dump(),
-            "collected_data": session.collected_data
+            "collected_data": session.collected_data,
+            "images": images_list  # 이미지 데이터 반환
         }
     except Exception as e:
         logger.error(f"Failed to load story: {e}")

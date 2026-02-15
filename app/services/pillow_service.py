@@ -63,6 +63,10 @@ class PillowService:
         "soft": {
             "border_radius": 22, "padding": 15,
             "bg_color": (255, 255, 255, 230), "border_color": (200, 200, 200), "border_width": 0
+        },
+        "comic": {
+            "border_radius": 40, "padding": 16,
+            "bg_color": (255, 255, 255, 245), "border_color": (0, 0, 0), "border_width": 3
         }
     }
     

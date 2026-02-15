@@ -296,6 +296,7 @@ class BubbleShape(str, Enum):
     EMPHASIS = "emphasis"
     SYSTEM = "system"
     SOFT = "soft"
+    COMIC = "comic"
 
 
 class BubbleOverlay(BaseModel):
