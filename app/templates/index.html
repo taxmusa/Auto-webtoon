@@ -11,6 +11,8 @@
     <!-- 웹툰 말풍선 한국어 폰트 13종 -->
     <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700&family=Do+Hyeon&family=Jua&family=Gaegu:wght@400;700&family=Black+Han+Sans&family=Nanum+Pen+Script&family=Nanum+Brush+Script&family=Nanum+Myeongjo:wght@400;700&family=Gothic+A1:wght@400;700&family=Gamja+Flower&family=Hi+Melody&family=Poor+Story&family=Sunflower:wght@300;500&display=swap"
         rel="stylesheet">
+    <!-- html2canvas — 말풍선 내보내기용 (CSS 렌더링 그대로 캡처) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         :root {
             --primary: #6366f1;
@@ -1287,7 +1289,7 @@
 
                     <!-- ★ 왼쪽: 이미지 + CSS 말풍선 오버레이 (실시간 프리뷰) ★ -->
                     <div style="position: relative; background: #1a1a2e; border-radius: 10px; overflow: hidden; display: flex; align-items: center; justify-content: center;">
-                        <div id="bubble-preview-container" style="position: relative; width: 100%; max-width: 480px; aspect-ratio: 4/5;">
+                        <div id="bubble-preview-container" style="position: relative; width: 100%; max-width: 480px; aspect-ratio: 1/1;">
                             <img id="bubble-preview-img" src="" alt="씬 이미지"
                                  style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;">
                             <!-- CSS 말풍선 오버레이 레이어 (JS로 동적 생성 — 드래그 가능) -->
@@ -1322,23 +1324,30 @@
                                 <span id="bubble-font-preview" style="font-size:0.8rem; min-width:60px; text-align:center; font-family:'Nanum Gothic'">가나다</span>
                                 <label style="font-size: 0.75rem; font-weight: 600;">모양</label>
                                 <select id="bubble-global-shape" style="padding: 3px 6px; font-size: 0.75rem;">
-                                    <option value="round">둥근</option>
-                                    <option value="round-lg">큰둥근</option>
-                                    <option value="square">사각</option>
-                                    <option value="shout">강조</option>
-                                    <option value="spike">외침</option>
-                                    <option value="thought">생각</option>
-                                    <option value="cloud">구름</option>
-                                    <option value="whisper">속삭임</option>
-                                    <option value="comic">만화</option>
-                                    <option value="scream">절규</option>
-                                    <option value="dark">다크</option>
-                                    <option value="emphasis">임팩트</option>
-                                    <option value="soft">부드러운</option>
-                                    <option value="system">시스템</option>
-                                    <option value="fluffy">뭉실</option>
-                                    <option value="explosion">폭발</option>
-                                    <option value="wavy">물결</option>
+                                    <optgroup label="기본">
+                                        <option value="round">둥근</option>
+                                        <option value="ellipse">타원</option>
+                                        <option value="square">사각</option>
+                                        <option value="thought">생각</option>
+                                        <option value="whisper">속삭임</option>
+                                        <option value="cloud">구름</option>
+                                        <option value="soft">부드러운</option>
+                                        <option value="dark">다크</option>
+                                        <option value="system">시스템</option>
+                                    </optgroup>
+                                    <optgroup label="강조">
+                                        <option value="shout">강조</option>
+                                        <option value="emphasis">임팩트</option>
+                                    </optgroup>
+                                    <optgroup label="웹툰 전용">
+                                        <option value="starburst">톱니</option>
+                                        <option value="spike">외침</option>
+                                        <option value="explosion">폭발</option>
+                                        <option value="scallop">꽃잎</option>
+                                        <option value="wavy">물결</option>
+                                        <option value="fluffy">뭉실</option>
+                                        <option value="jagged">들쭉날쭉</option>
+                                    </optgroup>
                                 </select>
                             </div>
                             <div style="display: flex; gap: 0.4rem; align-items: center; margin-bottom: 0.5rem;">
@@ -1350,9 +1359,17 @@
                                     <input type="checkbox" id="bubble-global-bold" style="margin-right:2px;"> 볼드
                                 </label>
                             </div>
-                            <button class="btn btn-secondary" onclick="applyGlobalToAll()" style="width:100%; font-size:0.75rem; padding:5px;">
-                                🔄 위 설정을 현재 씬 전체 말풍선에 일괄 적용
-                            </button>
+                            <div style="display: flex; gap: 0.4rem;">
+                                <button class="btn btn-secondary" onclick="applyGlobalFontOnly()" style="flex:1; font-size:0.72rem; padding:5px;" title="폰트만 전체 말풍선에 적용">
+                                    🔤 폰트만 적용
+                                </button>
+                                <button class="btn btn-secondary" onclick="applyGlobalShapeOnly()" style="flex:1; font-size:0.72rem; padding:5px;" title="모양만 전체 말풍선에 적용">
+                                    💬 모양만 적용
+                                </button>
+                                <button class="btn btn-secondary" onclick="applyGlobalToAll()" style="flex:1; font-size:0.72rem; padding:5px;" title="모든 설정을 전체 말풍선에 적용">
+                                    🔄 전체 적용
+                                </button>
+                            </div>
                         </div>
 
                         <!-- 개별 말풍선 편집 카드 (JS로 생성) -->
@@ -1401,10 +1418,10 @@
                 <div>AI가 인스타그램 맞춤형 캡션을 생성하고 있습니다...</div>
             </div>
 
-            <div id="caption-publish-area" style="display: grid; grid-template-columns: 1fr 380px; gap: 2rem;">
-                <!-- Left: Instagram Mockup -->
+            <div id="caption-publish-area" style="display: grid; grid-template-columns: 400px 1fr; gap: 1.5rem;">
+                <!-- Left: Instagram Mockup (고정 400px) -->
                 <div class="card"
-                    style="padding: 0; overflow: hidden; background: #fff; color: #000; border-radius: 12px; border: 1px solid #dbdbdb;">
+                    style="padding: 0; overflow: hidden; background: #fff; color: #000; border-radius: 12px; border: 1px solid #dbdbdb; max-width: 400px; align-self: start;">
                     <div
                         style="padding: 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #efefef;">
                         <div
@@ -1417,11 +1434,17 @@
                     </div>
 
                     <div id="insta-preview-carousel"
-                        style="aspect-ratio: 1/1; background: #fafafa; position: relative;">
-                        <!-- Preview Image will be here -->
-                        <img id="insta-preview-img" src="" style="width: 100%; height: 100%; object-fit: cover;">
-                        <div style="position: absolute; bottom: 10px; right: 10px; background: rgba(0,0,0,0.7); color: #fff; padding: 4px 8px; border-radius: 12px; font-size: 12px;"
-                            id="insta-carousel-index">1 / 8</div>
+                        style="aspect-ratio: 1/1; background: #fafafa; position: relative; overflow: hidden;">
+                        <!-- Preview Image -->
+                        <img id="insta-preview-img" src="" alt="미리보기 이미지" style="width: 100%; height: 100%; object-fit: cover;">
+                        <!-- 이전/다음 화살표 -->
+                        <button onclick="prevPreviewImage()" id="carousel-prev-btn"
+                            style="position:absolute; left:8px; top:50%; transform:translateY(-50%); width:28px; height:28px; border-radius:50%; border:none; background:rgba(255,255,255,0.85); color:#333; font-size:14px; cursor:pointer; display:none; align-items:center; justify-content:center; box-shadow:0 1px 4px rgba(0,0,0,0.2);">&#10094;</button>
+                        <button onclick="nextPreviewImage()" id="carousel-next-btn"
+                            style="position:absolute; right:8px; top:50%; transform:translateY(-50%); width:28px; height:28px; border-radius:50%; border:none; background:rgba(255,255,255,0.85); color:#333; font-size:14px; cursor:pointer; display:none; align-items:center; justify-content:center; box-shadow:0 1px 4px rgba(0,0,0,0.2);">&#10095;</button>
+                        <!-- 인덱스 표시 -->
+                        <div style="position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.7); color: #fff; padding: 3px 8px; border-radius: 12px; font-size: 11px;"
+                            id="insta-carousel-index">1 / 1</div>
                     </div>
 
                     <div style="padding: 12px;">
@@ -4756,10 +4779,18 @@
         // --- 캡션 생성 (편집 → 발행) ---
         async function generateCaption() {
             // 발행 탭에서 수동 호출 (탭 이동 불필요 — 이미 step 5)
-            const loadingEl = document.getElementById('loading-caption');
-            const captionArea = document.getElementById('caption-publish-area');
-            loadingEl.style.display = 'block';
-            if (captionArea) captionArea.style.display = 'none';
+            // 화면을 숨기지 않고, 버튼 인라인 로딩 + 필드 비활성화 방식
+            const captionBtn = document.querySelector('[onclick="generateCaption()"]');
+            const captionFields = document.querySelectorAll('#final-hook, #final-body, #final-tip, #final-hashtags');
+
+            // 버튼 로딩 상태
+            if (captionBtn) {
+                captionBtn.disabled = true;
+                captionBtn._originalText = captionBtn.innerText;
+                captionBtn.innerText = '⏳ AI 캡션 생성 중...';
+            }
+            // 필드 비활성화 + 반투명
+            captionFields.forEach(function(f) { f.disabled = true; f.style.opacity = '0.5'; });
 
             try {
                 const res = await fetch('/api/workflow/generate-caption', {
@@ -4771,15 +4802,11 @@
                 if (!res.ok) {
                     const msg = data.detail || data.message || (typeof data === 'string' ? data : `오류 ${res.status}`);
                     showToast('캡션 생성 오류: ' + msg, 'error');
-                    loadingEl.style.display = 'none';
-                    if (captionArea) captionArea.style.display = 'grid';
                     return;
                 }
                 const caption = data.caption;
                 if (!caption) {
                     showToast('캡션 생성 오류: 응답 형식이 올바르지 않습니다.', 'error');
-                    loadingEl.style.display = 'none';
-                    if (captionArea) captionArea.style.display = 'grid';
                     return;
                 }
                 document.getElementById('final-hook').value = caption.hook || '';
@@ -4787,16 +4814,17 @@
                 document.getElementById('final-tip').value = caption.expert_tip || caption.tip || '';
                 document.getElementById('final-hashtags').value = (caption.hashtags || []).join(' ');
 
-                loadingEl.style.display = 'none';
-                if (captionArea) captionArea.style.display = 'grid';
-                ensurePublishImagesFromSession().then(function() {
-                    initPublishSeriesTabs();
-                    updateInstaPreview();
-                });
+                showToast('캡션이 생성되었습니다!', 'success');
+                updateInstaPreview();
             } catch (e) {
                 showToast('캡션 생성 오류: ' + (e.message || String(e)), 'error');
-                loadingEl.style.display = 'none';
-                if (captionArea) captionArea.style.display = 'grid';
+            } finally {
+                // 버튼, 필드 복원
+                if (captionBtn) {
+                    captionBtn.disabled = false;
+                    captionBtn.innerText = captionBtn._originalText || '✨ AI 캡션 자동 채우기';
+                }
+                captionFields.forEach(function(f) { f.disabled = false; f.style.opacity = '1'; });
             }
         }
 
@@ -4815,8 +4843,12 @@
                 if (!res.ok) return;
                 var data = await res.json();
                 // final_images(말풍선 합성본) 우선, 없으면 원본 images 사용
+                // final_images는 List[str] (문자열 경로 배열) 또는 객체 배열일 수 있음
                 var images = (data.final_images && data.final_images.length > 0)
-                    ? data.final_images.map(function(fi) { return { local_path: fi.export_path || fi.local_path, scene_number: fi.scene_number }; })
+                    ? data.final_images.map(function(fi, idx) {
+                        var path = (typeof fi === 'string') ? fi : (fi.export_path || fi.local_path);
+                        return { local_path: path, scene_number: idx + 1 };
+                    })
                     : (data.images || []);
                 images.sort(function(a, b) { return (a.scene_number || 0) - (b.scene_number || 0); });
                 images.forEach(function(img) {
@@ -4875,11 +4907,9 @@
         }
 
         function updateInstaPreviewForSeries() {
-            var imgs = getSeriesImages();
-            var previewImg = document.getElementById('insta-preview-img');
-            var indexEl = document.getElementById('insta-carousel-index');
-            if (imgs.length > 0 && previewImg) previewImg.src = imgs[0].src;
-            if (indexEl) indexEl.innerText = '1 / ' + imgs.length;
+            // 시리즈 선택이 바뀌면 캐러셀 초기화
+            previewImgIdx = 0;
+            showPreviewImage(0);
         }
 
         function downloadSeriesImages() {
@@ -4916,39 +4946,95 @@
             });
         }
 
-        function updateInstaPreview() {
-            const hook = document.getElementById('final-hook').value;
-            const body = document.getElementById('final-body').value;
-            const tip = document.getElementById('final-tip').value;
-            const hashtags = document.getElementById('final-hashtags').value;
+        // --- 캐러셀 네비게이션 ---
+        var previewImgIdx = 0;
 
-            const fullText = `${hook}\n\n${body}\n\n💡 Tip: ${tip}`;
-            document.getElementById('insta-preview-caption-text').innerText = fullText;
-            document.getElementById('insta-preview-hashtags').innerText = hashtags;
+        function getPreviewImages() {
+            // 시리즈 선택에 따른 이미지 반환
+            return getSeriesImages();
+        }
 
-            // 이미지 프리셋 (첫 번째 이미지 표시)
-            const firstImg = document.querySelector('#images-container img');
-            if (firstImg) {
-                document.getElementById('insta-preview-img').src = firstImg.src;
+        function updateCarouselButtons() {
+            var imgs = getPreviewImages();
+            var prevBtn = document.getElementById('carousel-prev-btn');
+            var nextBtn = document.getElementById('carousel-next-btn');
+            if (!prevBtn || !nextBtn) return;
+            if (imgs.length <= 1) {
+                prevBtn.style.display = 'none';
+                nextBtn.style.display = 'none';
+            } else {
+                prevBtn.style.display = (previewImgIdx > 0) ? 'flex' : 'none';
+                nextBtn.style.display = (previewImgIdx < imgs.length - 1) ? 'flex' : 'none';
             }
+        }
 
-            const totalImages = document.querySelectorAll('#images-container img').length;
-            document.getElementById('insta-carousel-index').innerText = `1 / ${totalImages}`;
+        function showPreviewImage(idx) {
+            var imgs = getPreviewImages();
+            if (imgs.length === 0) return;
+            previewImgIdx = Math.max(0, Math.min(idx, imgs.length - 1));
+            var previewImg = document.getElementById('insta-preview-img');
+            var indexEl = document.getElementById('insta-carousel-index');
+            if (previewImg && imgs[previewImgIdx]) previewImg.src = imgs[previewImgIdx].src;
+            if (indexEl) indexEl.innerText = (previewImgIdx + 1) + ' / ' + imgs.length;
+            updateCarouselButtons();
+        }
+
+        function prevPreviewImage() {
+            showPreviewImage(previewImgIdx - 1);
+        }
+
+        function nextPreviewImage() {
+            showPreviewImage(previewImgIdx + 1);
+        }
+
+        function updateInstaPreview() {
+            const hook = document.getElementById('final-hook').value || '';
+            const body = document.getElementById('final-body').value || '';
+            const tip = document.getElementById('final-tip').value || '';
+            const hashtags = document.getElementById('final-hashtags').value || '';
+
+            // Tip이 있을 때만 표시
+            const fullText = tip ? `${hook}\n\n${body}\n\n💡 Tip: ${tip}` : `${hook}\n\n${body}`;
+            var captionEl = document.getElementById('insta-preview-caption-text');
+            if (captionEl) captionEl.innerText = fullText;
+            var hashEl = document.getElementById('insta-preview-hashtags');
+            if (hashEl) hashEl.innerText = hashtags;
+
+            // 캐러셀 초기화 (첫 번째 이미지 표시)
+            previewImgIdx = 0;
+            showPreviewImage(0);
         }
 
         async function publishToInstagram() {
             if (!sessionId) { showToast('세션이 없습니다.', 'error'); return; }
+
+            // 이미지 0장 방어
+            const seriesImgs = getSeriesImages();
+            if (seriesImgs.length === 0) {
+                showToast('발행할 이미지가 없습니다. 이미지를 먼저 생성해주세요.', 'error');
+                return;
+            }
+
             const hook = document.getElementById('final-hook').value || '';
             const body = document.getElementById('final-body').value || '';
             const tip = document.getElementById('final-tip').value || '';
             const hashtags = document.getElementById('final-hashtags').value || '';
             const caption = `${hook}\n\n${body}\n\n💡 ${tip}`.trim() + (hashtags ? '\n\n' + hashtags.trim() : '');
 
-            // 현재 시리즈 선택에 따른 이미지 URL 수집
-            const seriesImgs = getSeriesImages();
-            const imageUrls = seriesImgs.map(img => img.src).filter(src => src && src.startsWith('http'));
+            // 현재 시리즈 선택에 따른 이미지 경로 수집
+            // img.src는 브라우저가 http://localhost:8000/... 로 자동 변환하므로
+            // 항상 pathname만 추출하여 서버에 전송 (서버에서 Cloudinary 업로드 처리)
+            const imageUrls = seriesImgs.map(function(img) {
+                var src = img.src || '';
+                if (!src) return '';
+                try { return new URL(src, window.location.origin).pathname; } catch(e) { return src; }
+            }).filter(function(src) { return !!src; });
 
             if (!confirm(`${seriesImgs.length}장의 이미지를 인스타그램에 발행합니다. 계속할까요?`)) return;
+
+            // 버튼 로딩 상태
+            const pubBtn = document.querySelector('[onclick="publishToInstagram()"]');
+            if (pubBtn) { pubBtn.disabled = true; pubBtn._origText = pubBtn.innerText; pubBtn.innerText = '⏳ 발행 중...'; }
 
             try {
                 const res = await fetch('/api/workflow/publish', {
@@ -4964,12 +5050,30 @@
                 const data = await res.json();
                 if (data.success) {
                     showToast('인스타그램 발행 완료!', 'success');
+                    if (pubBtn) pubBtn.innerText = '✅ 발행 완료!';
+                    setTimeout(function() { if (pubBtn) { pubBtn.innerText = pubBtn._origText || '📸 인스타그램 즉시 발행'; pubBtn.disabled = false; } }, 3000);
+                    return;
                 } else {
-                    showToast('발행 실패: ' + (data.error || '알 수 없음'), 'error');
+                    // ★ 진단 정보 포함 에러 표시
+                    var errMsg = '발행 실패: ' + (data.error || '알 수 없음');
+                    if (data.diagnostics) {
+                        var d = data.diagnostics;
+                        var diagParts = [];
+                        if (d.error_code) diagParts.push('code=' + d.error_code);
+                        if (d.error_subcode) diagParts.push('subcode=' + d.error_subcode);
+                        if (d.fbtrace_id) diagParts.push('trace=' + d.fbtrace_id);
+                        if (diagParts.length > 0) {
+                            errMsg += '\n[진단] ' + diagParts.join(', ');
+                        }
+                    }
+                    showToast(errMsg, 'error');
+                    console.error('[발행 실패 진단]', data);
                 }
             } catch (e) {
                 showToast('발행 오류: ' + e.message, 'error');
             }
+            // 실패 시 버튼 복원
+            if (pubBtn) { pubBtn.disabled = false; pubBtn.innerText = pubBtn._origText || '📸 인스타그램 즉시 발행'; }
         }
 
         // 발행 탭 진입 시 Instagram 연결 상태 확인
@@ -5062,6 +5166,13 @@
                 return;
             }
 
+            // 이미지 0장 방어
+            const seriesImgs = getSeriesImages();
+            if (seriesImgs.length === 0) {
+                showToast('예약 발행할 이미지가 없습니다. 이미지를 먼저 생성해주세요.', 'error');
+                return;
+            }
+
             const unixTs = Math.floor(scheduledDate.getTime() / 1000);
             const hook = document.getElementById('final-hook').value || '';
             const body = document.getElementById('final-body').value || '';
@@ -5069,11 +5180,18 @@
             const hashtags = document.getElementById('final-hashtags').value || '';
             const caption = `${hook}\n\n${body}\n\n💡 ${tip}`.trim() + (hashtags ? '\n\n' + hashtags.trim() : '');
 
-            const seriesImgs = getSeriesImages();
-            const imageUrls = seriesImgs.map(img => img.src).filter(src => src && src.startsWith('http'));
+            const imageUrls = seriesImgs.map(function(img) {
+                var src = img.src || '';
+                if (!src) return '';
+                try { return new URL(src, window.location.origin).pathname; } catch(e) { return src; }
+            }).filter(function(src) { return !!src; });
 
             const timeStr = scheduledDate.toLocaleString('ko-KR');
             if (!confirm(`${seriesImgs.length}장의 이미지를 ${timeStr}에 예약 발행합니다. 계속할까요?`)) return;
+
+            // 버튼 로딩 상태
+            const schedBtn = document.querySelector('[onclick="schedulePublish()"]');
+            if (schedBtn) { schedBtn.disabled = true; schedBtn._origText = schedBtn.innerText; schedBtn.innerText = '⏳ 예약 등록 중...'; }
 
             try {
                 const res = await fetch('/api/workflow/publish', {
@@ -5091,12 +5209,17 @@
                 if (data.success) {
                     showToast(`📅 ${timeStr}에 예약 발행 등록 완료!`, 'success');
                     dtInput.value = '';
+                    if (schedBtn) schedBtn.innerText = '✅ 예약 완료!';
+                    setTimeout(function() { if (schedBtn) { schedBtn.innerText = schedBtn._origText || '📅 예약 발행 등록'; schedBtn.disabled = false; } }, 3000);
+                    return;
                 } else {
                     showToast('예약 발행 실패: ' + (data.error || '알 수 없음'), 'error');
                 }
             } catch (e) {
                 showToast('예약 발행 오류: ' + e.message, 'error');
             }
+            // 실패 시 버튼 복원
+            if (schedBtn) { schedBtn.disabled = false; schedBtn.innerText = schedBtn._origText || '📅 예약 발행 등록'; }
         }
 
         // --- 유틸리티 ---
@@ -5175,12 +5298,26 @@
 
             // Step 5: 캡션 + 발행 (세션 이미지로 미리보기 소스 채운 뒤 미리보기 갱신)
             if (step === 5) {
+                // 복원된 캡션이 있으면 UI에 채움
+                if (window._restoredCaption) {
+                    var cap = window._restoredCaption;
+                    var hk = document.getElementById('final-hook');
+                    var bd = document.getElementById('final-body');
+                    var tp = document.getElementById('final-tip');
+                    var ht = document.getElementById('final-hashtags');
+                    if (hk && !hk.value) hk.value = cap.hook || '';
+                    if (bd && !bd.value) bd.value = cap.body || '';
+                    if (tp && !tp.value) tp.value = cap.expert_tip || cap.tip || '';
+                    if (ht && !ht.value) ht.value = (cap.hashtags || []).join(' ');
+                }
                 if (typeof ensurePublishImagesFromSession === 'function') {
                     ensurePublishImagesFromSession().then(function() {
+                        if (typeof initPublishSeriesTabs === 'function') initPublishSeriesTabs();
                         updateInstaPreview();
                         if (typeof checkPublishConnection === 'function') checkPublishConnection();
                     });
                 } else {
+                    if (typeof initPublishSeriesTabs === 'function') initPublishSeriesTabs();
                     updateInstaPreview();
                     if (typeof checkPublishConnection === 'function') checkPublishConnection();
                 }
@@ -5208,25 +5345,55 @@
 
         // 말풍선 모양 → CSS 스타일
         const SHAPE_CSS = {
+            // ── 기본 모양 ──
             "round":     { borderRadius: "18px", border: "2px solid", label: "둥근" },
-            "round-lg":  { borderRadius: "28px", border: "2px solid", label: "큰둥근" },
+            "ellipse":   { borderRadius: "50%", border: "2px solid", padding: "14px 20px", label: "타원" },
             "square":    { borderRadius: "6px", border: "2px solid", label: "사각" },
-            "shout":     { borderRadius: "4px", border: "3px solid", fontWeight: "700", label: "강조" },
-            "spike":     { borderRadius: "2px", border: "3px solid", boxShadow: "2px 2px 0 #333", fontWeight: "700", label: "외침" },
             "thought":   { borderRadius: "24px", border: "2px dashed", fontStyle: "italic", label: "생각" },
-            "cloud":     { borderRadius: "40% 40% 40% 40% / 50% 50% 35% 35%", border: "2px solid", padding: "12px 18px", label: "구름" },
             "whisper":   { borderRadius: "14px", border: "1px dashed", opacity: "0.8", fontStyle: "italic", label: "속삭임" },
-            "comic":     { borderRadius: "50%", border: "3px solid", padding: "10px 14px", label: "만화" },
-            // 백엔드 기존 모양 프론트 반영
-            "scream":    { borderRadius: "2px", border: "4px solid", fontWeight: "700", boxShadow: "3px 3px 0 #000", label: "절규" },
-            "dark":      { borderRadius: "4px", border: "2px solid #555", label: "다크" },
-            "emphasis":  { borderRadius: "12px", border: "2px solid", fontWeight: "700", label: "임팩트" },
-            "soft":      { borderRadius: "22px", border: "none", boxShadow: "0 2px 12px rgba(0,0,0,0.1)", label: "부드러운" },
+            "cloud":     { borderRadius: "40% 40% 40% 40% / 50% 50% 35% 35%", border: "2px solid", padding: "14px 18px", label: "구름" },
+            "soft":      { borderRadius: "22px", border: "none", boxShadow: "0 2px 12px rgba(0,0,0,0.12)", label: "부드러운" },
+            "dark":      { borderRadius: "8px", border: "2px solid #555", label: "다크" },
             "system":    { borderRadius: "0", border: "1px solid #999", opacity: "0.85", label: "시스템" },
-            // 웹툰 전용 신규 모양
-            "fluffy":    { borderRadius: "50% 45% 50% 45% / 45% 50% 45% 50%", border: "2px solid", padding: "12px 16px", label: "뭉실" },
-            "explosion": { borderRadius: "8px", border: "4px solid #e00", fontWeight: "900", boxShadow: "4px 4px 0 rgba(255,0,0,0.3)", label: "폭발" },
-            "wavy":      { borderRadius: "30% 70% 70% 30% / 30% 30% 70% 70%", border: "2px solid", padding: "10px 14px", label: "물결" },
+            // ── 웹툰 강조 ──
+            "shout":     { borderRadius: "4px", border: "3px solid", fontWeight: "700", label: "강조" },
+            "emphasis":  { borderRadius: "12px", border: "3px solid", fontWeight: "700", boxShadow: "3px 3px 0 rgba(0,0,0,0.25)", label: "임팩트" },
+            // ── clip-path 기반 웹툰 전용 모양 (참고: 톱니/폭발/물결/꽃잎 등) ──
+            "starburst": {
+                clipPath: "polygon(50% 0%, 61% 15%, 75% 2%, 77% 20%, 95% 10%, 85% 28%, 100% 40%, 88% 50%, 100% 62%, 85% 68%, 93% 88%, 75% 78%, 65% 98%, 55% 80%, 45% 98%, 35% 80%, 22% 95%, 22% 72%, 5% 82%, 15% 62%, 0% 50%, 12% 40%, 0% 25%, 15% 22%, 8% 5%, 25% 15%, 38% 0%)",
+                border: "none", padding: "16px 18px", fontWeight: "700",
+                dropShadow: "drop-shadow(1px 1px 0 #333) drop-shadow(-1px -1px 0 #333)", label: "톱니"
+            },
+            "spike": {
+                clipPath: "polygon(50% 0%, 58% 20%, 72% 3%, 68% 25%, 90% 12%, 80% 32%, 100% 28%, 88% 45%, 100% 55%, 88% 58%, 100% 72%, 82% 70%, 92% 90%, 72% 75%, 62% 100%, 52% 78%, 40% 100%, 35% 78%, 18% 92%, 22% 70%, 0% 75%, 14% 58%, 0% 48%, 12% 40%, 0% 25%, 18% 30%, 8% 12%, 28% 25%, 35% 2%, 42% 22%)",
+                border: "none", padding: "18px 20px", fontWeight: "700",
+                dropShadow: "drop-shadow(1.5px 1.5px 0 #222) drop-shadow(-1.5px -1.5px 0 #222)", label: "외침"
+            },
+            "explosion": {
+                clipPath: "polygon(50% 0%, 55% 18%, 68% 2%, 65% 22%, 85% 8%, 78% 28%, 98% 22%, 85% 38%, 100% 45%, 88% 52%, 100% 62%, 82% 62%, 95% 80%, 72% 72%, 78% 98%, 58% 78%, 48% 100%, 42% 78%, 25% 95%, 30% 70%, 8% 82%, 18% 62%, 0% 55%, 15% 48%, 0% 35%, 18% 35%, 5% 18%, 22% 28%, 28% 5%, 38% 22%)",
+                border: "none", padding: "20px 22px", fontWeight: "900",
+                dropShadow: "drop-shadow(2px 2px 0 #c00) drop-shadow(-1px -1px 0 #c00)", label: "폭발"
+            },
+            "scallop": {
+                clipPath: "polygon(8% 0%, 18% 6%, 28% 0%, 38% 6%, 50% 0%, 62% 6%, 72% 0%, 82% 6%, 92% 0%, 100% 8%, 95% 18%, 100% 28%, 95% 40%, 100% 52%, 95% 62%, 100% 72%, 95% 82%, 100% 92%, 92% 100%, 82% 94%, 72% 100%, 62% 94%, 50% 100%, 38% 94%, 28% 100%, 18% 94%, 8% 100%, 0% 92%, 5% 82%, 0% 72%, 5% 62%, 0% 52%, 5% 40%, 0% 28%, 5% 18%, 0% 8%)",
+                border: "none", padding: "16px 18px",
+                dropShadow: "drop-shadow(1px 1px 0 #444) drop-shadow(-1px -1px 0 #444)", label: "꽃잎"
+            },
+            "wavy": {
+                clipPath: "polygon(5% 0%, 15% 5%, 25% 0%, 35% 5%, 45% 0%, 55% 5%, 65% 0%, 75% 5%, 85% 0%, 95% 5%, 100% 12%, 98% 25%, 100% 38%, 98% 50%, 100% 62%, 98% 75%, 100% 88%, 95% 95%, 85% 100%, 75% 95%, 65% 100%, 55% 95%, 45% 100%, 35% 95%, 25% 100%, 15% 95%, 5% 100%, 0% 88%, 2% 75%, 0% 62%, 2% 50%, 0% 38%, 2% 25%, 0% 12%)",
+                border: "none", padding: "14px 16px",
+                dropShadow: "drop-shadow(1px 1px 0 #555) drop-shadow(-1px -1px 0 #555)", label: "물결"
+            },
+            "fluffy": {
+                clipPath: "polygon(10% 5%, 20% 0%, 30% 8%, 42% 0%, 55% 5%, 65% 0%, 75% 8%, 88% 0%, 95% 10%, 100% 22%, 95% 35%, 100% 48%, 95% 60%, 100% 72%, 95% 85%, 88% 95%, 78% 100%, 65% 95%, 55% 100%, 42% 95%, 30% 100%, 20% 95%, 10% 100%, 2% 88%, 0% 75%, 5% 62%, 0% 50%, 5% 38%, 0% 25%, 5% 12%)",
+                border: "none", padding: "16px 18px",
+                dropShadow: "drop-shadow(1px 1px 0 #666) drop-shadow(-1px -1px 0 #666)", label: "뭉실"
+            },
+            "jagged": {
+                clipPath: "polygon(3% 5%, 12% 0%, 22% 8%, 30% 0%, 42% 5%, 55% 0%, 62% 8%, 75% 0%, 82% 5%, 95% 0%, 100% 10%, 95% 22%, 100% 32%, 98% 45%, 100% 58%, 95% 68%, 100% 78%, 98% 88%, 95% 100%, 82% 95%, 72% 100%, 62% 92%, 50% 100%, 40% 95%, 28% 100%, 18% 92%, 8% 100%, 0% 90%, 5% 78%, 0% 65%, 5% 52%, 0% 42%, 3% 30%, 0% 18%)",
+                border: "none", padding: "16px 18px", fontWeight: "700",
+                dropShadow: "drop-shadow(1.5px 1.5px 0 #333) drop-shadow(-1px -1px 0 #333)", label: "들쭉날쭉"
+            },
             "narration": { borderRadius: "0", border: "none", label: "나레이션" },
         };
 
@@ -5335,11 +5502,18 @@
             document.getElementById('bubble-prev-btn').disabled = idx <= 0;
             document.getElementById('bubble-next-btn').disabled = idx >= total - 1;
 
-            // 이미지 표시
+            // 이미지 표시 + 컨테이너 비율 동적 조정
             const imgEl = document.getElementById('bubble-preview-img');
             const imgData = bubbleImages[idx];
             if (imgData && imgData.path) {
                 imgEl.src = imgData.path.startsWith('/') ? imgData.path : '/' + imgData.path;
+                // 이미지 로드 완료 시 컨테이너 비율을 원본 이미지에 맞춤 (여백 제거)
+                imgEl.onload = function() {
+                    var container = document.getElementById('bubble-preview-container');
+                    if (container && imgEl.naturalWidth && imgEl.naturalHeight) {
+                        container.style.aspectRatio = imgEl.naturalWidth + '/' + imgEl.naturalHeight;
+                    }
+                };
             } else {
                 imgEl.src = '';
             }
@@ -5367,6 +5541,119 @@
             renderBubbleEditCards(layer);
         }
 
+        // ★ 공통 헬퍼: 말풍선 div 생성 (편집기 프리뷰 + 내보내기 캡처 모두 사용)
+        // options.interactive = true: 드래그/리사이즈 핸들 포함 (편집기용)
+        // options.interactive = false: 순수 렌더링만 (캡처용) — wrapper 구조로 오염 방지
+        // options.scaleFontSize: 폰트 크기 스케일 팩터 (캡처 시 해상도 보정용, 기본 1)
+        function buildBubbleDiv(bubble, layerFont, idx, options) {
+            options = options || {};
+            const interactive = options.interactive !== false;
+            const fontScale = options.scaleFontSize || 1;
+            migrateBubbleData(bubble);
+
+            const shapeCSS = SHAPE_CSS[bubble.shape] || SHAPE_CSS["round"];
+            const isNarr = bubble.type === 'narration';
+            const isBold = bubble.bold || shapeCSS.fontWeight;
+            const fontFamily = bubble.font_family || layerFont;
+            const fontSize = Math.round((bubble.font_size || 13) * fontScale);
+
+            const div = document.createElement('div');
+            div.dataset.bubbleIdx = idx;
+            const bubblePadding = shapeCSS.padding || '6px 10px';
+            const hasClipPath = !!shapeCSS.clipPath;
+
+            // 말풍선 본체 스타일 (위치/크기는 interactive 모드에서만 직접 설정)
+            const bubbleStyleBase = `
+                padding: ${bubblePadding}; box-sizing: border-box;
+                font-family: '${fontFamily}', sans-serif;
+                font-size: ${fontSize}px; line-height: 1.35;
+                background: ${isNarr ? 'rgba(0,0,0,0.7)' : (bubble.bg_color || '#FFF')};
+                color: ${isNarr ? '#fff' : (bubble.text_color || '#000')};
+                border-color: ${bubble.border_color || '#333'};
+                opacity: ${bubble.opacity || (shapeCSS.opacity ? parseFloat(shapeCSS.opacity) : 0.95)};
+                ${hasClipPath ? 'clip-path:' + shapeCSS.clipPath + ';' : ''}
+                ${hasClipPath ? 'border: none;' : (isNarr ? 'border: none;' : (shapeCSS.border || ''))};
+                ${hasClipPath ? '' : 'border-radius:' + (isNarr ? '0' : (shapeCSS.borderRadius || '18px')) + ';'}
+                font-weight: ${isBold ? '700' : '400'};
+                ${shapeCSS.fontStyle ? 'font-style:'+shapeCSS.fontStyle+';' : ''}
+                ${hasClipPath ? 'filter:' + (shapeCSS.dropShadow || 'drop-shadow(1px 1px 0 #333) drop-shadow(-1px -1px 0 #333)') + ';' : 'box-shadow:' + (shapeCSS.boxShadow || '0 2px 8px rgba(0,0,0,0.15)') + ';'}
+                word-break: keep-all;
+                text-align: ${isNarr ? 'center' : 'left'};
+                display: flex; align-items: center; justify-content: center;
+                user-select: none;
+            `;
+
+            // 꼬리 요소 생성
+            var tailEl = null;
+            if (!isNarr && bubble.tail && bubble.tail !== 'none') {
+                tailEl = document.createElement('div');
+                const tailColor = bubble.bg_color || '#FFF';
+                const tailSize = interactive ? 10 : Math.round(10 * fontScale);
+                let tailCSS = 'position:absolute; width:0; height:0; pointer-events:none;';
+                switch (bubble.tail) {
+                    case 'bottom-left':
+                        tailCSS += 'bottom:-' + tailSize + 'px; left:15%; border-left:' + tailSize + 'px solid transparent; border-right:' + tailSize + 'px solid transparent; border-top:' + tailSize + 'px solid ' + tailColor + ';';
+                        break;
+                    case 'bottom-center':
+                        tailCSS += 'bottom:-' + tailSize + 'px; left:50%; transform:translateX(-50%); border-left:' + tailSize + 'px solid transparent; border-right:' + tailSize + 'px solid transparent; border-top:' + tailSize + 'px solid ' + tailColor + ';';
+                        break;
+                    case 'bottom-right':
+                        tailCSS += 'bottom:-' + tailSize + 'px; right:15%; border-left:' + tailSize + 'px solid transparent; border-right:' + tailSize + 'px solid transparent; border-top:' + tailSize + 'px solid ' + tailColor + ';';
+                        break;
+                    case 'top-left':
+                        tailCSS += 'top:-' + tailSize + 'px; left:15%; border-left:' + tailSize + 'px solid transparent; border-right:' + tailSize + 'px solid transparent; border-bottom:' + tailSize + 'px solid ' + tailColor + ';';
+                        break;
+                    case 'top-center':
+                        tailCSS += 'top:-' + tailSize + 'px; left:50%; transform:translateX(-50%); border-left:' + tailSize + 'px solid transparent; border-right:' + tailSize + 'px solid transparent; border-bottom:' + tailSize + 'px solid ' + tailColor + ';';
+                        break;
+                    case 'top-right':
+                        tailCSS += 'top:-' + tailSize + 'px; right:15%; border-left:' + tailSize + 'px solid transparent; border-right:' + tailSize + 'px solid transparent; border-bottom:' + tailSize + 'px solid ' + tailColor + ';';
+                        break;
+                    case 'left':
+                        tailCSS += 'left:-' + tailSize + 'px; top:50%; transform:translateY(-50%); border-top:' + tailSize + 'px solid transparent; border-bottom:' + tailSize + 'px solid transparent; border-right:' + tailSize + 'px solid ' + tailColor + ';';
+                        break;
+                    case 'right':
+                        tailCSS += 'right:-' + tailSize + 'px; top:50%; transform:translateY(-50%); border-top:' + tailSize + 'px solid transparent; border-bottom:' + tailSize + 'px solid transparent; border-left:' + tailSize + 'px solid ' + tailColor + ';';
+                        break;
+                }
+                tailEl.style.cssText = tailCSS;
+            }
+
+            if (interactive) {
+                // ── 편집기 모드: 기존 구조 유지 (단일 div, overflow:visible) ──
+                div.style.cssText = `
+                    position: absolute; pointer-events: auto; cursor: move;
+                    left: ${bubble.x}%; top: ${bubble.y}%;
+                    width: ${bubble.w}%; min-height: ${bubble.h}%;
+                    z-index: ${10 + idx}; overflow: visible;
+                    ${bubbleStyleBase}
+                `;
+                div.innerText = bubble.text;
+                if (tailEl) div.appendChild(tailEl);
+                return div;
+            } else {
+                // ── 캡처 모드: wrapper 구조 (html2canvas 오염 방지) ──
+                // wrapper: 투명 배경, overflow:visible (tail이 바깥으로 나갈 수 있도록)
+                var wrapper = document.createElement('div');
+                wrapper.style.cssText = 'position:absolute; left:' + bubble.x + '%; top:' + bubble.y + '%;'
+                    + ' width:' + bubble.w + '%; min-height:' + bubble.h + '%;'
+                    + ' z-index:' + (10 + idx) + '; overflow:visible; pointer-events:none; background:transparent;';
+
+                // bubble div: position:relative, overflow:hidden (배경 누출 차단)
+                div.style.cssText = `
+                    position: relative; width: 100%; min-height: 100%;
+                    overflow: hidden;
+                    ${bubbleStyleBase}
+                `;
+                div.innerText = bubble.text;
+                wrapper.appendChild(div);
+
+                // tail: wrapper의 직접 자식 (bubble div 밖 → overflow:hidden 영향 안 받음)
+                if (tailEl) wrapper.appendChild(tailEl);
+                return wrapper;
+            }
+        }
+
         // ★ CSS 실시간 프리뷰 — 자유 위치 + 드래그 이동 + 리사이즈
         function renderCSSOverlay(layer) {
             const container = document.getElementById('bubble-overlay-layer');
@@ -5379,104 +5666,9 @@
 
             layer.bubbles.forEach((bubble, i) => {
                 if (!bubble.visible || !bubble.text) return;
-                migrateBubbleData(bubble);
 
-                const shapeCSS = SHAPE_CSS[bubble.shape] || SHAPE_CSS["round"];
-                const isNarr = bubble.type === 'narration';
-                const isBold = bubble.bold || shapeCSS.fontWeight;
-                // 개별 폰트 > 레이어 글로벌 폰트
-                const fontFamily = bubble.font_family || layerFont;
-
-                const div = document.createElement('div');
-                div.dataset.bubbleIdx = i;
-                const bubblePadding = shapeCSS.padding || '6px 10px';
-                div.style.cssText = `
-                    position: absolute; pointer-events: auto; cursor: move;
-                    left: ${bubble.x}%; top: ${bubble.y}%;
-                    width: ${bubble.w}%; min-height: ${bubble.h}%;
-                    padding: ${bubblePadding}; box-sizing: border-box;
-                    font-family: '${fontFamily}', sans-serif;
-                    font-size: ${bubble.font_size || 13}px; line-height: 1.35;
-                    background: ${isNarr ? 'rgba(0,0,0,0.7)' : (bubble.bg_color || '#FFF')};
-                    color: ${isNarr ? '#fff' : (bubble.text_color || '#000')};
-                    border-color: ${bubble.border_color || '#333'};
-                    opacity: ${bubble.opacity || (shapeCSS.opacity ? parseFloat(shapeCSS.opacity) : 0.95)};
-                    z-index: ${10 + i};
-                    ${isNarr ? 'border: none;' : (shapeCSS.border || '')};
-                    border-radius: ${isNarr ? '0' : (shapeCSS.borderRadius || '18px')};
-                    font-weight: ${isBold ? '700' : '400'};
-                    ${shapeCSS.fontStyle ? 'font-style:'+shapeCSS.fontStyle+';' : ''}
-                    box-shadow: ${shapeCSS.boxShadow || '0 2px 8px rgba(0,0,0,0.15)'};
-                    word-break: keep-all; overflow: hidden;
-                    text-align: ${isNarr ? 'center' : 'left'};
-                    display: flex; align-items: center; justify-content: center;
-                    user-select: none;
-                `;
-
-                // 대사 텍스트만 (캐릭터 이름 표시하지 않음)
-                div.innerText = bubble.text;
-
-                // 말풍선 꼬리(tail) 렌더링
-                if (!isNarr && bubble.tail && bubble.tail !== 'none') {
-                    const tail = document.createElement('div');
-                    const tailColor = bubble.bg_color || '#FFF';
-                    const tailBorder = bubble.border_color || '#333';
-                    const tailSize = 10;
-                    let tailCSS = 'position:absolute; width:0; height:0; pointer-events:none;';
-                    
-                    switch (bubble.tail) {
-                        case 'bottom-left':
-                            tailCSS += `bottom:-${tailSize}px; left:15%;
-                                border-left: ${tailSize}px solid transparent;
-                                border-right: ${tailSize}px solid transparent;
-                                border-top: ${tailSize}px solid ${tailColor};`;
-                            break;
-                        case 'bottom-center':
-                            tailCSS += `bottom:-${tailSize}px; left:50%; transform:translateX(-50%);
-                                border-left: ${tailSize}px solid transparent;
-                                border-right: ${tailSize}px solid transparent;
-                                border-top: ${tailSize}px solid ${tailColor};`;
-                            break;
-                        case 'bottom-right':
-                            tailCSS += `bottom:-${tailSize}px; right:15%;
-                                border-left: ${tailSize}px solid transparent;
-                                border-right: ${tailSize}px solid transparent;
-                                border-top: ${tailSize}px solid ${tailColor};`;
-                            break;
-                        case 'top-left':
-                            tailCSS += `top:-${tailSize}px; left:15%;
-                                border-left: ${tailSize}px solid transparent;
-                                border-right: ${tailSize}px solid transparent;
-                                border-bottom: ${tailSize}px solid ${tailColor};`;
-                            break;
-                        case 'top-center':
-                            tailCSS += `top:-${tailSize}px; left:50%; transform:translateX(-50%);
-                                border-left: ${tailSize}px solid transparent;
-                                border-right: ${tailSize}px solid transparent;
-                                border-bottom: ${tailSize}px solid ${tailColor};`;
-                            break;
-                        case 'top-right':
-                            tailCSS += `top:-${tailSize}px; right:15%;
-                                border-left: ${tailSize}px solid transparent;
-                                border-right: ${tailSize}px solid transparent;
-                                border-bottom: ${tailSize}px solid ${tailColor};`;
-                            break;
-                        case 'left':
-                            tailCSS += `left:-${tailSize}px; top:50%; transform:translateY(-50%);
-                                border-top: ${tailSize}px solid transparent;
-                                border-bottom: ${tailSize}px solid transparent;
-                                border-right: ${tailSize}px solid ${tailColor};`;
-                            break;
-                        case 'right':
-                            tailCSS += `right:-${tailSize}px; top:50%; transform:translateY(-50%);
-                                border-top: ${tailSize}px solid transparent;
-                                border-bottom: ${tailSize}px solid transparent;
-                                border-left: ${tailSize}px solid ${tailColor};`;
-                            break;
-                    }
-                    tail.style.cssText = tailCSS;
-                    div.appendChild(tail);
-                }
+                // 공통 헬퍼로 말풍선 div 생성 (인터랙티브 모드)
+                const div = buildBubbleDiv(bubble, layerFont, i, { interactive: true });
 
                 // 드래그 이동 이벤트
                 div.addEventListener('mousedown', (e) => {
@@ -5496,11 +5688,11 @@
                 const handle = document.createElement('div');
                 handle.className = 'bubble-resize-handle';
                 handle.style.cssText = `
-                    position: absolute; right: -3px; bottom: -3px;
-                    width: 14px; height: 14px; cursor: nwse-resize;
-                    background: var(--primary); border-radius: 2px;
-                    opacity: 0; transition: opacity 0.15s;
-                    pointer-events: auto;
+                    position: absolute; right: 0px; bottom: 0px;
+                    width: 18px; height: 18px; cursor: nwse-resize;
+                    background: var(--primary); border-radius: 3px;
+                    opacity: 0.25; transition: opacity 0.15s;
+                    pointer-events: auto; z-index: 999;
                 `;
                 handle.addEventListener('mousedown', (e) => {
                     e.preventDefault(); e.stopPropagation();
@@ -5550,6 +5742,8 @@
         document.addEventListener('mouseup', () => {
             if (bubbleDragState) {
                 bubbleDragState = null;
+                saveSnapshot();
+                saveBubbleLayerToServer();
             }
         });
 
@@ -5686,6 +5880,7 @@
                 saveSnapshot();
                 layer.bubbles[idx].font_family = fontVal;
                 renderCSSOverlay(layer);
+                saveBubbleLayerToServer();
             }
         }
 
@@ -5695,6 +5890,7 @@
                 saveSnapshot();
                 layer.bubbles[idx].text = text;
                 renderCSSOverlay(layer);
+                saveBubbleLayerToServer();
             }
         }
 
@@ -5709,24 +5905,30 @@
         function updateBubbleColor(idx, prop, color) {
             const layer = bubbleLayers[bubbleCurrentScene];
             if (layer && layer.bubbles[idx]) {
+                saveSnapshot();
                 layer.bubbles[idx][prop] = color;
                 renderCSSOverlay(layer);
+                saveBubbleLayerToServer();
             }
         }
 
         function updateBubbleShape(idx, shape) {
             const layer = bubbleLayers[bubbleCurrentScene];
             if (layer && layer.bubbles[idx]) {
+                saveSnapshot();
                 layer.bubbles[idx].shape = shape;
                 renderCSSOverlay(layer);
+                saveBubbleLayerToServer();
             }
         }
 
         function updateBubbleFontSize(idx, size) {
             const layer = bubbleLayers[bubbleCurrentScene];
             if (layer && layer.bubbles[idx]) {
+                saveSnapshot();
                 layer.bubbles[idx].font_size = parseInt(size) || 15;
                 renderCSSOverlay(layer);
+                saveBubbleLayerToServer();
             }
         }
 
@@ -5849,20 +6051,52 @@
         function toggleBubbleBold(idx, checked) {
             const layer = bubbleLayers[bubbleCurrentScene];
             if (layer && layer.bubbles[idx]) {
+                saveSnapshot();
                 layer.bubbles[idx].bold = checked;
                 renderCSSOverlay(layer);
+                saveBubbleLayerToServer();
             }
         }
 
         function updateBubbleTail(idx, dir) {
             const layer = bubbleLayers[bubbleCurrentScene];
             if (layer && layer.bubbles[idx]) {
+                saveSnapshot();
                 layer.bubbles[idx].tail = dir;
+                layer.bubbles[idx].tail_direction = dir;  // 양방향 동기화 (서버 model_post_init 충돌 방지)
                 renderCSSOverlay(layer);
+                saveBubbleLayerToServer();
             }
         }
 
         // 글로벌 일괄적용 — 현재 씬의 모든 대사 말풍선에 적용
+        // 폰트만 전체 적용
+        function applyGlobalFontOnly() {
+            const layer = bubbleLayers[bubbleCurrentScene];
+            if (!layer) return;
+            saveSnapshot();
+            const font = document.getElementById('bubble-font-family').value;
+            layer.font_family = font;
+            // 개별 폰트 설정도 초기화 (전체 설정 따르게)
+            layer.bubbles.forEach(b => { b.font_family = ''; });
+            renderBubbleEditor();
+            showToast('전체 말풍선에 폰트가 적용되었습니다.', 'success');
+        }
+
+        // 모양만 전체 적용
+        function applyGlobalShapeOnly() {
+            const layer = bubbleLayers[bubbleCurrentScene];
+            if (!layer) return;
+            saveSnapshot();
+            const shape = document.getElementById('bubble-global-shape').value;
+            layer.bubbles.forEach(b => {
+                if (b.type === 'dialogue') { b.shape = shape; }
+            });
+            renderBubbleEditor();
+            showToast('전체 말풍선에 모양이 적용되었습니다.', 'success');
+        }
+
+        // 전체 설정 일괄 적용 (폰트+모양+색상+볼드 모두)
         function applyGlobalToAll() {
             const layer = bubbleLayers[bubbleCurrentScene];
             if (!layer) return;
@@ -5881,10 +6115,11 @@
                     b.text_color = textColor;
                     b.bg_color = bgColor;
                     b.bold = bold;
+                    b.font_family = ''; // 전체 설정 따르게
                 }
             });
             renderBubbleEditor();
-            showToast('전체 말풍선에 설정이 적용되었습니다.', 'success');
+            showToast('전체 말풍선에 모든 설정이 적용되었습니다.', 'success');
         }
 
         function onGlobalSettingChange() {
@@ -5929,16 +6164,18 @@
             } catch(e) { console.warn("말풍선 저장 실패:", e); }
         }
 
-        // ── 최종 내보내기 ──
+        // ── 최종 내보내기 (편집기 화면 직접 캡처 방식) ──
+        // 편집기에 이미 렌더링된 #bubble-preview-container를 그대로 캡처하여
+        // WYSIWYG(보이는 그대로) 100% 보장
         async function exportWithBubbles() {
             if (!sessionId) { showToast('세션이 없습니다.', 'error'); return; }
             // 현재 씬 먼저 저장
             await saveBubbleLayerToServer();
             // 모든 씬 저장
-            for (let i = 0; i < bubbleLayers.length; i++) {
-                const layer = bubbleLayers[i];
+            for (var i = 0; i < bubbleLayers.length; i++) {
+                var layer = bubbleLayers[i];
                 try {
-                    await fetch(`/api/workflow/bubble-layers/${sessionId}/${layer.scene_number}`, {
+                    await fetch('/api/workflow/bubble-layers/' + sessionId + '/' + layer.scene_number, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ bubbles: layer.bubbles, show_all: layer.show_all, font_family: layer.font_family })
@@ -5946,21 +6183,98 @@
                 } catch(e) {}
             }
 
-            const btn = document.getElementById('bubble-export-btn');
-            btn.disabled = true; btn.innerText = '⏳ 내보내기 중...';
+            var btn = document.getElementById('bubble-export-btn');
+            if (btn) { btn.disabled = true; btn.innerText = '⏳ 내보내기 준비 중...'; }
+
+            // 폰트 로딩 완료 대기
+            if (document.fonts && document.fonts.ready) {
+                await document.fonts.ready;
+            }
+
+            var container = document.getElementById('bubble-preview-container');
+            var imgEl = document.getElementById('bubble-preview-img');
+            var originalScene = bubbleCurrentScene;
+            var exportedPaths = [];
+            var total = bubbleLayers.length;
 
             try {
-                const res = await fetch(`/api/workflow/bubble-layers/${sessionId}/export`, { method: 'POST' });
-                const data = await res.json();
-                if (data.success) {
-                    btn.innerText = `✅ ${data.exported_count}장 내보내기 완료!`;
-                    setTimeout(() => { btn.disabled = false; btn.innerText = '📥 최종 이미지 내보내기'; }, 3000);
-                } else {
-                    throw new Error(data.detail || '내보내기 실패');
+                for (var i = 0; i < total; i++) {
+                    if (btn) btn.innerText = '⏳ (' + (i + 1) + '/' + total + ') 캡처 중...';
+
+                    // 1. 해당 씬으로 전환
+                    bubbleCurrentScene = i;
+                    renderBubbleEditor();
+
+                    // 2. 이미지 로드 완료 대기
+                    await new Promise(function(resolve) {
+                        if (imgEl.complete && imgEl.naturalWidth > 0) {
+                            resolve();
+                        } else {
+                            imgEl.onload = resolve;
+                            // 이미지가 없는 경우 타임아웃
+                            setTimeout(resolve, 2000);
+                        }
+                    });
+                    // DOM 렌더링 안정화 대기
+                    await new Promise(function(r) { setTimeout(r, 150); });
+
+                    // 이미지가 없으면 스킵
+                    if (!imgEl.src || !imgEl.naturalWidth) continue;
+
+                    // 3. 편집 UI 요소 숨기기 (리사이즈 핸들)
+                    var handles = container.querySelectorAll('.bubble-resize-handle');
+                    handles.forEach(function(h) { h.style.display = 'none'; });
+
+                    // 4. 편집기 화면 그대로 html2canvas 캡처 (scale로 해상도 보정)
+                    var scale = imgEl.naturalWidth / container.offsetWidth;
+                    if (scale < 1) scale = 1;
+                    var canvas = await html2canvas(container, {
+                        scale: scale,
+                        useCORS: true,
+                        backgroundColor: null,
+                        logging: false
+                    });
+
+                    // 5. 편집 UI 복원
+                    handles.forEach(function(h) { h.style.display = ''; });
+
+                    // 6. Blob 생성 + FormData 업로드
+                    var blob = await new Promise(function(resolve) { canvas.toBlob(resolve, 'image/png'); });
+                    var formData = new FormData();
+                    formData.append('image', blob, 'scene_' + bubbleLayers[i].scene_number + '.png');
+                    formData.append('scene_number', String(bubbleLayers[i].scene_number));
+
+                    var res = await fetch('/api/workflow/bubble-layers/' + sessionId + '/upload-export', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    var data = await res.json();
+                    if (data.export_path) exportedPaths.push(data.export_path);
+                }
+
+                // 7. 원래 씬 복원
+                bubbleCurrentScene = originalScene;
+                renderBubbleEditor();
+
+                // 8. final_images 갱신
+                if (exportedPaths.length > 0) {
+                    await fetch('/api/workflow/bubble-layers/' + sessionId + '/finalize-export', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ export_paths: exportedPaths })
+                    });
+                }
+
+                if (btn) {
+                    btn.innerText = '✅ ' + exportedPaths.length + '장 내보내기 완료!';
+                    setTimeout(function() { btn.disabled = false; btn.innerText = '📥 최종 이미지 내보내기'; }, 3000);
                 }
             } catch(e) {
-                showToast('내보내기 실패: ' + e.message, 'error');
-                btn.disabled = false; btn.innerText = '📥 최종 이미지 내보내기';
+                showToast('내보내기 실패: ' + (e.message || String(e)), 'error');
+                if (btn) { btn.disabled = false; btn.innerText = '📥 최종 이미지 내보내기'; }
+                // 원래 씬 복원
+                bubbleCurrentScene = originalScene;
+                renderBubbleEditor();
             }
         }
 
@@ -6849,9 +7163,26 @@
                 });
             }
 
-            // 말풍선 레이어 복원
+            // 말풍선 레이어 복원 + 데이터 마이그레이션
             if (data.bubble_layers && data.bubble_layers.length > 0) {
                 bubbleLayers = data.bubble_layers;
+                bubbleLayers.forEach(function(layer) {
+                    if (layer.bubbles) layer.bubbles.forEach(function(b) { migrateBubbleData(b); });
+                });
+            }
+
+            // 캡션 데이터 복원
+            if (data.caption) {
+                // 발행 탭의 캡션 필드에 복원 (탭 전환 시 표시됨)
+                window._restoredCaption = data.caption;
+                var hookEl = document.getElementById('final-hook');
+                var bodyEl = document.getElementById('final-body');
+                var tipEl = document.getElementById('final-tip');
+                var hashEl = document.getElementById('final-hashtags');
+                if (hookEl) hookEl.value = data.caption.hook || '';
+                if (bodyEl) bodyEl.value = data.caption.body || '';
+                if (tipEl) tipEl.value = data.caption.expert_tip || data.caption.tip || '';
+                if (hashEl) hashEl.value = (data.caption.hashtags || []).join(' ');
             }
 
             document.getElementById('project-list-panel').style.display = 'none';
@@ -6883,16 +7214,51 @@
         const name = prompt('프로젝트 이름을 입력하세요:', storyData ? (storyData.title || '') : '');
         if (!name) return;
         try {
+            // 1) 현재 편집 중인 말풍선 레이어 전부 서버 동기화
+            if (typeof bubbleLayers !== 'undefined' && bubbleLayers && bubbleLayers.length > 0) {
+                for (var i = 0; i < bubbleLayers.length; i++) {
+                    if (bubbleLayers[i] && bubbleLayers[i].scene_number !== undefined) {
+                        await fetch('/api/workflow/bubble-layers/' + sessionId + '/' + bubbleLayers[i].scene_number, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(bubbleLayers[i])
+                        });
+                    }
+                }
+            }
+
+            // 2) 캡션 데이터 수집 (프론트 입력값)
+            var captionData = null;
+            var hookEl = document.getElementById('final-hook');
+            var bodyEl = document.getElementById('final-body');
+            var tipEl = document.getElementById('final-tip');
+            var hashEl = document.getElementById('final-hashtags');
+            if (hookEl && (hookEl.value || (bodyEl && bodyEl.value))) {
+                var hashText = (hashEl ? hashEl.value : '').trim();
+                var hashArr = hashText ? hashText.split(/\s+/).filter(function(t) { return t; }) : [];
+                captionData = {
+                    hook: hookEl.value || '',
+                    body: bodyEl ? bodyEl.value || '' : '',
+                    expert_tip: tipEl ? tipEl.value || '' : '',
+                    hashtags: hashArr
+                };
+            }
+
+            // 3) 프로젝트 저장 API 호출 (캡션 포함)
             const res = await fetch('/api/workflow/project/save', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ session_id: sessionId, project_name: name })
+                body: JSON.stringify({
+                    session_id: sessionId,
+                    project_name: name,
+                    caption: captionData
+                })
             });
             const data = await res.json();
             if (data.success) {
                 showToast('프로젝트 저장 완료 (이미지 ' + data.image_count + '개)', 'success');
             } else {
-                showToast('저장 실패: ' + (data.detail || ''), 'error');
+                showToast('저장 실패: ' + (data.detail || data.error || ''), 'error');
             }
         } catch(e) { showToast('저장 오류: ' + e.message, 'error'); }
     }

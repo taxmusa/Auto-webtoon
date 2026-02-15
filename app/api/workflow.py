@@ -2,7 +2,7 @@
 워크플로우 API 라우터
 웹툰 생성 전체 흐름 관리
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, File, UploadFile, Form
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional, List
@@ -13,7 +13,8 @@ from app.models.models import (
     Story, Scene, CharacterSettings, SpecializedField,
     ManualPromptOverrides, ThumbnailData, ThumbnailSource, ThumbnailPosition,
     SeriesInfo, SeriesEpisode, ToBeContinuedStyle, GeneratedImage,
-    BubbleLayer, BubbleOverlay, BubblePosition, BubbleShape, CHARACTER_COLORS
+    BubbleLayer, BubbleOverlay, BubblePosition, BubbleShape, CHARACTER_COLORS,
+    InstagramCaption
 )
 from app.services.gemini_service import get_gemini_service
 from app.services.image_generator import get_generator
@@ -578,7 +579,13 @@ async def generate_images(request: GenerateImagesRequest):
             style_ref_bytes = PILImg.open(BIO(style_ref_bytes))
 
     # ★ 속도 최적화: 루프 밖에서 1회만 계산
-    scene_size = "1024x1536" if request.aspect_ratio in ("4:5", "9:16") else "1024x1024"
+    # 비율별 정확한 이미지 크기 (인스타 허용: 1.91:1 가로 ~ 4:5 세로)
+    if request.aspect_ratio == "4:5":
+        scene_size = "1024x1280"    # 정확한 4:5
+    elif request.aspect_ratio == "9:16":
+        scene_size = "1024x1820"    # 정확한 9:16 (릴스/스토리용)
+    else:
+        scene_size = "1024x1024"    # 1:1
     os.makedirs("output", exist_ok=True)
     async def generate_single_scene(scene, ref_image_bytes=None,
                                      method_bytes=None, style_bytes=None,
@@ -753,28 +760,47 @@ async def generate_caption(request: GenerateCaptionRequest):
     
     gemini = get_gemini_service()
     
-    # 스토리 전체 요약 생성 (모든 씬 포함)
+    # 가상 캐릭터 고유 이름 목록 수집 (캡션 노출 방지용)
+    char_names = [c.name for c in session.story.characters] if session.story.characters else []
+    
+    # 스토리 전체 요약 생성 (캐릭터 고유 이름 제거)
     story_summary = f"제목: {session.story.title}\n"
-    story_summary += f"등장인물: {', '.join([c.name + '(' + c.role + ')' for c in session.story.characters])}\n"
-    story_summary += "\n".join([
-        f"씬{s.scene_number}: {s.scene_description}"
-        for s in session.story.scenes  # ★ 전체 씬 사용 (기존: [:3])
-    ])
-    # 대사도 요약에 포함 (스토리 맥락 강화)
+    scene_lines = []
+    for s in session.story.scenes:
+        desc = s.scene_description
+        for cname in char_names:
+            desc = desc.replace(cname, "")
+        scene_lines.append(f"씬{s.scene_number}: {desc}")
+    story_summary += "\n".join(scene_lines)
+    # 대사 내용만 요약에 포함 (캐릭터 고유 이름 제거)
     dialogues_summary = []
     for s in session.story.scenes[:5]:
         for d in s.dialogues[:2]:
-            dialogues_summary.append(f"  {d.character}: \"{d.text}\"")
+            clean_text = d.text
+            for cname in char_names:
+                clean_text = clean_text.replace(cname, "")
+            dialogues_summary.append(f"  \"{clean_text}\"")
     if dialogues_summary:
         story_summary += "\n주요 대사:\n" + "\n".join(dialogues_summary)
     
     field = session.field_info.field if session.field_info else SpecializedField.GENERAL
     
-    caption = await gemini.generate_caption(
-        keyword=session.keyword or session.story.title,
-        field=field,
-        story_summary=story_summary
-    )
+    try:
+        caption = await gemini.generate_caption(
+            keyword=session.keyword or session.story.title,
+            field=field,
+            story_summary=story_summary,
+            character_names=char_names  # 캐릭터명 후처리 제거용
+        )
+    except Exception as e:
+        logger.error(f"[generate_caption] 예외 발생: {e}", exc_info=True)
+        # 500 대신 기본 캡션 반환
+        caption = InstagramCaption(
+            hook=f"📌 {session.keyword or '정보'} 알아보기",
+            body=f"{session.keyword or '유용한 정보'}에 대해 웹툰으로 정리했어요!\n\n저장해두고 필요할 때 확인해보세요 ✅",
+            expert_tip="전문가 팁은 저장 필수!",
+            hashtags=["#웹툰", "#정보", "#꿀팁"]
+        )
     
     session.caption = caption
     session.state = WorkflowState.REVIEWING_CAPTION
@@ -1353,7 +1379,7 @@ async def instagram_check():
 
 @router.post("/publish")
 async def publish(request: PublishRequest):
-    """Instagram 발행 (즉시 또는 예약). 로컬 이미지는 Cloudinary 있으면 자동 업로드 후 발행."""
+    """Instagram 발행 (즉시 또는 예약). 로컬 이미지는 Cloudinary 업로드 후 발행."""
     session = sessions.get(request.session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -1362,47 +1388,110 @@ async def publish(request: PublishRequest):
         from app.services.instagram_service import get_instagram_service
         from app.services.cloudinary_service import get_cloudinary_service
         from app.models.models import PublishData
+        from urllib.parse import urlparse, unquote
         
         image_urls = []
         cloudinary = get_cloudinary_service()
         
-        # 1) request.images에 공개 URL이 있으면 우선 사용
+        logger.info(f"[발행] 시작 — 프론트엔드에서 받은 이미지: {request.images}")
+        
+        # 1) request.images 처리: 모든 이미지를 공개 HTTPS URL로 변환
         if request.images:
-            for raw in request.images:
-                if raw.startswith("http"):
+            for idx, raw in enumerate(request.images):
+                # ★ URL 인코딩된 한글 경로 디코딩 (%EB%B0%9C → 발)
+                raw = unquote(raw)
+                logger.info(f"[발행] 이미지 {idx+1}/{len(request.images)} 처리: {raw[:100]}")
+                
+                # (a) localhost/127.0.0.1 URL → 로컬 경로 추출 후 Cloudinary 업로드
+                if raw.startswith("http://localhost") or raw.startswith("http://127.0.0.1"):
+                    local_path = unquote(urlparse(raw).path.lstrip("/"))
+                    logger.info(f"[발행] localhost URL 감지 → 로컬 경로: {local_path}")
+                    if cloudinary.cloud_name and local_path:
+                        url = await cloudinary.upload_from_path(local_path)
+                        if url:
+                            image_urls.append(url)
+                            logger.info(f"[발행] Cloudinary 업로드 성공: {url}")
+                        else:
+                            logger.error(f"[발행] Cloudinary 업로드 실패: {local_path}")
+                            return {"success": False, "error": f"이미지 업로드 실패: {local_path} — 서버 로그를 확인하세요."}
+                    else:
+                        return {"success": False, "error": f"Cloudinary 설정이 필요합니다. .env 파일을 확인하세요."}
+                
+                # (b) 이미 공개 HTTPS URL인 경우
+                elif raw.startswith("https://"):
                     image_urls.append(raw)
-                elif cloudinary.cloud_name:
-                    url = await cloudinary.upload_from_path(raw)
-                    if url:
-                        image_urls.append(url)
+                    logger.info(f"[발행] HTTPS URL 그대로 사용: {raw[:80]}")
+                
+                # (c) http:// (localhost 아닌 외부) — 경고 후 사용
+                elif raw.startswith("http://"):
+                    logger.warning(f"[발행] 비-HTTPS URL 감지: {raw[:80]} — Instagram이 거부할 수 있습니다")
+                    image_urls.append(raw)
+                
+                # (d) 상대 경로 (/output/... 등) → Cloudinary 업로드
+                else:
+                    clean_path = raw.lstrip("/")
+                    logger.info(f"[발행] 로컬 경로 → Cloudinary 업로드: {clean_path}")
+                    if cloudinary.cloud_name:
+                        url = await cloudinary.upload_from_path(clean_path)
+                        if url:
+                            image_urls.append(url)
+                            logger.info(f"[발행] Cloudinary 업로드 성공: {url}")
+                        else:
+                            logger.error(f"[발행] Cloudinary 업로드 실패: {clean_path}")
+                            return {"success": False, "error": f"이미지 업로드 실패: {clean_path} — 서버 로그를 확인하세요."}
+                    else:
+                        return {"success": False, "error": "Cloudinary 설정이 필요합니다. .env 파일을 확인하세요."}
 
-        # 2) 없으면 final_images(말풍선 합성본) 우선, 그다음 원본 images 사용
+        # 2) request.images가 비어있으면 세션의 final_images / 원본 images 사용
         if not image_urls:
+            logger.info("[발행] request.images에서 URL 확보 실패 → 세션 이미지 fallback")
             source_images = []
-            # final_images 우선 (말풍선 합성 이미지)
             if hasattr(session, 'final_images') and session.final_images:
                 for fi in session.final_images:
-                    ep = getattr(fi, 'export_path', None) or getattr(fi, 'local_path', None)
-                    if ep:
-                        source_images.append(ep)
-            # final_images가 없으면 원본 images
+                    if isinstance(fi, str) and fi:
+                        source_images.append(fi)
+                    elif hasattr(fi, 'export_path'):
+                        ep = fi.export_path or getattr(fi, 'local_path', None)
+                        if ep:
+                            source_images.append(ep)
             if not source_images and session.images:
                 for img in session.images:
                     lp = getattr(img, "local_path", None)
                     if lp:
                         source_images.append(lp)
+            logger.info(f"[발행] 세션 이미지 {len(source_images)}장 발견")
             for path in source_images:
-                if str(path).startswith("http"):
+                if str(path).startswith("https://"):
                     image_urls.append(path)
                 elif cloudinary.cloud_name and path:
                     url = await cloudinary.upload_from_path(path)
                     if url:
                         image_urls.append(url)
+                    else:
+                        return {"success": False, "error": f"이미지 업로드 실패: {path}"}
                 else:
                     return {"success": False, "error": "로컬 이미지는 Cloudinary 설정이 필요합니다. .env에 CLOUDINARY_* 를 넣어주세요."}
         
         if not image_urls:
             return {"success": False, "error": "발행할 이미지가 없습니다."}
+        
+        # ★ URL 검증 게이트: Instagram은 공개 HTTPS URL만 허용
+        for url in image_urls:
+            if not url.startswith("https://"):
+                logger.error(f"[발행] 비-HTTPS URL이 Instagram에 전달될 뻔함: {url}")
+                return {"success": False, "error": f"Instagram은 공개 HTTPS URL만 허용합니다. 문제 URL: {url[:80]}"}
+        
+        # ★ Cloudinary URL JPEG 변환 보장 (Instagram은 JPEG만 공식 지원)
+        for i, u in enumerate(image_urls):
+            if "res.cloudinary.com" in u and "/image/upload/" in u:
+                # URL에 f_jpg 변환이 없으면 삽입: /image/upload/ → /image/upload/f_jpg,q_95/
+                if "/f_jpg" not in u and "/f_auto" not in u:
+                    image_urls[i] = u.replace("/image/upload/", "/image/upload/f_jpg,q_95/")
+                    logger.info(f"[발행] Cloudinary URL JPEG 변환 적용: {image_urls[i][:100]}")
+        
+        logger.info(f"[발행] 최종 URL {len(image_urls)}개 검증 완료 → Instagram 발행 시작")
+        for i, u in enumerate(image_urls):
+            logger.info(f"[발행]   URL {i+1}: {u}")
         
         # 예약 발행 시간 처리
         scheduled_time = None
@@ -1414,7 +1503,16 @@ async def publish(request: PublishRequest):
         result = await instagram.publish_workflow(publish_data, scheduled_publish_time=scheduled_time)
         
         if not result.get("success"):
-            return {"success": False, "error": result.get("error", "Unknown error")}
+            # ★ 진단 정보를 사용자에게 직접 표시
+            diag = {
+                "error_code": result.get("error_code"),
+                "error_subcode": result.get("error_subcode"),
+                "error_type": result.get("error_type"),
+                "fbtrace_id": result.get("fbtrace_id"),
+                "image_urls": [u[:80] for u in image_urls],
+            }
+            logger.error(f"[발행] Instagram 발행 실패: {result.get('error')} | 진단: {diag}")
+            return {"success": False, "error": result.get("error", "Unknown error"), "diagnostics": diag}
         
         session.state = WorkflowState.PUBLISHED
         
@@ -1426,9 +1524,10 @@ async def publish(request: PublishRequest):
             "image_count": result.get("image_count", len(image_urls)),
         }
         
+        logger.info(f"[발행] 완료: {response}")
         return response
     except Exception as e:
-        logger.error(f"[발행] 오류: {e}")
+        logger.error(f"[발행] 오류: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
@@ -2276,13 +2375,112 @@ async def export_with_bubbles(session_id: str):
                         border_w = 0
                         border_outline = None
                     
-                    draw.rounded_rectangle(
-                        [bx1, by1, bx2, by2],
-                        radius=radius,
-                        fill=fill_color,
-                        outline=border_outline,
-                        width=border_w
-                    )
+                    bw = bx2 - bx1
+                    bh = by2 - by1
+                    
+                    # ── 모양별 Pillow 렌더링 분기 ──
+                    import math
+                    
+                    # clip-path 기반 모양: 다각형으로 렌더링
+                    _CLIP_PATH_SHAPES = {
+                        "starburst": [
+                            (0.50,0.00),(0.61,0.15),(0.75,0.02),(0.77,0.20),(0.95,0.10),(0.85,0.28),
+                            (1.00,0.40),(0.88,0.50),(1.00,0.62),(0.85,0.68),(0.93,0.88),(0.75,0.78),
+                            (0.65,0.98),(0.55,0.80),(0.45,0.98),(0.35,0.80),(0.22,0.95),(0.22,0.72),
+                            (0.05,0.82),(0.15,0.62),(0.00,0.50),(0.12,0.40),(0.00,0.25),(0.15,0.22),
+                            (0.08,0.05),(0.25,0.15),(0.38,0.00)
+                        ],
+                        "spike": [
+                            (0.50,0.00),(0.58,0.20),(0.72,0.03),(0.68,0.25),(0.90,0.12),(0.80,0.32),
+                            (1.00,0.28),(0.88,0.45),(1.00,0.55),(0.88,0.58),(1.00,0.72),(0.82,0.70),
+                            (0.92,0.90),(0.72,0.75),(0.62,1.00),(0.52,0.78),(0.40,1.00),(0.35,0.78),
+                            (0.18,0.92),(0.22,0.70),(0.00,0.75),(0.14,0.58),(0.00,0.48),(0.12,0.40),
+                            (0.00,0.25),(0.18,0.30),(0.08,0.12),(0.28,0.25),(0.35,0.02),(0.42,0.22)
+                        ],
+                        "explosion": [
+                            (0.50,0.00),(0.55,0.18),(0.68,0.02),(0.65,0.22),(0.85,0.08),(0.78,0.28),
+                            (0.98,0.22),(0.85,0.38),(1.00,0.45),(0.88,0.52),(1.00,0.62),(0.82,0.62),
+                            (0.95,0.80),(0.72,0.72),(0.78,0.98),(0.58,0.78),(0.48,1.00),(0.42,0.78),
+                            (0.25,0.95),(0.30,0.70),(0.08,0.82),(0.18,0.62),(0.00,0.55),(0.15,0.48),
+                            (0.00,0.35),(0.18,0.35),(0.05,0.18),(0.22,0.28),(0.28,0.05),(0.38,0.22)
+                        ],
+                        "scallop": [
+                            (0.08,0.00),(0.18,0.06),(0.28,0.00),(0.38,0.06),(0.50,0.00),(0.62,0.06),
+                            (0.72,0.00),(0.82,0.06),(0.92,0.00),(1.00,0.08),(0.95,0.18),(1.00,0.28),
+                            (0.95,0.40),(1.00,0.52),(0.95,0.62),(1.00,0.72),(0.95,0.82),(1.00,0.92),
+                            (0.92,1.00),(0.82,0.94),(0.72,1.00),(0.62,0.94),(0.50,1.00),(0.38,0.94),
+                            (0.28,1.00),(0.18,0.94),(0.08,1.00),(0.00,0.92),(0.05,0.82),(0.00,0.72),
+                            (0.05,0.62),(0.00,0.52),(0.05,0.40),(0.00,0.28),(0.05,0.18),(0.00,0.08)
+                        ],
+                        "wavy": [
+                            (0.05,0.00),(0.15,0.05),(0.25,0.00),(0.35,0.05),(0.45,0.00),(0.55,0.05),
+                            (0.65,0.00),(0.75,0.05),(0.85,0.00),(0.95,0.05),(1.00,0.12),(0.98,0.25),
+                            (1.00,0.38),(0.98,0.50),(1.00,0.62),(0.98,0.75),(1.00,0.88),(0.95,0.95),
+                            (0.85,1.00),(0.75,0.95),(0.65,1.00),(0.55,0.95),(0.45,1.00),(0.35,0.95),
+                            (0.25,1.00),(0.15,0.95),(0.05,1.00),(0.00,0.88),(0.02,0.75),(0.00,0.62),
+                            (0.02,0.50),(0.00,0.38),(0.02,0.25),(0.00,0.12)
+                        ],
+                        "fluffy": [
+                            (0.10,0.05),(0.20,0.00),(0.30,0.08),(0.42,0.00),(0.55,0.05),(0.65,0.00),
+                            (0.75,0.08),(0.88,0.00),(0.95,0.10),(1.00,0.22),(0.95,0.35),(1.00,0.48),
+                            (0.95,0.60),(1.00,0.72),(0.95,0.85),(0.88,0.95),(0.78,1.00),(0.65,0.95),
+                            (0.55,1.00),(0.42,0.95),(0.30,1.00),(0.20,0.95),(0.10,1.00),(0.02,0.88),
+                            (0.00,0.75),(0.05,0.62),(0.00,0.50),(0.05,0.38),(0.00,0.25),(0.05,0.12)
+                        ],
+                        "jagged": [
+                            (0.03,0.05),(0.12,0.00),(0.22,0.08),(0.30,0.00),(0.42,0.05),(0.55,0.00),
+                            (0.62,0.08),(0.75,0.00),(0.82,0.05),(0.95,0.00),(1.00,0.10),(0.95,0.22),
+                            (1.00,0.32),(0.98,0.45),(1.00,0.58),(0.95,0.68),(1.00,0.78),(0.98,0.88),
+                            (0.95,1.00),(0.82,0.95),(0.72,1.00),(0.62,0.92),(0.50,1.00),(0.40,0.95),
+                            (0.28,1.00),(0.18,0.92),(0.08,1.00),(0.00,0.90),(0.05,0.78),(0.00,0.65),
+                            (0.05,0.52),(0.00,0.42),(0.03,0.30),(0.00,0.18)
+                        ],
+                    }
+                    
+                    if shape == 'ellipse':
+                        # 타원형 — draw.ellipse 사용
+                        draw.ellipse([bx1, by1, bx2, by2], fill=fill_color, outline=border_outline, width=border_w)
+                    elif shape == 'cloud':
+                        # 구름 — 겹치는 원으로 구름 느낌
+                        cx_c, cy_c = (bx1 + bx2) // 2, (by1 + by2) // 2
+                        rw, rh = bw // 2, bh // 2
+                        # 메인 타원
+                        draw.ellipse([bx1, by1, bx2, by2], fill=fill_color, outline=None)
+                        # 상단 볼록한 원들
+                        bump_r = int(min(bw, bh) * 0.18)
+                        for offset_x in [-rw * 0.4, -rw * 0.1, rw * 0.2, rw * 0.45]:
+                            bx = int(cx_c + offset_x)
+                            by_t = by1 - int(bump_r * 0.3)
+                            draw.ellipse([bx - bump_r, by_t, bx + bump_r, by_t + bump_r * 2], fill=fill_color, outline=None)
+                        # 테두리 (전체 외곽)
+                        draw.ellipse([bx1, by1, bx2, by2], fill=None, outline=border_outline, width=border_w)
+                    elif shape == 'thought':
+                        # 생각 — 점선은 Pillow로 어렵기 때문에 타원 + 작은 원들로 표현
+                        draw.ellipse([bx1, by1, bx2, by2], fill=fill_color, outline=border_outline, width=border_w)
+                        # 아래에 작은 생각 동그라미 3개
+                        dot_r = max(4, int(min(bw, bh) * 0.04))
+                        for i, (dr, doff) in enumerate([(dot_r * 3, 1), (dot_r * 2, 2), (dot_r, 3)]):
+                            dx = bx1 + int(bw * 0.25) - i * int(bw * 0.05)
+                            dy = by2 + dot_r * (i + 1) * 2
+                            draw.ellipse([dx - dr, dy - dr, dx + dr, dy + dr], fill=fill_color, outline=border_outline, width=max(1, border_w - 1))
+                    elif shape in _CLIP_PATH_SHAPES:
+                        # clip-path 다각형 기반 모양 렌더링
+                        points = _CLIP_PATH_SHAPES[shape]
+                        polygon_pts = [(int(bx1 + p[0] * bw), int(by1 + p[1] * bh)) for p in points]
+                        draw.polygon(polygon_pts, fill=fill_color)
+                        # 테두리를 다각형 외곽선으로
+                        if border_outline and border_w > 0:
+                            pts_closed = polygon_pts + [polygon_pts[0]]
+                            draw.line(pts_closed, fill=border_outline, width=max(1, border_w), joint="curve")
+                    else:
+                        # 기본: rounded_rectangle (round, square, shout, emphasis, soft, dark, system 등)
+                        draw.rounded_rectangle(
+                            [bx1, by1, bx2, by2],
+                            radius=radius,
+                            fill=fill_color,
+                            outline=border_outline,
+                            width=border_w
+                        )
                     
                     # 텍스트 색상: dark 스타일은 흰색
                     txt_fill = bubble.text_color or "#000000"
@@ -2294,11 +2492,9 @@ async def export_with_bubbles(session_id: str):
                                        bx2 - bx1 - padding_x * 2,
                                        fill=txt_fill)
                     
-                    # ── 꼬리(tail) 그리기 — 8방향 지원 ──
+                    # ── 꼬리(tail) 그리기 — 8방향 지원 (clip-path 모양은 꼬리 생략) ──
                     tail_dir = bubble.tail or bubble.tail_direction or 'none'
-                    if tail_dir != 'none':
-                        bw = bx2 - bx1
-                        bh = by2 - by1
+                    if tail_dir != 'none' and shape not in _CLIP_PATH_SHAPES:
                         tail_size = max(8, int(min(bw, bh) * 0.12))
                         cx = (bx1 + bx2) // 2  # 말풍선 중앙 X
                         cy = (by1 + by2) // 2  # 말풍선 중앙 Y
@@ -2348,6 +2544,39 @@ async def export_with_bubbles(session_id: str):
         "exported_count": len(exported),
         "images": exported
     }
+
+
+# ── html2canvas 캡처 이미지 업로드 (프론트엔드 캡처 방식) ──
+
+@router.post("/bubble-layers/{session_id}/upload-export")
+async def upload_export_image(session_id: str, image: UploadFile = File(...), scene_number: int = Form(...)):
+    """프론트엔드 html2canvas에서 캡처한 최종 이미지 업로드"""
+    session = sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다")
+    
+    export_dir = os.path.join("output", "export")
+    os.makedirs(export_dir, exist_ok=True)
+    export_path = os.path.join(export_dir, f"scene_{scene_number}_final.png")
+    
+    content = await image.read()
+    with open(export_path, "wb") as f:
+        f.write(content)
+    
+    return {"success": True, "export_path": export_path, "scene_number": scene_number}
+
+
+class FinalizeExportRequest(BaseModel):
+    export_paths: List[str]
+
+@router.post("/bubble-layers/{session_id}/finalize-export")
+async def finalize_export(session_id: str, request: FinalizeExportRequest):
+    """내보내기 완료 후 final_images 목록 갱신"""
+    session = sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다")
+    session.final_images = request.export_paths
+    return {"success": True, "count": len(request.export_paths)}
 
 
 # ============================================
@@ -2462,6 +2691,7 @@ import shutil
 class ProjectSaveRequest(BaseModel):
     session_id: str
     project_name: str
+    caption: Optional[dict] = None  # 프론트에서 편집한 캡션 직접 전달
 
 
 @router.post("/project/save")
@@ -2499,6 +2729,13 @@ async def save_project(request: ProjectSaveRequest):
                     if not os.path.exists(hdst):
                         shutil.copy2(hist_path, hdst)
 
+    # 프론트에서 캡션 직접 전달 시 세션 갱신
+    if request.caption:
+        try:
+            session.caption = InstagramCaption(**request.caption)
+        except Exception as e:
+            logger.warning(f"[프로젝트] 프론트 캡션 반영 실패: {e}")
+
     # 메타데이터 구성
     project_data = {
         "project_name": request.project_name,
@@ -2513,6 +2750,8 @@ async def save_project(request: ProjectSaveRequest):
         "image_files": image_files,
         "preset_name": getattr(session, 'preset_name', None),
         "collected_data": session.collected_data if hasattr(session, 'collected_data') else None,
+        "caption": session.caption.model_dump() if session.caption else None,
+        "final_images": session.final_images if hasattr(session, 'final_images') else [],
         "state": session.state.value if session.state else "idle",
         "last_tab": getattr(session, 'last_tab', None),
     }
@@ -2560,6 +2799,17 @@ async def list_projects():
                     })
                 except Exception as e:
                     logger.warning(f"[프로젝트] 메타 파싱 실패 ({dirname}): {e}")
+
+        # saved_at 기준 최신순 정렬 (datetime 파싱으로 확실한 시간순 보장)
+        def _sort_key(p):
+            s = p.get("saved_at")
+            if not s:
+                return datetime.min
+            try:
+                return datetime.fromisoformat(s)
+            except (ValueError, TypeError):
+                return datetime.min
+        projects.sort(key=_sort_key, reverse=True)
 
         return {"projects": projects}
     except Exception as e:
@@ -2636,6 +2886,17 @@ async def load_project(request: dict):
     if data.get("collected_data"):
         session.collected_data = data["collected_data"]
 
+    # 캡션 복원
+    if data.get("caption"):
+        try:
+            session.caption = InstagramCaption(**data["caption"])
+        except Exception as e:
+            logger.warning(f"[프로젝트] 캡션 복원 실패: {e}")
+
+    # final_images 복원
+    if data.get("final_images"):
+        session.final_images = data["final_images"]
+
     # 세션 등록
     sessions[sid] = session
     logger.info(f"[프로젝트] 불러오기 완료: {dirname} → 세션 {sid}")
@@ -2648,6 +2909,8 @@ async def load_project(request: dict):
         "images": [img.model_dump() if hasattr(img, 'model_dump') else img for img in (session.images or [])],
         "bubble_layers": [bl.model_dump() if hasattr(bl, 'model_dump') else bl for bl in (session.bubble_layers or [])],
         "series_config": data.get("series_config"),
+        "caption": session.caption.model_dump() if session.caption else None,
+        "collected_data": session.collected_data if session.collected_data else None,
         "state": data.get("state", "idle"),
     }
 

@@ -286,20 +286,24 @@ class BubblePosition(str, Enum):
 class BubbleShape(str, Enum):
     """말풍선 모양"""
     ROUND = "round"
+    ELLIPSE = "ellipse"
     SQUARE = "square"
     SHOUT = "shout"
     THOUGHT = "thought"
     WHISPER = "whisper"
-    SCREAM = "scream"
     CLOUD = "cloud"
     DARK = "dark"
     EMPHASIS = "emphasis"
     SYSTEM = "system"
     SOFT = "soft"
-    COMIC = "comic"
-    FLUFFY = "fluffy"
+    # 웹툰 전용 (clip-path 기반)
+    STARBURST = "starburst"
+    SPIKE = "spike"
     EXPLOSION = "explosion"
+    SCALLOP = "scallop"
     WAVY = "wavy"
+    FLUFFY = "fluffy"
+    JAGGED = "jagged"
 
 
 class BubbleOverlay(BaseModel):
@@ -330,9 +334,13 @@ class BubbleOverlay(BaseModel):
     h: Optional[float] = None                        # 높이 %
 
     def model_post_init(self, __context):
-        """tail ↔ tail_direction 양방향 동기화"""
+        """tail ↔ tail_direction 동기화 (tail 우선)"""
+        # tail이 전달되면 tail_direction에 동기화 (프론트 기준)
         if self.tail and self.tail != "none":
             self.tail_direction = self.tail
+        elif self.tail == "none":
+            # 명시적으로 "none"이면 tail_direction도 "none"으로 통일
+            self.tail_direction = "none"
         elif self.tail_direction and self.tail_direction != "none":
             self.tail = self.tail_direction
 

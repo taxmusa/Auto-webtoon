@@ -473,7 +473,7 @@ async def system_status():
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 r = await client.get(
-                    "https://graph.facebook.com/v18.0/me",
+                    f"{GRAPH_API}/me",
                     params={"fields": "id", "access_token": ig_token}
                 )
                 if r.status_code == 200:

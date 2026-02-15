@@ -68,17 +68,38 @@ class PillowService:
             "border_radius": 40, "padding": 16,
             "bg_color": (255, 255, 255, 245), "border_color": (0, 0, 0), "border_width": 3
         },
-        "fluffy": {
-            "border_radius": 30, "padding": 16,
-            "bg_color": (255, 255, 255, 235), "border_color": (100, 100, 100), "border_width": 2
+        # 웹툰 전용 모양 (Pillow에서는 기본 사각 렌더링, 프론트에서 clip-path로 표현)
+        "ellipse": {
+            "border_radius": 40, "padding": 18,
+            "bg_color": (255, 255, 255, 235), "border_color": (0, 0, 0), "border_width": 2
+        },
+        "starburst": {
+            "border_radius": 4, "padding": 18,
+            "bg_color": (255, 255, 255, 240), "border_color": (50, 50, 50), "border_width": 3
+        },
+        "spike": {
+            "border_radius": 4, "padding": 18,
+            "bg_color": (255, 255, 255, 240), "border_color": (30, 30, 30), "border_width": 3
         },
         "explosion": {
-            "border_radius": 8, "padding": 14,
-            "bg_color": (255, 255, 255, 245), "border_color": (220, 0, 0), "border_width": 4
+            "border_radius": 4, "padding": 20,
+            "bg_color": (255, 255, 255, 245), "border_color": (200, 0, 0), "border_width": 4
+        },
+        "scallop": {
+            "border_radius": 8, "padding": 16,
+            "bg_color": (255, 255, 255, 235), "border_color": (60, 60, 60), "border_width": 2
         },
         "wavy": {
-            "border_radius": 25, "padding": 14,
+            "border_radius": 8, "padding": 14,
             "bg_color": (255, 255, 255, 230), "border_color": (80, 80, 80), "border_width": 2
+        },
+        "fluffy": {
+            "border_radius": 8, "padding": 16,
+            "bg_color": (255, 255, 255, 235), "border_color": (100, 100, 100), "border_width": 2
+        },
+        "jagged": {
+            "border_radius": 4, "padding": 16,
+            "bg_color": (255, 255, 255, 240), "border_color": (50, 50, 50), "border_width": 3
         }
     }
     

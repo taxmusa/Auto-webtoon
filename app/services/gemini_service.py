@@ -434,9 +434,28 @@ image_prompt 나쁜 예시:
         self,
         keyword: str,
         field: SpecializedField,
-        story_summary: str
+        story_summary: str,
+        model: str = "gemini-3-flash-preview",
+        character_names: list[str] | None = None
     ) -> InstagramCaption:
-        """인스타그램 캡션 생성"""
+        """인스타그램 캡션 생성 - 모델 fallback + 재시도 + 캐릭터명 후처리 제거"""
+        import logging
+        import asyncio
+        logger = logging.getLogger(__name__)
+
+        # Fallback 모델 순서 (빠른 모델 우선)
+        FALLBACK_MODELS = {
+            "gemini-3-pro-preview": ["gemini-3-flash-preview", "gemini-2.0-flash"],
+            "gemini-3-flash-preview": ["gemini-2.0-flash"],
+            "gemini-2.0-flash": []
+        }
+        models_to_try = [model] + FALLBACK_MODELS.get(model, ["gemini-2.0-flash"])
+        
+        # 캐릭터명 금지 목록 프롬프트 구성
+        char_ban_text = ""
+        if character_names:
+            names_str = ", ".join(f"'{n}'" for n in character_names)
+            char_ban_text = f"\n   - 다음 이름은 웹툰 속 가상인물이므로 절대 사용 금지: {names_str}"
         
         prompt = f"""당신은 인스타그램 마케팅 전문가입니다.
 
@@ -454,11 +473,13 @@ image_prompt 나쁜 예시:
 
 2. 본문 캡션
    - 친근한 말투
-   - 스토리 내용 요약
+   - 주제의 핵심 내용 요약
    - CTA 포함 (저장, 공유 유도)
    - 3~5문장
    - 가독성을 위해 2~3문장마다 줄 바꿈(\\n)을 넣을 것
    - 강조나 분위기에 맞게 본문 중간에 적절한 이모지를 사용할 것 (예: 💡, ✅, 💰, 👋, 📌 등)
+   - 웹툰 속 가상 캐릭터 이름(등장인물명)은 절대 캡션에 포함하지 마세요{char_ban_text}
+   - 주제와 핵심 정보 중심으로 작성하세요
 
 3. 전문가 Tip
    - 핵심 정보 1줄 요약
@@ -481,32 +502,76 @@ image_prompt 나쁜 예시:
   "hashtags": ["#태그1", "#태그2"]
 }}"""
 
-        try:
-            response = await self.model.generate_content_async(prompt)
-            text = response.text.strip()
-            
-            json_match = re.search(r'```json\s*(.*?)\s*```', text, re.DOTALL)
-            if json_match:
-                text = json_match.group(1)
-            
-            data = json.loads(text)
-            
-            # 분야별 기본 해시태그 추가
-            hashtags = data.get("hashtags", [])
-            base_tags = FIELD_HASHTAGS.get(field.value, [])
-            all_tags = list(set(hashtags + base_tags))[:20]
-            
-            return InstagramCaption(
-                hook=data.get("hook", ""),
-                body=data.get("body", ""),
-                expert_tip=data.get("expert_tip", ""),
-                hashtags=all_tags
-            )
-            
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).error(f"[generate_caption] 캡션 생성 실패: {e}")
-            raise RuntimeError(f"캡션 생성 실패: {e}")
+        for try_model in models_to_try:
+            try:
+                logger.info(f"[generate_caption] 시도 중: {try_model}")
+                current_model = genai.GenerativeModel(try_model)
+                response = await asyncio.wait_for(
+                    current_model.generate_content_async(prompt),
+                    timeout=30  # 60초→30초 단축 (cold start 대비 fallback 사용)
+                )
+                text = response.text.strip()
+                
+                json_match = re.search(r'```json\s*(.*?)\s*```', text, re.DOTALL)
+                if json_match:
+                    text = json_match.group(1)
+                
+                data = json.loads(text)
+                
+                # 분야별 기본 해시태그 추가
+                hashtags = data.get("hashtags", [])
+                base_tags = FIELD_HASHTAGS.get(field.value, [])
+                all_tags = list(set(hashtags + base_tags))[:20]
+                
+                hook = data.get("hook", "")
+                body = data.get("body", "")
+                expert_tip = data.get("expert_tip", "")
+                
+                # ★ 캐릭터명 후처리 제거 (프롬프트 무시 대비 안전장치)
+                if character_names:
+                    for cname in character_names:
+                        if not cname:
+                            continue
+                        # "전문가 '김세무'가" → "전문가가" 패턴 제거
+                        import re as _re
+                        for quote_pat in [f"'{cname}'", f"'{cname}'", f'"{cname}"', f"「{cname}」"]:
+                            hook = hook.replace(quote_pat, "")
+                            body = body.replace(quote_pat, "")
+                            expert_tip = expert_tip.replace(quote_pat, "")
+                        # 이름 자체 제거
+                        hook = hook.replace(cname, "")
+                        body = body.replace(cname, "")
+                        expert_tip = expert_tip.replace(cname, "")
+                    # 연속 공백 정리
+                    hook = " ".join(hook.split())
+                    body = _re.sub(r' +', ' ', body)
+                    expert_tip = " ".join(expert_tip.split())
+                
+                logger.info(f"[generate_caption] 성공: {try_model}")
+                return InstagramCaption(
+                    hook=hook,
+                    body=body,
+                    expert_tip=expert_tip,
+                    hashtags=all_tags
+                )
+                
+            except asyncio.TimeoutError:
+                logger.warning(f"[generate_caption] {try_model} 타임아웃 (30초) → 다음 모델 시도")
+            except Exception as e:
+                logger.warning(f"[generate_caption] {try_model} 실패: {str(e)}")
+                if try_model != models_to_try[-1]:
+                    await asyncio.sleep(1)
+                    continue
+
+        # 모든 모델 실패 시 기본 캡션 반환 (500 에러 대신)
+        logger.error(f"[generate_caption] 모든 모델 실패, 기본 캡션 반환")
+        default_tags = FIELD_HASHTAGS.get(field.value, ["#웹툰", "#정보", "#꿀팁"])
+        return InstagramCaption(
+            hook=f"📌 {keyword} 알아보기",
+            body=f"{keyword}에 대해 알아두면 좋은 정보를 웹툰으로 정리했어요!\n\n저장해두고 필요할 때 확인해보세요 ✅",
+            expert_tip=f"{keyword} 관련 전문가 팁",
+            hashtags=default_tags[:20]
+        )
 
 
 
