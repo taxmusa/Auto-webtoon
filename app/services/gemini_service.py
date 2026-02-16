@@ -94,8 +94,8 @@ class GeminiService:
         logger.error(f"[detect_field] 모든 모델 실패")
         return FieldInfo(field=SpecializedField.GENERAL, target_year=current_year_str)
 
-    async def collect_data(self, keyword: str, field_info: FieldInfo, model: str = "gemini-3-flash-preview") -> list:
-        """주제와 관련된 상세 자료 수집 (제목 + 본문) - 모델 fallback 지원"""
+    async def collect_data(self, keyword: str, field_info: FieldInfo, model: str = "gemini-3-flash-preview", expert_mode: bool = False) -> list:
+        """주제와 관련된 상세 자료 수집 (제목 + 본문) - 모델 fallback 지원, 전문가 모드 지원"""
         import logging
         logger = logging.getLogger(__name__)
         
@@ -111,7 +111,63 @@ class GeminiService:
         import datetime
         current_year_str = str(datetime.datetime.now().year)
 
-        prompt = f"""키워드 "{keyword}"에 대해 SNS(인스타그램/블로그)용 콘텐츠 제작을 위한 상세 자료를 수집해 주세요.
+        if expert_mode:
+            # 분야별 전문가 프롬프트
+            field_specific = {
+                "TAX": (
+                    "당신은 세무사/회계사 수준의 세무 전문가입니다.\n"
+                    "- 관련 세법 조항(소득세법, 법인세법, 상속증여세법 등)의 정확한 조/항/호를 명시하세요\n"
+                    "- 공제 금액, 세율, 신고 기한 등 정확한 숫자를 기재하세요\n"
+                    "- 일반인이 자주 놓치는 절세 전략이나 주의사항을 포함하세요\n"
+                    "- 최근 개정된 세법 내용이 있다면 반드시 언급하세요"
+                ),
+                "LAW": (
+                    "당신은 변호사 수준의 법률 전문가입니다.\n"
+                    "- 관련 법조문(민법, 형법, 상법 등)의 정확한 조항을 명시하세요\n"
+                    "- 관련 판례가 있다면 판례번호와 핵심 판시사항을 포함하세요\n"
+                    "- 실무에서 자주 발생하는 분쟁 사례와 대처 방법을 설명하세요"
+                ),
+                "FINANCE": (
+                    "당신은 공인재무설계사(CFP) 수준의 금융 전문가입니다.\n"
+                    "- 금융상품의 수익률, 위험도, 세제 혜택을 구체적으로 비교하세요\n"
+                    "- 관련 금융 규제나 소비자 보호 제도를 명시하세요"
+                ),
+                "MEDICAL": (
+                    "당신은 의학 전문가입니다.\n"
+                    "- 의학적 근거(연구, 가이드라인)를 기반으로 작성하세요\n"
+                    "- 증상, 원인, 예방법을 구체적으로 설명하세요"
+                ),
+            }
+            field_key = field_info.field.value if hasattr(field_info.field, 'value') else str(field_info.field)
+            expert_instruction = field_specific.get(field_key, (
+                "당신은 해당 분야의 최고 수준 전문가입니다.\n"
+                "- 전문 용어와 함께 일반인도 이해할 수 있는 설명을 병행하세요\n"
+                "- 구체적 수치, 사례, 근거를 반드시 포함하세요"
+            ))
+            
+            prompt = f"""{expert_instruction}
+
+키워드 "{keyword}"에 대해 전문가 수준의 상세 자료를 작성하세요.
+
+[핵심 지침]
+1. 기준 년도: {current_year_str}년 최신 정보 기준으로 작성하세요.
+2. 분야: {field_info.field.value} (기준 년도: {field_info.target_year})
+
+[전문가 모드 요청 사항]
+1. 제목과 상세 본문 내용을 포함하여 **8~12개**의 항목으로 정리하세요.
+2. 각 항목의 본문은 **200자 이상** 상세하게 작성하세요.
+3. 정확한 법령명/조항, 금액, 세율, 기한 등 **구체적 수치**를 반드시 포함하세요.
+4. 일반인이 자주 놓치는 **실무 팁**이나 **주의사항**을 포함하세요.
+5. 각 항목에 **source_hint**(근거 법령/출처 힌트)를 추가하세요.
+6. SNS 콘텐츠(웹툰/카드뉴스)로 설명하기 좋은 정보 위주로 선정하세요.
+
+[출력 형식 (JSON)]
+[
+    {{"title": "자료 제목1", "content": "상세 설명 내용 ({current_year_str}년 기준)...", "source_hint": "근거 법령 또는 출처 힌트"}},
+    ...
+]"""
+        else:
+            prompt = f"""키워드 "{keyword}"에 대해 SNS(인스타그램/블로그)용 콘텐츠 제작을 위한 상세 자료를 수집해 주세요.
         
         [핵심 지침]
         1. 기준 년도: 무조건 최신 {current_year_str}년 (또는 그 이후) 정보를 기준으로 작성하세요.
@@ -159,15 +215,65 @@ class GeminiService:
         return [{"title": keyword, "content": f"정보를 불러오지 못했습니다. ({last_error}) 다시 시도해 주세요."}]
 
     @staticmethod
-    def _build_character_names_prompt(character_names: str, monologue_mode: bool = False, monologue_character: str = "") -> str:
-        """캐릭터 이름 지정 프롬프트 생성 (독백 모드 지원)"""
+    def _build_character_names_prompt(
+        character_names: str, 
+        monologue_mode: bool = False, 
+        monologue_character: str = "",
+        characters_input: list = None
+    ) -> str:
+        """캐릭터 이름+역할 지정 프롬프트 생성 (구조적 입력 우선)"""
+        
+        ROLE_LABELS = {
+            "expert": "전문가",
+            "questioner": "질문자", 
+            "helper": "조력자",
+            "none": "일반 등장인물"
+        }
+        ROLE_INSTRUCTIONS = {
+            "expert": "정보를 설명하고 답변합니다. 질문하지 않습니다. 전문적 내용을 쉽게 풀어서 설명하는 역할입니다.",
+            "questioner": "궁금한 점을 짧게 묻고, 놀라거나 반응합니다. 직접 전문 내용을 설명하면 안 됩니다.",
+            "helper": "보조적으로 정보를 추가하거나 상황을 진행합니다. 전문가를 보조하는 역할입니다.",
+            "none": "특별한 역할 없이 자연스럽게 대화에 참여합니다. 스토리 흐름에 맞게 자유롭게 행동합니다."
+        }
+        
+        # 구조적 입력이 있으면 우선 사용
+        if characters_input and len(characters_input) > 0:
+            valid_chars = [c for c in characters_input if c.get("name", "").strip()]
+            if not valid_chars:
+                return ""
+            
+            # 독백 모드 체크
+            is_monologue = monologue_mode or len(valid_chars) == 1
+            if is_monologue:
+                mono_name = monologue_character.strip() if monologue_character else valid_chars[0]["name"]
+                return (
+                    f"\n[등장인물 - 독백 모드 - 필수]\n"
+                    f"캐릭터는 '{mono_name}' 1명만 등장합니다. 다른 캐릭터를 절대 만들지 마세요.\n"
+                    f"'{mono_name}'가 시청자(독자)에게 직접 설명하는 1인 독백 형식입니다.\n"
+                    f"대화 상대 없이 혼자서 모든 내용을 설명합니다.\n"
+                )
+            
+            # 다중 캐릭터: 이름-역할 명시적 매핑
+            lines = ["\n[등장인물 이름 및 역할 지정 - 필수]"]
+            lines.append("아래 캐릭터만 등장시키세요. 다른 이름을 만들지 마세요.\n")
+            for c in valid_chars:
+                name = c["name"].strip()
+                role = c.get("role", "expert")
+                role_label = ROLE_LABELS.get(role, "전문가")
+                role_inst = ROLE_INSTRUCTIONS.get(role, "")
+                lines.append(f"- '{name}': {role_label} 역할. {role_inst}")
+            lines.append("")
+            lines.append("★ 역할을 절대 바꾸지 마세요! 전문가가 질문하거나, 질문자가 전문 내용을 설명하면 안 됩니다.")
+            lines.append("★ 각 씬의 대사에서 character 필드에 위 이름을 정확히 사용하세요.")
+            return "\n".join(lines) + "\n"
+        
+        # 하위 호환: 기존 character_names 문자열 방식
         if not character_names or not character_names.strip():
             return ""
         names = [n.strip() for n in character_names.split(",") if n.strip()]
         if not names:
             return ""
 
-        # 독백 모드: 자동 감지 (이름 1개) 또는 명시적 선택
         is_monologue = monologue_mode or len(names) == 1
         mono_char = monologue_character.strip() if monologue_character else (names[0] if len(names) == 1 else "")
 
@@ -180,11 +286,19 @@ class GeminiService:
             )
         else:
             names_str = ", ".join(names)
-            return (
-                "\n[등장인물 이름 지정 - 필수]\n"
-                f"다음 이름을 반드시 사용하세요. 다른 이름을 만들지 마세요: {names_str}\n"
-                "첫 번째 이름이 메인 역할(전문가)이고, 나머지는 보조 역할입니다.\n"
-            )
+            lines = [
+                "\n[등장인물 이름 지정 - 필수]",
+                f"다음 이름을 반드시 사용하세요. 다른 이름을 만들지 마세요: {names_str}",
+            ]
+            if len(names) >= 2:
+                lines.append(f"- '{names[0]}': 전문가 역할. 정보를 설명하고 답변합니다. 질문하지 않습니다.")
+                lines.append(f"- '{names[1]}': 질문자 역할. 궁금한 점을 짧게 묻고 반응합니다. 직접 설명하지 않습니다.")
+                for extra in names[2:]:
+                    lines.append(f"- '{extra}': 조력자 역할.")
+                lines.append("★ 역할을 절대 바꾸지 마세요!")
+            else:
+                lines.append(f"'{names[0]}'이(가) 메인 역할(전문가)입니다.")
+            return "\n".join(lines) + "\n"
 
     async def generate_story(
         self,
@@ -196,6 +310,7 @@ class GeminiService:
         rule_settings: Optional[RuleSettings] = None,
         model: str = "gemini-3-flash-preview",
         character_names: str = "",
+        characters_input: list = None,
         monologue_mode: bool = False,
         monologue_character: str = ""
     ) -> Story:
@@ -239,7 +354,32 @@ class GeminiService:
                 "- 각 씬마다 캐릭터의 감정을 한글로 지정하세요 (일반/웃으며/밝게/진지하게/놀라며/화내며/슬프게/걱정하며/당황하며/자신있게/속삭이며/소리치며/궁금해하며/감탄하며/고민하며/장난스럽게/뿌듯하게/차분하게/다급하게/부끄러워하며)."
             )
         
-        char_names_prompt = self._build_character_names_prompt(character_names, monologue_mode, monologue_character)
+        char_names_prompt = self._build_character_names_prompt(character_names, monologue_mode, monologue_character, characters_input)
+        
+        # 구조적 캐릭터 입력이 있으면 역할별 이름을 프롬프트에 반영
+        if characters_input and len(characters_input) > 0:
+            valid_ci = [c for c in characters_input if c.get("name", "").strip()]
+            expert_name = next((c["name"] for c in valid_ci if c.get("role") == "expert"), None)
+            questioner_name = next((c["name"] for c in valid_ci if c.get("role") == "questioner"), None)
+            char_setting_text = ""
+            for c in valid_ci:
+                role_label = {"expert": "전문가", "questioner": "질문자", "helper": "조력자", "none": "일반 등장인물"}.get(c.get("role", ""), "전문가")
+                char_setting_text += f"- {c['name']}: {role_label}\n"
+            dialogue_quality_text = f"""[중요 지침 - 대화 품질]
+1. **전문가 대사는 충분히 설명해야 합니다!** 
+   - "그건 안 돼요." (X) → 너무 짧음
+   - "그 방법은 이런 이유로 효과적이에요. 구체적으로 설명해 드릴게요." (O) → 적절함
+2. {expert_name or '전문가'}만 전문 내용을 설명/답변합니다. {questioner_name or '질문자'}가 전문 내용을 설명하면 안 됩니다!
+3. {questioner_name or '질문자'}는 짧게 질문하고 반응(놀람, 궁금, 감탄 등)만 합니다.
+4. 내용이 많으면 2~3개 씬에 나눠서 설명해도 됩니다. 억지로 한 씬에 압축하지 마세요."""
+        else:
+            char_setting_text = f"- 질문자 유형: {character_settings.questioner_type}\n- 전문가 유형: {character_settings.expert_type}\n"
+            dialogue_quality_text = """[중요 지침 - 대화 품질]
+1. **전문가 대사는 충분히 설명해야 합니다!** 
+   - "그건 안 돼요." (X) → 너무 짧음
+   - "그 방법은 이런 이유로 효과적이에요. 구체적으로 설명해 드릴게요." (O) → 적절함
+2. 질문자는 짧게, 전문가는 충분히 설명하는 형태로 작성하세요.
+3. 내용이 많으면 2~3개 씬에 나눠서 설명해도 됩니다. 억지로 한 씬에 압축하지 마세요."""
         
         prompt = f"""당신은 전문 웹툰 스토리 작가입니다. 다음 자료를 바탕으로 웹툰 스토리를 작성하세요.
 
@@ -247,16 +387,10 @@ class GeminiService:
 {data_str}
 
 [캐릭터 설정]
-- 질문자 유형: {character_settings.questioner_type}
-- 전문가 유형: {character_settings.expert_type}
+{char_setting_text}
 {char_names_prompt}
 
-[중요 지침 - 대화 품질]
-1. **전문가 대사는 충분히 설명해야 합니다!** 
-   - "그건 안 돼요." (X) → 너무 짧음
-   - "그 방법은 이런 이유로 효과적이에요. 구체적으로 설명해 드릴게요." (O) → 적절함
-2. 질문자는 짧게, 전문가는 충분히 설명하는 형태로 작성하세요.
-3. 내용이 많으면 2~3개 씬에 나눠서 설명해도 됩니다. 억지로 한 씬에 압축하지 마세요.
+{dialogue_quality_text}
 
 [제약 조건]
 1. 총 씬 개수: {scene_count} (표지 1장 + 본문 {scene_count - 1}장)

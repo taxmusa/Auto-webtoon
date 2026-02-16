@@ -97,7 +97,7 @@ class GeminiGenerator(ImageGeneratorBase):
 
     async def generate(self, prompt, reference_images=None, size="1024x1024", quality="medium", seed=None,
                        method_image=None, style_image=None, prev_scene_image=None, prev_scene_summaries=None,
-                       prev_scene_number=None):
+                       prev_scene_number=None, aspect_ratio=None):
         """Gemini 이미지 생성 — 3종 레퍼런스 + 이전 씬 체이닝 지원
         
         Args:
@@ -108,6 +108,7 @@ class GeminiGenerator(ImageGeneratorBase):
             prev_scene_image: bytes — 직전 씬 생성 이미지 (체이닝용)
             prev_scene_summaries: List[str] — 이전 씬 텍스트 요약 목록
             prev_scene_number: int — 직전 씬 번호 (라벨 텍스트용)
+            aspect_ratio: str — 이미지 비율 ("4:5", "9:16", "1:1" 등, Gemini 공식 지원)
         """
         t0 = time.time()
         try:
@@ -174,13 +175,24 @@ class GeminiGenerator(ImageGeneratorBase):
                 contents.append(f"[Previous Scene{sn_label}] 직전 장면 이미지 — 캐릭터 외형 참고용. 장소/배경은 위 프롬프트를 따를 것.")
                 contents.append(_to_pil(prev_scene_image))
 
+            # aspect_ratio: SDK 버전에 따라 ImageConfig 사용 (없으면 프롬프트 힌트에만 의존)
+            _gen_config_kwargs = {"response_modalities": ["IMAGE"]}
+            if aspect_ratio and hasattr(types, 'ImageConfig'):
+                try:
+                    _gen_config_kwargs["image_config"] = types.ImageConfig(
+                        aspect_ratio=aspect_ratio
+                    )
+                    logger.info(f"[Gemini] ImageConfig aspect_ratio={aspect_ratio} 적용")
+                except Exception:
+                    logger.warning(f"[Gemini] ImageConfig 미지원 — 프롬프트 힌트로 대체")
+            elif aspect_ratio:
+                logger.info(f"[Gemini] ImageConfig 미지원 SDK — 프롬프트 힌트로 비율 {aspect_ratio} 전달")
+
             def _sync_generate():
                 return self.client.models.generate_content(
                     model=self.model,
                     contents=contents,
-                    config=types.GenerateContentConfig(
-                        response_modalities=["IMAGE"]
-                    )
+                    config=types.GenerateContentConfig(**_gen_config_kwargs)
                 )
 
             ref_detail = []

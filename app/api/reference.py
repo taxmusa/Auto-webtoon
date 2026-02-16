@@ -70,6 +70,13 @@ class ApplyPresetRequest(BaseModel):
     session_id: Optional[str] = None
 
 
+class SetImageFromBase64Request(BaseModel):
+    """히스토리에서 선택한 이미지를 세션 레퍼런스로 설정"""
+    session_id: str
+    ref_type: str
+    image_base64: str  # data:image/... 형태
+
+
 class TestPreviewRequest(BaseModel):
     """테스트 미리보기 요청"""
     model_name: str = "nano-banana-pro"
@@ -131,6 +138,27 @@ async def upload_reference_image(
         "message": f"{ref_type} 레퍼런스 이미지 업로드 완료",
         "path": saved_path,
     }
+
+
+@router.post("/set-from-base64")
+async def set_reference_from_base64(req: SetImageFromBase64Request):
+    """히스토리 탐색 시 선택한 이미지를 세션 레퍼런스로 설정"""
+    if req.ref_type not in VALID_TYPES:
+        raise HTTPException(status_code=400, detail=f"유효하지 않은 타입: {req.ref_type}")
+
+    try:
+        # data:image/...;base64,XXXX 형태 파싱
+        b64_data = req.image_base64
+        if ',' in b64_data:
+            b64_data = b64_data.split(',', 1)[1]
+        image_bytes = base64.b64decode(b64_data)
+
+        service = ReferenceService(req.session_id)
+        saved_path = service.save_reference(req.ref_type, image_bytes)
+        return {"success": True, "path": saved_path}
+    except Exception as e:
+        logger.error(f"set-from-base64 실패: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.delete("/{ref_type}")

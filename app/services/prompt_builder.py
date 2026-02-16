@@ -241,7 +241,8 @@ def build_styled_prompt(
     character_style: Optional[CharacterStyle] = None,
     background_style: Optional[BackgroundStyle] = None,
     manual_overrides: Optional[ManualPromptOverrides] = None,
-    sub_style_name: Optional[str] = None
+    sub_style_name: Optional[str] = None,
+    aspect_ratio: Optional[str] = None
 ) -> str:
     """
     레퍼런스 일관성 시스템 기반 프롬프트 구성.
@@ -317,14 +318,27 @@ Characters in this scene:
     # =====================================================
     # 3. [RULES] — 금지 사항 (간결하게)
     # =====================================================
-    parts.append("""[RULES]
+    # 비율 힌트 생성
+    aspect_hint = ""
+    if aspect_ratio:
+        ratio_desc = {
+            "4:5": "portrait orientation (4:5 ratio, taller than wide)",
+            "9:16": "vertical/story orientation (9:16 ratio, very tall)",
+            "1:1": "square orientation (1:1 ratio)",
+            "3:4": "portrait orientation (3:4 ratio)",
+            "16:9": "landscape orientation (16:9 ratio, wider than tall)",
+        }
+        desc = ratio_desc.get(aspect_ratio, f"{aspect_ratio} ratio")
+        aspect_hint = f"\n- Generate the image in {desc}."
+
+    parts.append(f"""[RULES]
 - Generate exactly ONE single-scene illustration with ONE composition.
 - Do NOT repeat or duplicate the character. Do NOT create a character sheet, turnaround, or multiple views.
 - No grids, no multi-panel layouts, no tiled images.
 - No text, letters, numbers, logos, watermarks, UI elements in the image.
 - No speech bubbles or dialogue boxes.
 - Show characters fully — do not crop heads or bodies out of frame.
-- Use medium or medium-wide shot. Do not use extreme close-ups.
+- Use medium or medium-wide shot. Do not use extreme close-ups.{aspect_hint}
 """)
 
     # =====================================================

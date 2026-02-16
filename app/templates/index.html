@@ -227,7 +227,7 @@
         .scene-img-area img {
             width: 100%;
             height: 100%;
-            object-fit: cover;
+            object-fit: contain;
             border-radius: 7px;
         }
         .scene-img-actions {
@@ -866,6 +866,14 @@
                             <span style="font-weight: 600; color: var(--primary);">이미지 생성 AI:</span>
                             <span>Gemini 3.0 Pro Image (고정) — 최고 품질의 이미지를 위해 항상 Pro 모델을 사용합니다.</span>
                         </div>
+                        <!-- 전문가 모드 토글 -->
+                        <div style="display:flex; align-items:center; gap:8px; margin-top:8px; padding:6px 10px; background:rgba(245,158,11,0.06); border-radius:8px; border:1px solid rgba(245,158,11,0.2);">
+                            <label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-size:0.82rem; white-space:nowrap;">
+                                <input type="checkbox" id="expert-mode-toggle">
+                                <span style="font-weight:600; color:#f59e0b;">🔬 전문가 모드</span>
+                            </label>
+                            <span id="expert-mode-hint" style="font-size:0.7rem; color:var(--text-muted);">법령/판례/실무 사례 등 전문 자료를 깊이 있게 수집합니다</span>
+                        </div>
                     </div>
                 </div>
 
@@ -927,8 +935,12 @@
                     <h2 class="card-title">📚 수집된 상세 정보</h2>
                     <p class="card-desc">AI가 키워드에 맞춰 수집한 내용입니다. 필요 시 본문을 수정하거나 항목을 추가하세요.</p>
                     <div id="data-container"></div>
-                    <button class="btn btn-secondary" style="margin-top: 1rem; width: 100%;"
-                        onclick="openAddDataModal()">+ 정보 항목 추가</button>
+                    <div style="display:flex; gap:8px; margin-top:1rem;">
+                        <button class="btn btn-secondary" style="flex:1;"
+                            onclick="openAddDataModal()">+ 정보 항목 추가</button>
+                        <button class="btn btn-secondary" id="btn-expert-recollect" style="flex:1; border-color:#f59e0b; color:#f59e0b;"
+                            onclick="collectData(true)">🔬 전문가 모드로 재검색</button>
+                    </div>
                 </div>
 
                 <!-- AI 분할 추천 -->
@@ -986,16 +998,21 @@
                 <div id="story-preset-gallery" style="margin-bottom:10px; min-height:60px;">
                     <span style="font-size:0.78rem; color:var(--text-muted);">로딩 중...</span>
                 </div>
-                <div style="display:flex; align-items:center; gap:8px;">
-                    <label style="font-size:0.78rem; color:var(--text-muted); white-space:nowrap;">캐릭터 이름:</label>
-                    <input type="text" id="character-names-input"
-                        value=""
-                        placeholder="예: 유리, 민수 (쉼표 구분, 비우면 AI 자동 생성)"
-                        style="flex:1; padding:7px 10px; font-size:0.83rem; border-radius:6px; border:1px solid var(--border); box-sizing:border-box; background:var(--bg-card); color:var(--text);">
+                <!-- 구조적 캐릭터 입력 -->
+                <div style="margin-top:4px;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+                        <label style="font-size:0.78rem; color:var(--text-muted);">캐릭터 설정 (이름 + 역할):</label>
+                        <button onclick="addCharacterRow()" id="btn-add-char" class="btn btn-sm" style="padding:2px 10px; font-size:0.7rem; background:var(--bg-card); border:1px solid var(--border); color:var(--primary); cursor:pointer; border-radius:6px;">+ 추가</button>
+                    </div>
+                    <div id="characters-input-container" style="display:flex; flex-direction:column; gap:6px;">
+                        <!-- 동적으로 캐릭터 행 추가 -->
+                    </div>
+                    <div style="font-size:0.68rem; color:var(--text-muted); margin-top:4px;">
+                        프리셋 선택 시 자동 반영됩니다. 비워두면 AI가 자동 생성합니다. (최대 3명)
+                    </div>
                 </div>
-                <div style="font-size: 0.68rem; color: var(--text-muted); margin-top: 4px;">
-                    프리셋 선택 시 캐릭터 이름이 자동 반영됩니다. 직접 수정도 가능합니다. 비워두면 AI가 자동 생성합니다.
-                </div>
+                <!-- 하위 호환용 hidden input -->
+                <input type="hidden" id="character-names-input" value="">
                 <!-- 독백 모드 -->
                 <div style="display:flex; align-items:center; gap:8px; margin-top:8px; padding:6px 10px; background:rgba(99,102,241,0.04); border-radius:8px; border:1px solid var(--border);">
                     <label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-size:0.82rem; white-space:nowrap;">
@@ -1023,6 +1040,40 @@
             </div>
 
             <div id="story-review-area" style="display: none;">
+                <!-- 설정 변경 후 재생성 패널 -->
+                <div id="regenerate-panel" style="margin-bottom:10px;">
+                    <button onclick="toggleRegeneratePanel()" class="btn btn-secondary" style="width:100%; padding:10px; font-size:0.85rem; display:flex; align-items:center; justify-content:center; gap:6px; border-color:var(--primary); color:var(--primary);">
+                        <span>🔄</span> 설정 변경 후 재생성
+                        <span id="regen-arrow" style="font-size:0.7rem; transition:transform 0.2s;">▼</span>
+                    </button>
+                    <div id="regen-settings" style="display:none; margin-top:8px; padding:14px; background:var(--bg-input); border:1px solid var(--border); border-radius:10px;">
+                        <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:10px;">수집된 자료는 유지하고, 아래 설정만 변경하여 스토리를 다시 생성합니다.</p>
+                        <!-- 프리셋 갤러리 (재생성용) -->
+                        <div style="margin-bottom:10px;">
+                            <label style="font-size:0.78rem; font-weight:600; margin-bottom:4px; display:block;">프리셋</label>
+                            <div id="regen-preset-gallery" style="min-height:40px;">
+                                <span style="font-size:0.75rem; color:var(--text-muted);">위 프리셋 선택 영역을 사용하세요</span>
+                            </div>
+                        </div>
+                        <!-- 캐릭터 설정 (재생성용) -->
+                        <div style="margin-bottom:10px;">
+                            <label style="font-size:0.78rem; font-weight:600; margin-bottom:4px; display:block;">캐릭터</label>
+                            <div id="regen-characters-container" style="display:flex; flex-direction:column; gap:4px;"></div>
+                            <button onclick="addRegenCharacterRow()" class="btn btn-sm" style="margin-top:4px; padding:2px 8px; font-size:0.7rem; background:var(--bg-card); border:1px solid var(--border); color:var(--primary); cursor:pointer; border-radius:6px;">+ 추가</button>
+                        </div>
+                        <!-- 씬 개수 -->
+                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+                            <label style="font-size:0.78rem; font-weight:600; white-space:nowrap;">씬 개수:</label>
+                            <input type="number" id="regen-scene-count" value="8" min="3" max="15"
+                                style="width:60px; padding:4px 8px; font-size:0.85rem; border-radius:6px; border:1px solid var(--border); background:var(--bg-card); color:var(--text); text-align:center;">
+                            <span style="font-size:0.7rem; color:var(--text-muted);">(표지 포함)</span>
+                        </div>
+                        <button onclick="regenerateStory()" class="btn btn-primary" style="width:100%; padding:12px; font-size:0.9rem; font-weight:700;">
+                            ✨ 이 설정으로 재생성
+                        </button>
+                    </div>
+                </div>
+
                 <!-- 캐릭터 프로필 섹션 -->
                 <div class="card">
                     <h2 class="card-title">👥 등장인물 프로필</h2>
@@ -1184,8 +1235,13 @@
                                 <span id="ref-status-character" style="font-size:0.75rem; padding:2px 8px; border-radius:4px; background:var(--bg-input); color:var(--text-muted);">미설정</span>
                             </div>
                             <p style="font-size:0.75rem; color:var(--text-muted); margin:0 0 0.5rem 0; line-height:1.3;">웹툰에 등장할 캐릭터의 외형·디자인. 전신·정면 포즈 권장. 예시 버튼으로 샘플 프롬프트를 불러올 수 있습니다.</p>
-                            <div id="ref-preview-character" style="width:100%; aspect-ratio:1; background:var(--bg-input); border-radius:8px; display:flex; align-items:center; justify-content:center; margin-bottom:0.75rem; overflow:hidden; position:relative;">
+                            <div id="ref-preview-character" style="width:100%; aspect-ratio:1; background:var(--bg-input); border-radius:8px; display:flex; align-items:center; justify-content:center; margin-bottom:0.25rem; overflow:hidden; position:relative;">
                                 <span style="color:var(--text-muted); font-size:0.8rem; text-align:center; padding:1rem;">프리뷰 영역<br><span style="font-size:0.7rem;">AI 생성 또는 파일 업로드 시 여기에 표시됩니다</span></span>
+                            </div>
+                            <div id="ref-nav-character" style="display:none; align-items:center; justify-content:center; gap:0.5rem; margin-bottom:0.5rem;">
+                                <button class="btn btn-sm btn-outline ref-nav-prev" onclick="refHistoryNav('character',-1)" style="padding:2px 10px; font-size:0.8rem;">←</button>
+                                <span class="ref-nav-counter" style="font-size:0.75rem; font-weight:600; min-width:40px; text-align:center;">1/1</span>
+                                <button class="btn btn-sm btn-outline ref-nav-next" onclick="refHistoryNav('character',1)" style="padding:2px 10px; font-size:0.8rem;">→</button>
                             </div>
                             <input type="file" id="ref-upload-character" accept="image/*" style="display:none;" onchange="handleRefUpload('character', this)">
                             <textarea id="ref-prompt-character" rows="6" placeholder="캐릭터 설명 프롬프트..." style="width:100%; margin-bottom:0.5rem; font-size:0.85rem; padding:8px; border-radius:6px; border:1px solid var(--border); background:var(--bg-input); color:var(--text); resize:vertical;"></textarea>
@@ -1203,8 +1259,13 @@
                                 <span id="ref-status-method" style="font-size:0.75rem; padding:2px 8px; border-radius:4px; background:var(--bg-input); color:var(--text-muted);">미설정</span>
                             </div>
                             <p style="font-size:0.75rem; color:var(--text-muted); margin:0 0 0.5rem 0; line-height:1.3;">구도, 카메라 앵글, 만화 연출 방식. 1번 캐릭터를 기반으로 연출 스타일을 정의합니다. 예시 버튼 활용 가능.</p>
-                            <div id="ref-preview-method" style="width:100%; aspect-ratio:1; background:var(--bg-input); border-radius:8px; display:flex; align-items:center; justify-content:center; margin-bottom:0.75rem; overflow:hidden; position:relative;">
+                            <div id="ref-preview-method" style="width:100%; aspect-ratio:1; background:var(--bg-input); border-radius:8px; display:flex; align-items:center; justify-content:center; margin-bottom:0.25rem; overflow:hidden; position:relative;">
                                 <span style="color:var(--text-muted); font-size:0.8rem; text-align:center; padding:1rem;">프리뷰 영역<br><span style="font-size:0.7rem;">AI 생성 또는 파일 업로드 시 여기에 표시됩니다</span></span>
+                            </div>
+                            <div id="ref-nav-method" style="display:none; align-items:center; justify-content:center; gap:0.5rem; margin-bottom:0.5rem;">
+                                <button class="btn btn-sm btn-outline ref-nav-prev" onclick="refHistoryNav('method',-1)" style="padding:2px 10px; font-size:0.8rem;">←</button>
+                                <span class="ref-nav-counter" style="font-size:0.75rem; font-weight:600; min-width:40px; text-align:center;">1/1</span>
+                                <button class="btn btn-sm btn-outline ref-nav-next" onclick="refHistoryNav('method',1)" style="padding:2px 10px; font-size:0.8rem;">→</button>
                             </div>
                             <input type="file" id="ref-upload-method" accept="image/*" style="display:none;" onchange="handleRefUpload('method', this)">
                             <textarea id="ref-prompt-method" rows="6" placeholder="연출/구도 프롬프트..." style="width:100%; margin-bottom:0.5rem; font-size:0.85rem; padding:8px; border-radius:6px; border:1px solid var(--border); background:var(--bg-input); color:var(--text); resize:vertical;"></textarea>
@@ -1222,8 +1283,13 @@
                                 <span id="ref-status-style" style="font-size:0.75rem; padding:2px 8px; border-radius:4px; background:var(--bg-input); color:var(--text-muted);">미설정</span>
                             </div>
                             <p style="font-size:0.75rem; color:var(--text-muted); margin:0 0 0.5rem 0; line-height:1.3;">화풍, 색감, 선화 스타일. 캐릭터와 연출을 참고해 전체 분위기를 정의합니다. 예시 버튼 활용 가능.</p>
-                            <div id="ref-preview-style" style="width:100%; aspect-ratio:1; background:var(--bg-input); border-radius:8px; display:flex; align-items:center; justify-content:center; margin-bottom:0.75rem; overflow:hidden; position:relative;">
+                            <div id="ref-preview-style" style="width:100%; aspect-ratio:1; background:var(--bg-input); border-radius:8px; display:flex; align-items:center; justify-content:center; margin-bottom:0.25rem; overflow:hidden; position:relative;">
                                 <span style="color:var(--text-muted); font-size:0.8rem; text-align:center; padding:1rem;">프리뷰 영역<br><span style="font-size:0.7rem;">AI 생성 또는 파일 업로드 시 여기에 표시됩니다</span></span>
+                            </div>
+                            <div id="ref-nav-style" style="display:none; align-items:center; justify-content:center; gap:0.5rem; margin-bottom:0.5rem;">
+                                <button class="btn btn-sm btn-outline ref-nav-prev" onclick="refHistoryNav('style',-1)" style="padding:2px 10px; font-size:0.8rem;">←</button>
+                                <span class="ref-nav-counter" style="font-size:0.75rem; font-weight:600; min-width:40px; text-align:center;">1/1</span>
+                                <button class="btn btn-sm btn-outline ref-nav-next" onclick="refHistoryNav('style',1)" style="padding:2px 10px; font-size:0.8rem;">→</button>
                             </div>
                             <input type="file" id="ref-upload-style" accept="image/*" style="display:none;" onchange="handleRefUpload('style', this)">
                             <textarea id="ref-prompt-style" rows="6" placeholder="화풍/스타일 프롬프트..." style="width:100%; margin-bottom:0.5rem; font-size:0.85rem; padding:8px; border-radius:6px; border:1px solid var(--border); background:var(--bg-input); color:var(--text); resize:vertical;"></textarea>
@@ -1281,6 +1347,10 @@
                     <button class="btn btn-secondary" onclick="deleteSceneFromEditor()" id="bubble-delete-scene-btn"
                         style="padding: 4px 10px; font-size: 0.75rem; color: var(--danger); border-color: var(--danger);" title="현재 씬 삭제">
                         🗑 씬 삭제
+                    </button>
+                    <button class="btn btn-secondary" onclick="refreshSceneText()"
+                        style="padding: 4px 10px; font-size: 0.75rem;" title="Step 3의 최신 대사/나레이션을 이 씬에 반영">
+                        🔄 씬 텍스트 새로고침
                     </button>
                 </div>
 
@@ -1382,10 +1452,15 @@
                             <button class="btn btn-secondary" onclick="addNewBubble()" style="font-size: 0.8rem; padding: 6px; flex: 1;">
                                 + 말풍선 추가
                             </button>
-                            <button class="btn btn-secondary" onclick="undoBubbles()" style="font-size: 0.8rem; padding: 6px;" title="마지막 변경 되돌리기">
+                            <button class="btn btn-secondary" onclick="addNewNarration()" style="font-size: 0.8rem; padding: 6px; flex: 1;">
+                                + 나레이션 추가
+                            </button>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; margin-top: 0.3rem;">
+                            <button class="btn btn-secondary" onclick="undoBubbles()" style="font-size: 0.8rem; padding: 6px; flex:1;" title="마지막 변경 되돌리기">
                                 ↩ 되돌리기
                             </button>
-                            <button class="btn btn-secondary" onclick="resetBubbles()" style="font-size: 0.8rem; padding: 6px; color: var(--danger);" title="초기 상태로 복원">
+                            <button class="btn btn-secondary" onclick="resetBubbles()" style="font-size: 0.8rem; padding: 6px; flex:1; color: var(--danger);" title="초기 상태로 복원">
                                 🔄 초기화
                             </button>
                         </div>
@@ -1598,7 +1673,7 @@
                     <div style="margin-bottom: 1rem;">
                         <label style="font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; display:block;">비율</label>
                         <div style="display:flex; gap:6px;">
-                            <button class="ratio-btn active" data-type="carousel" data-ratio="default" onclick="selectRatio('carousel','default')" style="padding:4px 12px; border:2px solid var(--primary); border-radius:6px; cursor:pointer; font-size:0.75rem; background:var(--primary); color:#fff;">1:1</button>
+                            <button class="ratio-btn active" data-type="carousel" data-ratio="1:1" onclick="selectRatio('carousel','1:1')" style="padding:4px 12px; border:2px solid var(--primary); border-radius:6px; cursor:pointer; font-size:0.75rem; background:var(--primary); color:#fff;">1:1</button>
                             <button class="ratio-btn" data-type="carousel" data-ratio="4:5" onclick="selectRatio('carousel','4:5')" style="padding:4px 12px; border:2px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.75rem; background:var(--bg);">4:5</button>
                             <button class="ratio-btn" data-type="carousel" data-ratio="9:16" onclick="selectRatio('carousel','9:16')" style="padding:4px 12px; border:2px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.75rem; background:var(--bg);">9:16</button>
                         </div>
@@ -1818,7 +1893,7 @@
                         <label style="font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; display:block;">비율</label>
                         <div style="display:flex; gap:6px;">
                             <button class="ratio-btn" data-type="cardnews" data-ratio="1:1" onclick="selectRatio('cardnews','1:1')" style="padding:4px 12px; border:2px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.75rem; background:var(--bg);">1:1</button>
-                            <button class="ratio-btn active" data-type="cardnews" data-ratio="default" onclick="selectRatio('cardnews','default')" style="padding:4px 12px; border:2px solid var(--primary); border-radius:6px; cursor:pointer; font-size:0.75rem; background:var(--primary); color:#fff;">4:5</button>
+                            <button class="ratio-btn active" data-type="cardnews" data-ratio="4:5" onclick="selectRatio('cardnews','4:5')" style="padding:4px 12px; border:2px solid var(--primary); border-radius:6px; cursor:pointer; font-size:0.75rem; background:var(--primary); color:#fff;">4:5</button>
                             <button class="ratio-btn" data-type="cardnews" data-ratio="9:16" onclick="selectRatio('cardnews','9:16')" style="padding:4px 12px; border:2px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.75rem; background:var(--bg);">9:16</button>
                         </div>
                     </div>
@@ -2305,13 +2380,19 @@
         }
 
         // --- Step 2: 자료 수집 ---
-        async function collectData() {
+        async function collectData(forceExpertMode) {
             const loadingEl = document.getElementById('loading-data');
             const reviewArea = document.getElementById('data-review-area');
             const actionsEl = document.getElementById('data-actions');
 
+            // 전문가 모드 판단: 강제 파라미터 또는 토글 상태
+            const expertToggle = document.getElementById('expert-mode-toggle');
+            const expertMode = forceExpertMode === true || (expertToggle && expertToggle.checked);
+
             loadingEl.style.display = 'block';
-            loadingEl.innerHTML = '<div class="spinner"></div><p>AI가 자료를 수집하고 있습니다...</p>';
+            loadingEl.innerHTML = expertMode
+                ? '<div class="spinner"></div><p>🔬 전문가 모드로 심층 자료를 수집하고 있습니다...</p>'
+                : '<div class="spinner"></div><p>AI가 자료를 수집하고 있습니다...</p>';
             reviewArea.style.display = 'none';
             actionsEl.style.display = 'none';
 
@@ -2322,7 +2403,7 @@
                 const res = await fetch('/api/workflow/collect-data', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ session_id: sessionId, keyword, model })
+                    body: JSON.stringify({ session_id: sessionId, keyword, model, expert_mode: expertMode })
                 });
                 const data = await res.json();
 
@@ -2619,8 +2700,8 @@
 
         // 상태 저장소
         const contentState = {
-            carousel: { sessionId: null, items: [], currentSwipe: 0, selectedRatio: 'default', selectedTemplate: 'centered', logoPath: null },
-            cardnews: { sessionId: null, items: [], currentSwipe: 0, selectedRatio: 'default', selectedTemplate: 'centered', logoPath: null },
+            carousel: { sessionId: null, items: [], currentSwipe: 0, selectedRatio: '1:1', selectedTemplate: 'centered', logoPath: null },
+            cardnews: { sessionId: null, items: [], currentSwipe: 0, selectedRatio: '4:5', selectedTemplate: 'centered', logoPath: null },
         };
 
         // 색상 테마 프리셋 (p3-1)
@@ -3274,6 +3355,99 @@
         });
 
         // --- Step 3: 스토리 생성 ---
+        // === 재생성 패널 기능 ===
+        function toggleRegeneratePanel() {
+            const settings = document.getElementById('regen-settings');
+            const arrow = document.getElementById('regen-arrow');
+            if (settings.style.display === 'none') {
+                settings.style.display = 'block';
+                arrow.textContent = '▲';
+                // 현재 설정을 재생성 패널에 복사
+                syncRegenPanel();
+            } else {
+                settings.style.display = 'none';
+                arrow.textContent = '▼';
+            }
+        }
+
+        function syncRegenPanel() {
+            // 씬 개수 동기화
+            const sceneCount = document.getElementById('total-scene-count');
+            const regenSceneCount = document.getElementById('regen-scene-count');
+            if (sceneCount && regenSceneCount) regenSceneCount.value = sceneCount.value;
+            // 캐릭터 동기화
+            const regenContainer = document.getElementById('regen-characters-container');
+            if (regenContainer) {
+                regenContainer.innerHTML = '';
+                const currentChars = getCharactersInput();
+                if (currentChars.length > 0) {
+                    currentChars.forEach(c => addRegenCharacterRow(c.name, c.role));
+                } else {
+                    addRegenCharacterRow('', 'expert');
+                    addRegenCharacterRow('', 'questioner');
+                }
+            }
+        }
+
+        function addRegenCharacterRow(name = '', role = '') {
+            const container = document.getElementById('regen-characters-container');
+            if (!container) return;
+            const count = container.querySelectorAll('.regen-char-row').length;
+            // 인원 제한 없음
+            if (!role) {
+                const defaults = ['expert', 'questioner', 'helper'];
+                role = defaults[count] || 'none';
+            }
+            const roleOptions = CHARACTER_ROLES.map(r =>
+                `<option value="${r.value}" ${r.value === role ? 'selected' : ''}>${r.label}</option>`
+            ).join('');
+            const row = document.createElement('div');
+            row.className = 'regen-char-row';
+            row.style.cssText = 'display:flex; align-items:center; gap:4px;';
+            row.innerHTML = `
+                <input type="text" class="regen-char-name" value="${name}" placeholder="이름"
+                    style="flex:1; min-width:100px; padding:5px 8px; font-size:0.8rem; border-radius:6px; border:1px solid var(--border); background:var(--bg-card); color:var(--text);">
+                <select class="regen-char-role"
+                    style="padding:5px 6px; font-size:0.78rem; border-radius:6px; border:1px solid var(--border); background:var(--bg-card); color:var(--text); width:85px; max-width:85px;">
+                    ${roleOptions}
+                </select>
+                <button onclick="this.parentElement.remove()"
+                    style="background:none; border:none; color:var(--danger); cursor:pointer; font-size:0.9rem;">&times;</button>
+            `;
+            container.appendChild(row);
+        }
+
+        function getRegenCharactersInput() {
+            const container = document.getElementById('regen-characters-container');
+            if (!container) return [];
+            const rows = container.querySelectorAll('.regen-char-row');
+            const chars = [];
+            rows.forEach(row => {
+                const name = row.querySelector('.regen-char-name')?.value?.trim() || '';
+                const role = row.querySelector('.regen-char-role')?.value || 'expert';
+                if (name) chars.push({ name, role });
+            });
+            return chars;
+        }
+
+        async function regenerateStory() {
+            // 재생성 패널의 설정을 메인 설정에 반영
+            const regenChars = getRegenCharactersInput();
+            if (regenChars.length > 0) {
+                setCharacterRowsFromInput(regenChars);
+            }
+            const regenSceneCount = document.getElementById('regen-scene-count');
+            const mainSceneCount = document.getElementById('total-scene-count');
+            if (regenSceneCount && mainSceneCount) {
+                mainSceneCount.value = regenSceneCount.value;
+            }
+            // 패널 닫기
+            document.getElementById('regen-settings').style.display = 'none';
+            document.getElementById('regen-arrow').textContent = '▼';
+            // 기존 generateStory 호출
+            await generateStory();
+        }
+
         async function generateStory() {
             const loadingEl = document.getElementById('loading-story');
             const reviewArea = document.getElementById('story-review-area');
@@ -3290,8 +3464,13 @@
 
             try {
                 const storyModel = document.getElementById('ai-model-select') ? document.getElementById('ai-model-select').value : 'gemini-3-flash-preview';
-                const charNamesInput = document.getElementById('character-names-input');
-                const charNames = charNamesInput ? charNamesInput.value.trim() : '';
+                // 구조적 캐릭터 입력 수집
+                const charsInput = getCharactersInput();
+                const charNames = charsInput.map(c => c.name).join(', ');
+                // 역할별 타입 자동 추출
+                const expertChar = charsInput.find(c => c.role === 'expert');
+                const questionerChar = charsInput.find(c => c.role === 'questioner');
+
                 // collected_data를 안전하게 직렬화 (너무 큰 데이터 방지)
                 let safeCollectedData = null;
                 try {
@@ -3317,10 +3496,11 @@
                     body: JSON.stringify({
                         session_id: sessionId,
                         scene_count: sceneCount,
-                        questioner_type: '일반인',
-                        expert_type: '전문가',
+                        questioner_type: questionerChar ? questionerChar.name : '일반인',
+                        expert_type: expertChar ? expertChar.name : '전문가',
                         model: storyModel,
                         character_names: charNames,
+                        characters_input: charsInput,
                         collected_data: safeCollectedData,
                         monologue_mode: isMonologue,
                         monologue_character: monologueChar
@@ -3353,6 +3533,11 @@
                 if (!storyData) {
                     throw new Error('스토리 데이터를 받지 못했습니다. 다시 시도해주세요.');
                 }
+
+                // 새 스토리 생성 시 이전 캐시 초기화
+                window._sceneImages = {};
+                if (typeof bubbleLayers !== 'undefined') bubbleLayers = [];
+                if (typeof bubbleImages !== 'undefined') bubbleImages = [];
 
                 characters = storyData.characters || [];
 
@@ -3770,16 +3955,63 @@
                     </div>
                 </div>
             `}).join('');
+
+            // 씬 추가 버튼
+            container.insertAdjacentHTML('beforeend', `
+                <div style="text-align:center; padding:1rem 0;">
+                    <button onclick="addEmptyScene()"
+                        style="background:var(--bg-card); border:2px dashed var(--primary); color:var(--primary); cursor:pointer; padding:10px 24px; border-radius:10px; font-size:0.85rem; font-weight:600; transition:all 0.2s;"
+                        onmouseover="this.style.background='rgba(99,102,241,0.08)'"
+                        onmouseout="this.style.background='var(--bg-card)'">
+                        ＋ 씬 추가
+                    </button>
+                </div>
+            `);
+        }
+
+        // 빈 씬 추가
+        function addEmptyScene() {
+            if (!storyData || !storyData.scenes) {
+                showToast('스토리를 먼저 생성해주세요', 'warning');
+                return;
+            }
+            const maxNum = storyData.scenes.reduce((max, s) => Math.max(max, s.scene_number || 0), 0);
+            const newScene = {
+                scene_number: maxNum + 1,
+                scene_description: '',
+                image_prompt: '',
+                dialogues: [],
+                narration: ''
+            };
+            storyData.scenes.push(newScene);
+            renderScenes(storyData.scenes);
+            showToast(`씬 ${newScene.scene_number} 추가됨`, 'success');
+            // 추가된 씬으로 스크롤
+            setTimeout(() => {
+                const card = document.getElementById(`scene-card-${storyData.scenes.length - 1}`);
+                if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 100);
+        }
+
+        // Step 3 대사/나레이션 수정 시 자동 서버 동기화 (2초 debounce)
+        let _sceneSyncTimer = null;
+        function scheduleSceneSync() {
+            if (_sceneSyncTimer) clearTimeout(_sceneSyncTimer);
+            _sceneSyncTimer = setTimeout(() => {
+                syncScenesToBackend();
+            }, 2000);
         }
 
         // 씬 설명 인라인 수정
         function updateSceneDesc(idx, value) {
             storyData.scenes[idx].scene_description = value.trim();
+            scheduleSceneSync();
         }
 
         // 나레이션 인라인 수정
         function updateNarration(idx, value) {
             storyData.scenes[idx].narration = value.trim();
+            scheduleSceneSync();
         }
 
         // ── 독백 모드 UI 핸들러 ──
@@ -3797,37 +4029,130 @@
             }
         }
 
-        function updateMonologueCharList() {
-            const input = document.getElementById('character-names-input');
-            const select = document.getElementById('monologue-char-select');
-            if (!input || !select) return;
-            const names = input.value.split(',').map(n => n.trim()).filter(n => n);
-            select.innerHTML = '<option value="">캐릭터 선택...</option>' +
-                names.map(n => `<option value="${n}">${n}</option>`).join('');
-            // 이름이 1개면 자동 선택
-            if (names.length === 1) {
-                select.value = names[0];
-            }
+        // === 구조적 캐릭터 입력 시스템 ===
+        const CHARACTER_ROLES = [
+            { value: 'expert', label: '전문가' },
+            { value: 'questioner', label: '질문자' },
+            { value: 'helper', label: '조력자' },
+            { value: 'none', label: '없음' }
+        ];
+
+        function getCharactersInput() {
+            const container = document.getElementById('characters-input-container');
+            if (!container) return [];
+            const rows = container.querySelectorAll('.char-input-row');
+            const chars = [];
+            rows.forEach(row => {
+                const name = row.querySelector('.char-name-input')?.value?.trim() || '';
+                const role = row.querySelector('.char-role-select')?.value || 'expert';
+                if (name) chars.push({ name, role });
+            });
+            return chars;
         }
 
-        // 캐릭터 이름 입력 변경 시 독백 모드 자동 감지
-        document.addEventListener('DOMContentLoaded', function() {
-            const charInput = document.getElementById('character-names-input');
-            if (charInput) {
-                charInput.addEventListener('input', function() {
-                    const names = this.value.split(',').map(n => n.trim()).filter(n => n);
-                    const check = document.getElementById('monologue-mode-check');
-                    if (names.length === 1 && !check.checked) {
-                        check.checked = true;
-                        onMonologueModeChange();
-                        showToast('캐릭터 1명 감지 — 독백 모드가 자동 활성화됩니다', 'info');
-                    } else if (names.length > 1 && check.checked) {
-                        // 여러 명이면 자동 해제하지 않음 (사용자가 의도적으로 켰을 수 있음)
-                        updateMonologueCharList();
-                    }
-                });
+        function syncCharacterNamesHidden() {
+            const chars = getCharactersInput();
+            const hidden = document.getElementById('character-names-input');
+            if (hidden) hidden.value = chars.map(c => c.name).join(', ');
+            // 독백 모드 자동 감지 — 이름이 실제로 입력된 캐릭터만 카운트
+            const filledChars = chars.filter(c => c.name && c.name.trim().length > 0);
+            const check = document.getElementById('monologue-mode-check');
+            if (filledChars.length === 1 && check && !check.checked) {
+                check.checked = true;
+                onMonologueModeChange();
+                showToast('캐릭터 1명 — 독백 모드 자동 활성화', 'info');
             }
+            updateMonologueCharList();
+            updateAddCharBtn();
+        }
+
+        function updateAddCharBtn() {
+            // 인원 제한 없음 — 항상 표시
+            const btn = document.getElementById('btn-add-char');
+            if (btn) btn.style.display = 'inline-block';
+        }
+
+        function addCharacterRow(name = '', role = '') {
+            const container = document.getElementById('characters-input-container');
+            if (!container) return;
+            const count = container.querySelectorAll('.char-input-row').length;
+            // 기본 역할: 첫 3명은 expert/questioner/helper, 이후 none
+            if (!role) {
+                const defaultRoles = ['expert', 'questioner', 'helper'];
+                role = defaultRoles[count] || 'none';
+            }
+            const row = document.createElement('div');
+            row.className = 'char-input-row';
+            row.style.cssText = 'display:flex; align-items:center; gap:6px;';
+            const roleOptions = CHARACTER_ROLES.map(r =>
+                `<option value="${r.value}" ${r.value === role ? 'selected' : ''}>${r.label}</option>`
+            ).join('');
+            row.innerHTML = `
+                <input type="text" class="char-name-input" value="${name}" placeholder="캐릭터 이름"
+                    oninput="syncCharacterNamesHidden()"
+                    style="flex:1; min-width:120px; padding:6px 10px; font-size:0.83rem; border-radius:6px; border:1px solid var(--border); background:var(--bg-card); color:var(--text);">
+                <select class="char-role-select" onchange="syncCharacterNamesHidden()"
+                    style="padding:6px 8px; font-size:0.8rem; border-radius:6px; border:1px solid var(--border); background:var(--bg-card); color:var(--text); width:90px; max-width:90px;">
+                    ${roleOptions}
+                </select>
+                <button onclick="this.parentElement.remove(); syncCharacterNamesHidden();"
+                    style="background:none; border:none; color:var(--danger); cursor:pointer; font-size:1rem; padding:2px 6px;" title="삭제">&times;</button>
+            `;
+            container.appendChild(row);
+            syncCharacterNamesHidden();
+        }
+
+        function initCharacterRows(namesStr) {
+            const container = document.getElementById('characters-input-container');
+            if (!container) return;
+            container.innerHTML = '';
+            if (!namesStr || !namesStr.trim()) {
+                addCharacterRow('', 'expert');
+                addCharacterRow('', 'questioner');
+                return;
+            }
+            const names = namesStr.split(',').map(n => n.trim()).filter(n => n);
+            const defaultRoles = ['expert', 'questioner', 'helper'];
+            names.forEach((name, i) => {
+                addCharacterRow(name, defaultRoles[i] || 'helper');
+            });
+        }
+
+        function setCharacterRowsFromInput(charsArray) {
+            // charsArray: [{name, role}, ...] 또는 ["이름1", "이름2"]
+            const container = document.getElementById('characters-input-container');
+            if (!container) return;
+            container.innerHTML = '';
+            if (!charsArray || charsArray.length === 0) {
+                addCharacterRow('', 'expert');
+                addCharacterRow('', 'questioner');
+                return;
+            }
+            const defaultRoles = ['expert', 'questioner', 'helper'];
+            charsArray.forEach((c, i) => {
+                if (typeof c === 'string') {
+                    addCharacterRow(c, defaultRoles[i] || 'helper');
+                } else {
+                    addCharacterRow(c.name || '', c.role || defaultRoles[i] || 'helper');
+                }
+            });
+        }
+
+        // DOMContentLoaded 시 기본 행 2개 생성
+        document.addEventListener('DOMContentLoaded', function() {
+            initCharacterRows('');
         });
+
+        function updateMonologueCharList() {
+            const chars = getCharactersInput();
+            const select = document.getElementById('monologue-char-select');
+            if (!select) return;
+            select.innerHTML = '<option value="">캐릭터 선택...</option>' +
+                chars.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+            if (chars.length === 1 && chars[0].name) {
+                select.value = chars[0].name;
+            }
+        }
 
         // ★ 프론트엔드 편집 내용을 백엔드 세션에 일괄 동기화
         async function syncScenesToBackend() {
@@ -3876,6 +4201,7 @@
         function updateDialogueText(sceneIdx, dialogueIdx, newText) {
             if (newText && newText.trim()) {
                 storyData.scenes[sceneIdx].dialogues[dialogueIdx].text = newText.trim();
+                scheduleSceneSync();
             }
         }
 
@@ -5291,9 +5617,11 @@
                 if (genBar) genBar.style.display = 'block';
             }
 
-            // Step 4: 말풍선 편집
+            // Step 4: 말풍선 편집 — Step 3 대사/나레이션을 서버에 동기화 후 에디터 초기화
             if (step === 4) {
-                initBubbleEditor();
+                syncScenesToBackend().then(() => {
+                    initBubbleEditor();
+                });
             }
 
             // Step 5: 캡션 + 발행 (세션 이미지로 미리보기 소스 채운 뒤 미리보기 갱신)
@@ -5483,6 +5811,9 @@
                 if (layer.bubbles) layer.bubbles.forEach(b => migrateBubbleData(b));
             });
 
+            // 누락 레이어 자동 보충: bubbleImages에는 있지만 bubbleLayers에는 없는 씬
+            ensureBubbleLayersForAllImages();
+
             bubbleCurrentScene = 0;
             renderBubbleEditor();
         }
@@ -5519,7 +5850,7 @@
             }
 
             // 현재 레이어
-            const layer = bubbleLayers[idx] || { bubbles: [], show_all: true, font_family: "Nanum Gothic" };
+            const layer = bubbleLayers[idx] || { bubbles: [], show_all: true, font_family: "Jua" };
 
             // 전체 표시 체크박스
             document.getElementById('bubble-show-all').checked = layer.show_all !== false;
@@ -5531,7 +5862,7 @@
             }
             const fontPreview = document.getElementById('bubble-font-preview');
             if (fontPreview) {
-                fontPreview.style.fontFamily = "'" + (layer.font_family || 'Nanum Gothic') + "', sans-serif";
+                fontPreview.style.fontFamily = "'" + (layer.font_family || 'Jua') + "', sans-serif";
             }
 
             // CSS 오버레이 렌더링
@@ -5555,7 +5886,7 @@
             const isNarr = bubble.type === 'narration';
             const isBold = bubble.bold || shapeCSS.fontWeight;
             const fontFamily = bubble.font_family || layerFont;
-            const fontSize = Math.round((bubble.font_size || 13) * fontScale);
+            const fontSize = Math.round((bubble.font_size || 18) * fontScale);
 
             const div = document.createElement('div');
             div.dataset.bubbleIdx = idx;
@@ -5821,9 +6152,9 @@
                         <select onchange="updateBubbleShape(${i}, this.value)" style="font-size: 0.7rem; padding: 2px 4px; flex: 1;" title="말풍선 모양">
                             ${shapeOptions}
                         </select>
-                        <select onchange="updateBubbleFontSize(${i}, this.value)" style="font-size: 0.7rem; padding: 2px 4px; width:42px;" title="글자 크기">
-                            ${[9,10,11,12,13,14,15,16,18,20,22,24].map(s => `<option value="${s}" ${(bubble.font_size||13)==s?'selected':''}>${s}</option>`).join('')}
-                        </select>
+                        <input type="number" value="${bubble.font_size||18}" min="8" max="48" step="1"
+                            onchange="updateBubbleFontSize(${i}, this.value)"
+                            style="font-size: 0.7rem; padding: 2px 4px; width:48px; border:1px solid var(--border); border-radius:4px; background:var(--bg-input); color:var(--text); text-align:center;" title="글자 크기">
                         <label style="font-size:0.7rem; display:flex; align-items:center; gap:2px; cursor:pointer; white-space:nowrap;" title="볼드 처리">
                             <input type="checkbox" ${boldChecked} onchange="toggleBubbleBold(${i}, this.checked)"> <b>B</b>
                         </label>
@@ -5862,6 +6193,67 @@
             });
         }
 
+        // 누락 레이어 자동 보충 함수
+        function ensureBubbleLayersForAllImages() {
+            const existingSceneNums = new Set(bubbleLayers.map(l => l.scene_number));
+            bubbleImages.forEach((img, idx) => {
+                const sn = img.scene_number;
+                if (!existingSceneNums.has(sn)) {
+                    // 해당 씬의 storyData에서 대사/나레이션 가져오기
+                    const sceneData = storyData?.scenes?.find(s => s.scene_number === sn);
+                    const bubbles = [];
+                    if (sceneData) {
+                        const positions = ['top-left', 'top-right', 'top-center', 'middle-left', 'middle-right'];
+                        (sceneData.dialogues || []).forEach((d, j) => {
+                            bubbles.push({
+                                id: `s${sn}_d${j}`, type: 'dialogue',
+                                character: d.character || '', text: d.text || '',
+                                position: positions[j % positions.length],
+                                shape: 'round',
+                                tail_direction: j % 2 === 0 ? 'bottom-left' : 'bottom-right',
+                                tail: j % 2 === 0 ? 'bottom-left' : 'bottom-right',
+                                bg_color: '#FFFFFF', text_color: '#000000', border_color: '#333333',
+                                font_size: 18, visible: true, opacity: 0.95, bold: false,
+                                x: 10 + (j % 5) * 8, y: 5 + j * 16, w: 40, h: 14
+                            });
+                        });
+                        if (sceneData.narration) {
+                            bubbles.push({
+                                id: `s${sn}_narr`, type: 'narration',
+                                character: '', text: sceneData.narration,
+                                position: 'bottom-center', shape: 'square',
+                                bg_color: 'rgba(0,0,0,0.7)', text_color: '#FFFFFF',
+                                border_color: 'transparent',
+                                font_size: 15, visible: true, opacity: 0.85, bold: true,
+                                font_family: 'Nanum Gothic',
+                                x: 5, y: 78, w: 90, h: 12
+                            });
+                        }
+                    }
+                    // 올바른 위치에 삽입 (scene_number 순서 유지)
+                    const insertIdx = bubbleLayers.findIndex(l => l.scene_number > sn);
+                    const newLayer = { scene_number: sn, bubbles, show_all: true, font_family: 'Jua' };
+                    if (insertIdx === -1) {
+                        bubbleLayers.push(newLayer);
+                    } else {
+                        bubbleLayers.splice(insertIdx, 0, newLayer);
+                    }
+                    existingSceneNums.add(sn);
+                }
+            });
+            // storyData 씬 중 이미지는 없지만 레이어도 없는 씬도 보충
+            if (storyData?.scenes) {
+                storyData.scenes.forEach(s => {
+                    if (!existingSceneNums.has(s.scene_number)) {
+                        bubbleLayers.push({ scene_number: s.scene_number, bubbles: [], show_all: true, font_family: 'Jua' });
+                        existingSceneNums.add(s.scene_number);
+                    }
+                });
+                // scene_number 순서로 정렬
+                bubbleLayers.sort((a, b) => a.scene_number - b.scene_number);
+            }
+        }
+
         // ── 네비게이션 ──
         function bubbleNav(dir) {
             const total = Math.max(bubbleLayers.length, bubbleImages.length);
@@ -5869,6 +6261,12 @@
             if (next >= 0 && next < total) {
                 saveBubbleLayerToServer(); // 현재 씬 저장
                 bubbleCurrentScene = next;
+                // 이동 대상에 레이어가 없으면 빈 레이어 자동 생성
+                if (!bubbleLayers[next]) {
+                    const img = bubbleImages[next];
+                    const sn = img ? img.scene_number : (next + 1);
+                    bubbleLayers[next] = { scene_number: sn, bubbles: [], show_all: true, font_family: 'Jua' };
+                }
                 renderBubbleEditor();
             }
         }
@@ -5954,14 +6352,29 @@
             if (!layer) return;
             saveSnapshot();
             const newId = `s${layer.scene_number}_new_${Date.now()}`;
-            // 새 말풍선: 기본 위치를 약간 어긋나게 배치
             const offset = (layer.bubbles.length % 5) * 8;
             layer.bubbles.push({
                 id: newId, type: "dialogue", character: "", text: "새 대사",
                 position: "top-center", shape: "round",
                 x: 10 + offset, y: 5 + offset, w: 40, h: 14,
                 bg_color: "#FFFFFF", text_color: "#000000", border_color: "#333333",
-                font_size: 13, visible: true, opacity: 0.95, bold: false
+                font_size: 18, visible: true, opacity: 0.95, bold: false
+            });
+            renderBubbleEditor();
+        }
+
+        function addNewNarration() {
+            const layer = bubbleLayers[bubbleCurrentScene];
+            if (!layer) return;
+            saveSnapshot();
+            const newId = `s${layer.scene_number}_narr_${Date.now()}`;
+            layer.bubbles.push({
+                id: newId, type: "narration", character: "", text: "나레이션 텍스트",
+                position: "bottom-center", shape: "square",
+                x: 5, y: 78, w: 90, h: 12,
+                bg_color: "rgba(0,0,0,0.7)", text_color: "#FFFFFF", border_color: "transparent",
+                font_size: 15, visible: true, opacity: 0.85, bold: true,
+                font_family: "Nanum Gothic"
             });
             renderBubbleEditor();
         }
@@ -5995,6 +6408,106 @@
             if (!confirm('이 씬의 말풍선을 초기 상태로 되돌릴까요?')) return;
             // 서버에서 다시 초기화
             initBubbleEditor();
+        }
+
+        // Step 3의 최신 대사/나레이션을 현재 씬 버블에 반영
+        function refreshSceneText() {
+            if (!storyData || !storyData.scenes) {
+                showToast('스토리 데이터가 없습니다', 'warning');
+                return;
+            }
+            let layer = bubbleLayers[bubbleCurrentScene];
+            // 레이어가 없으면 자동 생성
+            if (!layer) {
+                const sceneNum = bubbleCurrentScene + 1;
+                layer = { scene_number: sceneNum, bubbles: [], show_all: true, font_family: 'Jua' };
+                bubbleLayers[bubbleCurrentScene] = layer;
+            }
+            if (!layer.bubbles) layer.bubbles = [];
+
+            // scene_number로 매칭
+            const sceneData = storyData.scenes.find(s => s.scene_number === layer.scene_number);
+            if (!sceneData) {
+                // scene_number 매칭 실패 시 인덱스로 시도
+                const fallbackScene = storyData.scenes[bubbleCurrentScene];
+                if (!fallbackScene) {
+                    showToast('매칭되는 씬 데이터를 찾을 수 없습니다', 'warning');
+                    return;
+                }
+                layer.scene_number = fallbackScene.scene_number;
+                return refreshSceneText(); // 재귀 호출로 다시 매칭
+            }
+
+            saveSnapshot(); // 되돌리기 지원
+
+            // dialogue 타입 버블 텍스트 교체 + 부족분 생성
+            const dialogueBubbles = layer.bubbles.filter(b => b.type === 'dialogue');
+            const dialogues = sceneData.dialogues || [];
+
+            // 기존 버블 업데이트
+            dialogueBubbles.forEach((bubble, i) => {
+                if (i < dialogues.length) {
+                    bubble.text = dialogues[i].text || '';
+                    bubble.character = dialogues[i].character || bubble.character;
+                }
+            });
+
+            // 부족분: 새 버블 생성
+            const positions = ['top-left', 'top-right', 'top-center', 'middle-left', 'middle-right'];
+            for (let i = dialogueBubbles.length; i < dialogues.length; i++) {
+                const pos = positions[i % positions.length];
+                const offset = (layer.bubbles.length % 5) * 8;
+                layer.bubbles.push({
+                    id: `s${layer.scene_number}_d${i}`,
+                    type: 'dialogue',
+                    character: dialogues[i].character || '',
+                    text: dialogues[i].text || '',
+                    position: pos,
+                    shape: 'round',
+                    tail_direction: i % 2 === 0 ? 'bottom-left' : 'bottom-right',
+                    tail: i % 2 === 0 ? 'bottom-left' : 'bottom-right',
+                    x: 10 + offset, y: 5 + (i * 16),
+                    w: 40, h: 14,
+                    bg_color: '#FFFFFF', text_color: '#000000', border_color: '#333333',
+                    font_size: 18, visible: true, opacity: 0.95, bold: false
+                });
+            }
+
+            // 초과분: 대사가 줄었으면 남은 dialogue 버블 제거
+            if (dialogueBubbles.length > dialogues.length) {
+                const removeCount = dialogueBubbles.length - dialogues.length;
+                for (let r = 0; r < removeCount; r++) {
+                    const idx = layer.bubbles.indexOf(dialogueBubbles[dialogueBubbles.length - 1 - r]);
+                    if (idx !== -1) layer.bubbles.splice(idx, 1);
+                }
+            }
+
+            // narration 타입 버블 텍스트 교체 / 생성
+            const narrationBubbles = layer.bubbles.filter(b => b.type === 'narration');
+            if (sceneData.narration) {
+                if (narrationBubbles.length > 0) {
+                    narrationBubbles[0].text = sceneData.narration;
+                } else {
+                    // 나레이션 버블이 없으면 새로 생성
+                    layer.bubbles.push({
+                        id: `s${layer.scene_number}_narr`,
+                        type: 'narration',
+                        character: '',
+                        text: sceneData.narration,
+                        position: 'bottom-center',
+                        shape: 'square',
+                        bg_color: 'rgba(0,0,0,0.7)', text_color: '#FFFFFF',
+                        border_color: 'transparent',
+                        font_size: 15, visible: true, opacity: 0.85, bold: true,
+                        font_family: 'Nanum Gothic',
+                        x: 5, y: 78, w: 90, h: 12
+                    });
+                }
+            }
+
+            renderBubbleEditor();
+            saveBubbleLayerToServer();
+            showToast('씬 텍스트가 새로고침되었습니다', 'success');
         }
 
         // 편집 탭에서 씬 삭제
@@ -6526,6 +7039,10 @@
     let _editingPresetId = null;    // 편집 중인 프리셋 ID (null이면 신규)
     let _presetSessionId = 'preset_' + Date.now(); // 프리셋 편집용 임시 세션
 
+    // 프리셋 이미지 히스토리 (이전/다음 탐색용, 세션 내 메모리)
+    const refHistory = { character: [], method: [], style: [] };
+    const refHistoryIdx = { character: -1, method: -1, style: -1 };
+
     // ── 프리셋 갤러리 로드 ──
     async function loadPresetGallery() {
         try {
@@ -6618,12 +7135,14 @@
             });
         } catch (e) { console.warn('프리셋 적용 실패:', e); }
 
-        // 3장 미리보기 로드
+        // 3장 미리보기 로드 + 히스토리 초기화
         ['character', 'method', 'style'].forEach(t => {
+            resetRefHistory(t);
             const preview = document.getElementById(`ref-preview-${t}`);
             const status = document.getElementById(`ref-status-${t}`);
             if (preset[`has_${t}`]) {
-                preview.innerHTML = `<img src="/api/reference/presets/${preset.id}/thumbnail/${t}?t=${Date.now()}" style="width:100%; height:100%; object-fit:cover;">`;
+                const imgUrl = `/api/reference/presets/${preset.id}/thumbnail/${t}?t=${Date.now()}`;
+                preview.innerHTML = `<img src="${imgUrl}" style="width:100%; height:100%; object-fit:cover;">`;
                 status.innerText = '설정됨';
                 status.style.background = 'rgba(16,185,129,0.2)';
                 status.style.color = '#10b981';
@@ -6655,6 +7174,7 @@
             status.style.background = 'var(--bg-input)';
             status.style.color = 'var(--text-muted)';
             document.getElementById(`ref-prompt-${t}`).value = '';
+            resetRefHistory(t);
         });
     }
 
@@ -6685,7 +7205,11 @@
             if (data.success) {
                 const preview = document.getElementById(`ref-preview-${refType}`);
                 const reader = new FileReader();
-                reader.onload = (e) => { preview.innerHTML = `<img src="${e.target.result}" style="width:100%; height:100%; object-fit:cover;">`; };
+                reader.onload = (e) => {
+                    preview.innerHTML = `<img src="${e.target.result}" style="width:100%; height:100%; object-fit:cover;">`;
+                    // 히스토리에 추가
+                    pushRefHistory(refType, e.target.result);
+                };
                 reader.readAsDataURL(file);
 
                 const status = document.getElementById(`ref-status-${refType}`);
@@ -6713,6 +7237,58 @@
             textarea.value = examples[refType];
             showToast('예시 프롬프트가 채워졌습니다', 'success');
         }
+    }
+
+    // ── 프리셋 이미지 히스토리 네비게이션 ──
+    function refHistoryNav(refType, direction) {
+        const hist = refHistory[refType];
+        if (!hist || hist.length <= 1) return;
+        const newIdx = refHistoryIdx[refType] + direction;
+        if (newIdx < 0 || newIdx >= hist.length) return;
+        refHistoryIdx[refType] = newIdx;
+        // 프리뷰 교체
+        const preview = document.getElementById(`ref-preview-${refType}`);
+        if (preview) {
+            preview.innerHTML = `<img src="${hist[newIdx]}" style="width:100%; height:100%; object-fit:cover;">`;
+        }
+        updateRefNavUI(refType);
+        // 서버 동기화 — 선택한 이미지를 세션 레퍼런스로 설정
+        fetch('/api/reference/set-from-base64', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: _presetSessionId,
+                ref_type: refType,
+                image_base64: hist[newIdx]
+            })
+        }).catch(e => console.warn('히스토리 동기화 실패:', e));
+    }
+
+    function updateRefNavUI(refType) {
+        const nav = document.getElementById(`ref-nav-${refType}`);
+        if (!nav) return;
+        const hist = refHistory[refType];
+        if (hist.length <= 1) {
+            nav.style.display = 'none';
+            return;
+        }
+        nav.style.display = 'flex';
+        const idx = refHistoryIdx[refType];
+        nav.querySelector('.ref-nav-prev').disabled = (idx <= 0);
+        nav.querySelector('.ref-nav-next').disabled = (idx >= hist.length - 1);
+        nav.querySelector('.ref-nav-counter').textContent = `${idx + 1} / ${hist.length}`;
+    }
+
+    function pushRefHistory(refType, base64Src) {
+        refHistory[refType].push(base64Src);
+        refHistoryIdx[refType] = refHistory[refType].length - 1;
+        updateRefNavUI(refType);
+    }
+
+    function resetRefHistory(refType) {
+        refHistory[refType] = [];
+        refHistoryIdx[refType] = -1;
+        updateRefNavUI(refType);
     }
 
     // ── AI 레퍼런스 생성 ──
@@ -6832,6 +7408,8 @@
                     statusEl.style.color = '#10b981';
                 }
                 showToast(`${label} 레퍼런스 AI 생성 완료! (${elapsed}초)`, 'success');
+                // 히스토리에 추가
+                pushRefHistory(refType, b64);
             } else {
                 preview.innerHTML = `
                     <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; gap:0.5rem;">
@@ -7070,10 +7648,12 @@
     function selectPresetForStory(preset) {
         _activePreset = preset;
 
-        // 캐릭터 이름 자동 반영
+        // 캐릭터 이름 자동 반영 (구조적 입력)
         if (preset.character_names && preset.character_names.length > 0) {
-            const nameInput = document.getElementById('character-names-input');
-            if (nameInput) nameInput.value = preset.character_names.join(', ');
+            setCharacterRowsFromInput(preset.character_names);
+            // hidden input도 동기화
+            const hidden = document.getElementById('character-names-input');
+            if (hidden) hidden.value = preset.character_names.join(', ');
         }
 
         renderStoryPresetGallery();

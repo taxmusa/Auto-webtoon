@@ -70,6 +70,7 @@ class GenerateStoryRequest(BaseModel):
     scene_count: int = 8
     model: str = "gemini-3-flash-preview"
     character_names: str = ""  # 쉼표 구분 등장인물 이름 (빈 문자열이면 AI 자동 생성)
+    characters_input: Optional[List[dict]] = None  # 구조적 캐릭터 입력 [{"name":"소미","role":"expert"}, ...]
     collected_data: Optional[List[dict]] = None  # 프론트엔드에서 수정된 수집 데이터
     monologue_mode: bool = False  # 독백 모드 (1인 캐릭터만 등장)
     monologue_character: str = ""  # 독백 시 사용할 캐릭터 이름
@@ -198,7 +199,7 @@ async def generate_story(request: GenerateStoryRequest):
         # 프로젝트 설정의 규칙 적용
         rule_settings = session.settings.rules
         
-        logger.info(f"[generate_story] 스토리 생성 시작 - keyword: {session.keyword}, scene_count: {request.scene_count}, model: {request.model}")
+        logger.info(f"[generate_story] 스토리 생성 시작 - keyword: {session.keyword}, scene_count: {request.scene_count}, model: {request.model}, characters_input: {request.characters_input}")
         
         story = await gemini.generate_story(
             keyword=session.keyword,
@@ -209,6 +210,7 @@ async def generate_story(request: GenerateStoryRequest):
             rule_settings=rule_settings,
             model=request.model,
             character_names=request.character_names,
+            characters_input=request.characters_input,
             monologue_mode=request.monologue_mode,
             monologue_character=request.monologue_character
         )
@@ -219,6 +221,7 @@ async def generate_story(request: GenerateStoryRequest):
         logger.info(f"[generate_story] 스토리 생성 완료 - 씬 수: {len(story.scenes) if story.scenes else 0}")
         
         session.story = story
+        session.images = []  # 새 스토리 생성 시 이전 이미지 초기화
         session.state = WorkflowState.REVIEWING_SCENES
         
         # 스토리 히스토리 저장
@@ -598,7 +601,8 @@ async def generate_images(request: GenerateImagesRequest):
                 character_style=char_style,
                 background_style=bg_style,
                 manual_overrides=overrides,
-                sub_style_name=sub_style
+                sub_style_name=sub_style,
+                aspect_ratio=request.aspect_ratio
             )
             
             size = scene_size
@@ -614,7 +618,8 @@ async def generate_images(request: GenerateImagesRequest):
                 style_image=style_bytes,
                 prev_scene_image=prev_scene_image,
                 prev_scene_summaries=prev_scene_summaries,
-                prev_scene_number=_prev_sn
+                prev_scene_number=_prev_sn,
+                aspect_ratio=request.aspect_ratio
             )
             ref_count = sum(1 for x in [ref_image_bytes, method_bytes, style_bytes] if x)
             logger.info(f"[Gemini] 씬 {scene.scene_number}: {ref_count}종 레퍼런스"
@@ -924,6 +929,7 @@ class CollectDataRequest(BaseModel):
     session_id: str
     keyword: str
     model: str = "gemini-3-flash-preview"
+    expert_mode: bool = False
 
 
 @router.post("/collect-data")
@@ -946,8 +952,8 @@ async def collect_data(request: CollectDataRequest):
         field_info = session.field_info or await gemini.detect_field(request.keyword, request.model)
         logger.info(f"[collect_data] 분야 감지 완료: {field_info.field}")
         
-        items = await gemini.collect_data(request.keyword, field_info, request.model)
-        logger.info(f"[collect_data] 자료 수집 완료: {len(items)}개 항목")
+        items = await gemini.collect_data(request.keyword, field_info, request.model, request.expert_mode)
+        logger.info(f"[collect_data] 자료 수집 완료: {len(items)}개 항목 (전문가모드: {request.expert_mode})")
         
         # 세션에 저장 (상세 내용 포함)
         session.collected_data = items
@@ -2044,7 +2050,7 @@ async def init_bubble_layers(session_id: str):
                 bg_color="#FFFFFF",
                 text_color="#000000",
                 border_color="#333333",
-                font_size=15,
+                font_size=18,
                 visible=True
             ))
         
@@ -2060,7 +2066,9 @@ async def init_bubble_layers(session_id: str):
                 bg_color="rgba(0,0,0,0.7)",
                 text_color="#FFFFFF",
                 border_color="transparent",
-                font_size=13,
+                font_family="Nanum Gothic",
+                font_size=15,
+                bold=True,
                 visible=True,
                 opacity=0.85,
                 x=5.0,
@@ -2073,7 +2081,7 @@ async def init_bubble_layers(session_id: str):
             scene_number=scene.scene_number,
             bubbles=bubbles,
             show_all=True,
-            font_family="Nanum Gothic"
+            font_family="Jua"
         ))
     
     session.bubble_layers = layers
