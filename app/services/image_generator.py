@@ -201,9 +201,31 @@ class GeminiGenerator(ImageGeneratorBase):
             if style_image: ref_detail.append("Style")
             if prev_scene_image: ref_detail.append("PrevScene")
 
-            # 최대 2회 재시도 (Gemini가 가끔 이미지 없이 응답하는 경우 대비)
-            max_attempts = 2
+            # ★ 에러 타입별 재시도 설정
+            RETRY_DELAYS = {
+                "rate_limit": [5, 15, 30],      # 429: 최대 3회, 지수 백오프
+                "timeout": [10, 20],             # 타임아웃: 최대 2회
+                "server_error": [5, 10],          # 504 등 서버 에러: 최대 2회
+                "content_empty": [1],             # 이미지 미포함: 1회
+                "safety_filter": [],              # 안전 필터: 재시도 불가
+            }
+            
+            def _classify_error(exc):
+                """에러 타입 분류"""
+                err_str = str(exc).lower()
+                if "429" in err_str or "rate" in err_str or "quota" in err_str or "resource_exhausted" in err_str:
+                    return "rate_limit"
+                if "504" in err_str or "503" in err_str or "unavailable" in err_str or "cancelled" in err_str:
+                    return "server_error"
+                if "safety" in err_str or "block" in err_str or "refused" in err_str:
+                    return "safety_filter"
+                return "server_error"
+            
+            max_attempts = 4  # 최대 시도 횟수 (첫 시도 + 재시도 3회)
             last_error = None
+            error_type = None
+            retry_count = 0
+            
             for attempt in range(1, max_attempts + 1):
                 try:
                     response = await asyncio.wait_for(
@@ -220,8 +242,11 @@ class GeminiGenerator(ImageGeneratorBase):
                         block_reason = getattr(response, 'prompt_feedback', None)
                         logger.warning("Gemini 응답에 candidates 없음 (attempt=%d). prompt_feedback=%s", attempt, block_reason)
                         last_error = f"Gemini가 이미지 생성을 거부했습니다 (안전 필터). feedback={block_reason}"
-                        if attempt < max_attempts:
-                            await asyncio.sleep(0.3)
+                        error_type = "safety_filter"
+                        delays = RETRY_DELAYS.get(error_type, [])
+                        if retry_count < len(delays):
+                            await asyncio.sleep(delays[retry_count])
+                            retry_count += 1
                             continue
                         raise ValueError(last_error)
 
@@ -238,34 +263,70 @@ class GeminiGenerator(ImageGeneratorBase):
                         if text_parts:
                             logger.warning("Gemini가 이미지 대신 텍스트 반환 (attempt=%d): %s", attempt, text_parts[0][:200])
                             last_error = f"Gemini가 이미지 대신 텍스트를 반환했습니다. finish_reason={finish_reason}"
-                            if attempt < max_attempts:
-                                await asyncio.sleep(0.3)
+                            error_type = "content_empty"
+                            delays = RETRY_DELAYS.get(error_type, [])
+                            if retry_count < len(delays):
+                                await asyncio.sleep(delays[retry_count])
+                                retry_count += 1
                                 continue
                             raise ValueError(last_error)
                     
                     logger.warning("Gemini 응답에 이미지 없음 (attempt=%d). finish_reason=%s", attempt, finish_reason)
                     last_error = f"Gemini 응답에 이미지가 없습니다 (finish_reason={finish_reason})"
-                    if attempt < max_attempts:
-                        await asyncio.sleep(0.3)
+                    error_type = "content_empty"
+                    delays = RETRY_DELAYS.get(error_type, [])
+                    if retry_count < len(delays):
+                        await asyncio.sleep(delays[retry_count])
+                        retry_count += 1
                         continue
                     raise ValueError(last_error)
 
                 except asyncio.TimeoutError:
-                    raise  # 타임아웃은 재시도하지 않음
+                    # ★ 타임아웃도 재시도 (기존: 즉시 실패)
+                    error_type = "timeout"
+                    delays = RETRY_DELAYS.get(error_type, [])
+                    logger.warning(f"Gemini 타임아웃 (attempt={attempt}, {time.time()-t0:.0f}초)")
+                    if retry_count < len(delays):
+                        logger.info(f"[재시도] 타임아웃 → {delays[retry_count]}초 후 재시도 ({retry_count+1}/{len(delays)})")
+                        await asyncio.sleep(delays[retry_count])
+                        retry_count += 1
+                        continue
+                    raise
                 except ValueError:
                     if attempt >= max_attempts:
                         raise
                     continue
+                except Exception as e:
+                    # ★ 429/504 등 API 에러 분류 후 재시도
+                    error_type = _classify_error(e)
+                    delays = RETRY_DELAYS.get(error_type, [])
+                    logger.warning(f"Gemini 에러 분류={error_type} (attempt={attempt}): {e}")
+                    if retry_count < len(delays):
+                        wait = delays[retry_count]
+                        logger.info(f"[재시도] {error_type} → {wait}초 후 재시도 ({retry_count+1}/{len(delays)})")
+                        await asyncio.sleep(wait)
+                        retry_count += 1
+                        continue
+                    raise
 
         except asyncio.TimeoutError:
-            logger.error("Gemini 이미지 생성 타임아웃 (%.0f초)", time.time() - t0)
+            logger.error("Gemini 이미지 생성 타임아웃 (%.0f초, 재시도 소진)", time.time() - t0)
             raise TimeoutError(
-                f"이미지 생성이 {IMAGE_GENERATION_TIMEOUT}초 안에 완료되지 않았습니다. "
-                "네트워크나 API 상태를 확인한 뒤 다시 시도해주세요."
+                "이미지 생성이 시간 초과되었습니다. 잠시 후 다시 시도해주세요."
             )
         except Exception as e:
-            logger.error("Gemini Image Generation Failed (%.1f초): %s", time.time() - t0, e)
-            raise
+            # ★ 사용자 친화적 에러 메시지
+            err_str = str(e).lower()
+            if "429" in err_str or "rate" in err_str or "quota" in err_str:
+                friendly = "Gemini API 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요."
+            elif "504" in err_str or "503" in err_str or "unavailable" in err_str:
+                friendly = "Gemini 서버가 일시적으로 바쁩니다. 잠시 후 다시 시도해주세요."
+            elif "safety" in err_str or "block" in err_str:
+                friendly = "안전 필터에 의해 이미지 생성이 거부되었습니다. 프롬프트를 수정해주세요."
+            else:
+                friendly = str(e)
+            logger.error("Gemini Image Generation Failed (%.1f초, type=%s): %s", time.time() - t0, error_type or "unknown", e)
+            raise type(e)(friendly) from e
 
     async def edit_with_reference(self, prompt, reference_image, size="1024x1024"):
         return await self.generate(prompt, reference_images=[reference_image], size=size)

@@ -38,6 +38,17 @@ sessions: dict[str, WorkflowSession] = {}
 # 이미지 생성 중단 신호: session_id → True 이면 즉시 루프 중단
 stop_signals: dict[str, bool] = {}
 
+# ★ 공통 헬퍼: aspect_ratio → 이미지 사이즈 변환 (전체 생성 + 개별 재생성 통일)
+def get_image_size_for_ratio(aspect_ratio: str) -> str:
+    """aspect_ratio 문자열을 Gemini 이미지 크기로 변환"""
+    ar_map = {
+        "4:5": "1024x1280",
+        "9:16": "1024x1820",
+        "1:1": "1024x1024",
+        "16:9": "1820x1024",
+    }
+    return ar_map.get(aspect_ratio, "1024x1280")
+
 
 def _resolve_api_key(model_name: str) -> str:
     """Gemini API 키를 반환하는 헬퍼"""
@@ -582,13 +593,7 @@ async def generate_images(request: GenerateImagesRequest):
             style_ref_bytes = PILImg.open(BIO(style_ref_bytes))
 
     # ★ 속도 최적화: 루프 밖에서 1회만 계산
-    # 비율별 정확한 이미지 크기 (인스타 허용: 1.91:1 가로 ~ 4:5 세로)
-    if request.aspect_ratio == "4:5":
-        scene_size = "1024x1280"    # 정확한 4:5
-    elif request.aspect_ratio == "9:16":
-        scene_size = "1024x1820"    # 정확한 9:16 (릴스/스토리용)
-    else:
-        scene_size = "1024x1024"    # 1:1
+    scene_size = get_image_size_for_ratio(request.aspect_ratio or "4:5")
     os.makedirs("output", exist_ok=True)
     async def generate_single_scene(scene, ref_image_bytes=None,
                                      method_bytes=None, style_bytes=None,
@@ -643,7 +648,8 @@ async def generate_images(request: GenerateImagesRequest):
                 "image_bytes": image_data if isinstance(image_data, bytes) else b""
             }
         except Exception as e:
-            logger.error(f"Error generating scene {scene.scene_number}: {e}")
+            import traceback
+            logger.error(f"Error generating scene {scene.scene_number}: {e}\n{traceback.format_exc()}")
             return {
                 "scene_number": scene.scene_number,
                 "prompt_used": "Error",
@@ -675,11 +681,15 @@ async def generate_images(request: GenerateImagesRequest):
             scenes_to_generate = session.story.scenes[target_ep.scene_start:target_ep.scene_end]
             logger.info(f"[시리즈] 시리즈 {request.target_series} 씬만 생성: 인덱스 {target_ep.scene_start}~{target_ep.scene_end-1} ({len(scenes_to_generate)}장)")
     
-    for scene in scenes_to_generate:
+    for scene_idx, scene in enumerate(scenes_to_generate):
         if stop_signals.get(request.session_id, False):
             logger.info(f"[STOP] 세션 {request.session_id} 이미지 생성 중단됨 "
                         f"({len(session.images)}/{len(session.story.scenes)} 완료)")
             break
+        
+        # ★ 씬 간 딜레이: 첫 씬 제외, Gemini rate limit 방지
+        if scene_idx > 0:
+            await asyncio.sleep(2)
         
         # 씬 체이닝: 직전 씬 이미지 + 이전 씬 텍스트 요약
         prev_scene_image = None
@@ -713,8 +723,26 @@ async def generate_images(request: GenerateImagesRequest):
             prev_scene_summaries=prev_scene_summaries
         )
         
-        # 체이닝용 이미지 저장
+        # ★ 실패 시 5초 대기 후 1회 자동 재시도
+        if res.get("status") == "error":
+            logger.warning(f"[재시도] 씬 {scene.scene_number} 첫 시도 실패: {res.get('error', '')} → 5초 후 재시도")
+            await asyncio.sleep(5)
+            res = await generate_single_scene(
+                scene,
+                ref_image_bytes=character_ref_bytes,
+                method_bytes=method_ref_bytes,
+                style_bytes=style_ref_bytes,
+                prev_scene_image=prev_scene_image,
+                prev_scene_summaries=prev_scene_summaries
+            )
+            if res.get("status") == "error":
+                logger.error(f"[재시도] 씬 {scene.scene_number} 재시도도 실패: {res.get('error', '')}")
+            else:
+                logger.info(f"[재시도] 씬 {scene.scene_number} 재시도 성공!")
+        
+        # 체이닝용 이미지 저장 (직전 씬만 보관하여 메모리 절약)
         if res.get("image_bytes"):
+            generated_scene_images.clear()
             generated_scene_images[scene.scene_number] = res["image_bytes"]
         
         if res.get("local_path"):
@@ -1122,7 +1150,8 @@ JSON 형식으로 응답:
 class RegenerateImageRequest(BaseModel):
     session_id: str
     scene_index: int
-    model: str = "nano-banana-pro"  # Gemini 3.0 Preview 고정 (프론트엔드와 일치)
+    model: str = "nano-banana-pro"
+    aspect_ratio: Optional[str] = "4:5"
 
 
 @router.post("/regenerate-image")
@@ -1180,7 +1209,9 @@ async def regenerate_image(request: RegenerateImageRequest):
     generator = get_generator(model_name, api_key)
     
     try:
-        size = "1024x1024"  # 1:1 정사각형 기본
+        # ★ aspect_ratio에 따라 동적 사이즈 결정 (공통 헬퍼 사용)
+        ar = request.aspect_ratio or "4:5"
+        size = get_image_size_for_ratio(ar)
         
         # ★ Gemini 재생성: 3종 레퍼런스 + 씬 체이닝 지원
         from app.services.reference_service import ReferenceService
@@ -1208,14 +1239,15 @@ async def regenerate_image(request: RegenerateImageRequest):
             prev_scene_summaries = summaries if summaries else None
             prev_scene_number = prev_sn
             
-            # 직전 씬 이미지 로드
+            # 직전 씬 이미지 로드 (비동기 래핑으로 이벤트 루프 블로킹 방지)
             if prev_sn and session.images:
                 for img_entry in session.images:
                     if (img_entry.scene_number == prev_sn and 
                         img_entry.status == "generated" and 
                         img_entry.local_path and os.path.exists(img_entry.local_path)):
-                        with open(img_entry.local_path, "rb") as rf:
-                            prev_scene_image = rf.read()
+                        prev_scene_image = await asyncio.to_thread(
+                            lambda p=img_entry.local_path: open(p, "rb").read()
+                        )
                         break
         
         ref_count = sum(1 for x in [character_ref, method_ref, style_ref] if x)
@@ -1230,7 +1262,8 @@ async def regenerate_image(request: RegenerateImageRequest):
             style_image=style_ref,
             prev_scene_image=prev_scene_image,
             prev_scene_summaries=prev_scene_summaries,
-            prev_scene_number=prev_scene_number
+            prev_scene_number=prev_scene_number,
+            aspect_ratio=ar
         )
         
         # ── 재생성 전 기존 이미지 히스토리 저장 ──
@@ -1272,7 +1305,8 @@ async def regenerate_image(request: RegenerateImageRequest):
             "history_count": len(old_history),
         }
     except Exception as e:
-        print(f"[REGEN ERROR] scene {scene.scene_number}: {e}")
+        import traceback
+        logger.error(f"[REGEN ERROR] scene {scene.scene_number}: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"재생성 실패: {str(e)}")
 
 
@@ -1499,10 +1533,22 @@ async def publish(request: PublishRequest):
         for i, u in enumerate(image_urls):
             logger.info(f"[발행]   URL {i+1}: {u}")
         
-        # 예약 발행 시간 처리
+        # 예약 발행 시간 처리 + 백엔드 검증
         scheduled_time = None
         if hasattr(request, 'scheduled_publish_time') and request.scheduled_publish_time:
-            scheduled_time = request.scheduled_publish_time
+            import time as _time
+            now_ts = int(_time.time())
+            st = request.scheduled_publish_time
+            # ★ C8: 과거 시간 방어
+            if st < now_ts:
+                raise HTTPException(status_code=400, detail="예약 시간이 현재보다 과거입니다.")
+            # 최소 10분 뒤
+            if st - now_ts < 10 * 60:
+                raise HTTPException(status_code=400, detail="예약 시간은 현재로부터 최소 10분 이후여야 합니다.")
+            # 최대 75일 이내
+            if st - now_ts > 75 * 24 * 60 * 60:
+                raise HTTPException(status_code=400, detail="예약 시간은 최대 75일 이내여야 합니다.")
+            scheduled_time = st
 
         instagram = get_instagram_service()
         publish_data = PublishData(images=image_urls, caption=request.caption)
@@ -2051,6 +2097,7 @@ async def init_bubble_layers(session_id: str):
                 text_color="#000000",
                 border_color="#333333",
                 font_size=18,
+                text_align="left",
                 visible=True
             ))
         
@@ -2069,6 +2116,7 @@ async def init_bubble_layers(session_id: str):
                 font_family="Nanum Gothic",
                 font_size=15,
                 bold=True,
+                text_align="center",
                 visible=True,
                 opacity=0.85,
                 x=5.0,

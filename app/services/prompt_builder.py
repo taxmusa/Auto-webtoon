@@ -331,6 +331,15 @@ Characters in this scene:
         desc = ratio_desc.get(aspect_ratio, f"{aspect_ratio} ratio")
         aspect_hint = f"\n- Generate the image in {desc}."
 
+    # ★ 대사 캐릭터 수 기반 인원 제한 규칙
+    num_chars = len(active_chars)
+    char_count_rule = ""
+    if num_chars == 1:
+        char_count_rule = f"\n- Draw EXACTLY 1 character ({active_chars[0].name}) in this scene. No other people."
+    elif num_chars >= 2:
+        names = ", ".join(c.name for c in active_chars)
+        char_count_rule = f"\n- Draw EXACTLY {num_chars} characters ({names}) in this scene. No extra people."
+
     parts.append(f"""[RULES]
 - Generate exactly ONE single-scene illustration with ONE composition.
 - Do NOT repeat or duplicate the character. Do NOT create a character sheet, turnaround, or multiple views.
@@ -338,7 +347,7 @@ Characters in this scene:
 - No text, letters, numbers, logos, watermarks, UI elements in the image.
 - No speech bubbles or dialogue boxes.
 - Show characters fully — do not crop heads or bodies out of frame.
-- Use medium or medium-wide shot. Do not use extreme close-ups.{aspect_hint}
+- Use medium or medium-wide shot. Do not use extreme close-ups.{char_count_rule}{aspect_hint}
 """)
 
     # =====================================================
@@ -466,6 +475,10 @@ def build_scene_chaining_context(
                 prev_summaries.append(f"- 장면 {sn}: {title} / {image_prompt}")
             else:
                 prev_summaries.append(f"- 장면 {sn}: {title}")
+
+    # ★ 최근 3개 씬만 유지 (토큰 절약 + 프롬프트 길이 제한 방지)
+    if len(prev_summaries) > 3:
+        prev_summaries = prev_summaries[-3:]
 
     prev_scene_number = current_scene_number - 1
     return prev_summaries, prev_scene_number

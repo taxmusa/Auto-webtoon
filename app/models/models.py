@@ -325,6 +325,7 @@ class BubbleOverlay(BaseModel):
     border_color: str = "#333333"                    # 테두리 색
     font_size: int = 18                              # px
     bold: bool = False                               # 볼드 여부
+    text_align: str = "left"                         # 텍스트 정렬: left | center | right
     visible: bool = True                             # 표시/숨기기 토글
     opacity: float = 0.95                            # 투명도 (0~1)
     # 자유 위치/크기 (퍼센트, 0~100)

@@ -1036,7 +1036,9 @@
 
             <div class="loading" id="loading-story">
                 <div class="spinner"></div>
-                <div>맞춤형 스토리를 구성 중입니다...</div>
+                <div id="story-loading-msg">맞춤형 스토리를 구성 중입니다...</div>
+                <div id="story-loading-elapsed" style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;"></div>
+                <button id="story-cancel-btn" onclick="cancelStoryGeneration()" style="display:none; margin-top:8px; font-size:0.8rem; padding:4px 16px;" class="btn btn-outline-danger btn-sm">❌ 취소</button>
             </div>
 
             <div id="story-review-area" style="display: none;">
@@ -1540,7 +1542,12 @@
                 <div>
                     <div class="card" style="padding: 1.5rem;">
                         <h2 class="card-title" style="font-size: 1.25rem;">📝 캡션 및 태그 수정</h2>
-                        <button class="btn btn-secondary" onclick="generateCaption()" style="width:100%; margin-bottom:0.75rem; font-size:0.85rem; padding:8px;">
+                        <button class="btn" onclick="generateCaption()"
+                            style="width:100%; margin-bottom:0.75rem; font-size:0.85rem; padding:8px;
+                                   background:transparent; color:var(--accent); border:2px solid var(--accent);
+                                   transition:all 0.2s;"
+                            onmouseenter="this.style.background='var(--accent)';this.style.color='#fff';"
+                            onmouseleave="this.style.background='transparent';this.style.color='var(--accent)';">
                             ✨ AI 캡션 자동 채우기
                         </button>
                         <div class="form-group">
@@ -1585,11 +1592,12 @@
                             style="width: 100%; margin-bottom: 0.5rem;">📸 인스타그램 즉시 발행</button>
                         
                         <!-- 예약 발행 -->
-                        <div style="border:1px solid var(--border); border-radius:8px; padding:0.75rem; margin-bottom:0.5rem;">
+                        <div style="border:2px solid var(--accent); border-radius:8px; padding:0.75rem; margin-bottom:0.5rem;">
                             <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem;">
                                 <label style="font-size:0.82rem; font-weight:600; white-space:nowrap;">⏰ 예약 발행</label>
                                 <input type="datetime-local" id="schedule-datetime" 
-                                    style="flex:1; padding:4px 8px; border:1px solid var(--border); border-radius:6px; font-size:0.8rem; background:var(--bg-card); color:var(--text);">
+                                    style="flex:1; padding:4px 8px; border:2px solid var(--accent); border-radius:6px; font-size:0.8rem; background:var(--bg-card); color:var(--text); color-scheme:dark;">
+                                <span style="font-size:0.6rem; background:var(--accent); color:#fff; padding:2px 6px; border-radius:4px; white-space:nowrap;">시간설정</span>
                             </div>
                             <button class="btn btn-secondary" onclick="schedulePublish()" style="width:100%; font-size:0.82rem;">
                                 📅 예약 발행 등록
@@ -3448,6 +3456,16 @@
             await generateStory();
         }
 
+        // ★ 스토리 생성 취소용 AbortController
+        var _storyAbortController = null;
+
+        function cancelStoryGeneration() {
+            if (_storyAbortController) {
+                _storyAbortController.abort();
+                showToast('스토리 생성이 취소되었습니다.', 'warning');
+            }
+        }
+
         async function generateStory() {
             const loadingEl = document.getElementById('loading-story');
             const reviewArea = document.getElementById('story-review-area');
@@ -3459,6 +3477,31 @@
             loadingEl.style.display = 'block';
             reviewArea.style.display = 'none';
             actionsEl.style.display = 'none';
+
+            // ★ 경과 시간 + 단계별 메시지 타이머
+            const msgEl = document.getElementById('story-loading-msg');
+            const elapsedEl = document.getElementById('story-loading-elapsed');
+            const cancelBtn = document.getElementById('story-cancel-btn');
+            const startTime = Date.now();
+            if (cancelBtn) cancelBtn.style.display = 'none';
+
+            const storyTimer = setInterval(() => {
+                const sec = Math.floor((Date.now() - startTime) / 1000);
+                const m = Math.floor(sec / 60);
+                const s = sec % 60;
+                if (elapsedEl) elapsedEl.innerText = `경과: ${m}:${String(s).padStart(2,'0')} / 평균 15~30초`;
+                if (msgEl) {
+                    if (sec < 5) msgEl.innerText = '맞춤형 스토리를 구성 중입니다...';
+                    else if (sec < 15) msgEl.innerText = 'AI가 씬을 구성하고 있습니다...';
+                    else if (sec < 30) msgEl.innerText = '스토리가 거의 완성되고 있습니다...';
+                    else if (sec < 60) msgEl.innerText = '평소보다 오래 걸리고 있습니다...';
+                    else msgEl.innerText = '서버 응답이 지연되고 있습니다. 취소 버튼을 눌러주세요.';
+                }
+                if (sec >= 30 && cancelBtn) cancelBtn.style.display = 'inline-block';
+            }, 1000);
+
+            // AbortController
+            _storyAbortController = new AbortController();
 
             const sceneCount = parseInt(document.getElementById('total-scene-count').value);
 
@@ -3493,6 +3536,7 @@
                 const res = await fetch('/api/workflow/generate-story', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    signal: _storyAbortController.signal,
                     body: JSON.stringify({
                         session_id: sessionId,
                         scene_count: sceneCount,
@@ -3550,10 +3594,19 @@
                 actionsEl.style.display = 'flex';
             } catch (e) {
                 console.error('스토리 생성 오류:', e);
-                showToast('스토리 생성 오류: ' + e.message, 'error');
+                if (e.name === 'AbortError') {
+                    showToast('스토리 생성이 취소되었습니다.', 'warning');
+                } else {
+                    showToast('스토리 생성 오류: ' + e.message, 'error');
+                }
                 loadingEl.style.display = 'none';
                 // 실패 시 생성 버튼 다시 표시
                 if (genStoryBtn) genStoryBtn.style.display = 'block';
+            } finally {
+                clearInterval(storyTimer);
+                _storyAbortController = null;
+                if (elapsedEl) elapsedEl.innerText = '';
+                if (cancelBtn) cancelBtn.style.display = 'none';
             }
         }
 
@@ -4754,6 +4807,8 @@
                         <div style="text-align:center;">
                             <span style="font-size:1.5rem;">⚠️</span>
                             <div style="font-size:0.65rem;color:var(--danger);margin-top:2px;">실패 (${errElapsed}초)</div>
+                            <button class="btn btn-outline-warning btn-sm" style="font-size:0.6rem;padding:1px 6px;margin-top:4px;"
+                                    onclick="regenerateOneImage(${idx}, null)">🔄 다시 시도</button>
                         </div>`;
                 }
                 if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">❌ 오류</span>';
@@ -4848,14 +4903,16 @@
                     scene_chaining: true
                 };
 
-                fetch('/api/workflow/generate-images', {
+                // ★ fetch 응답 확인 후 폴링 시작 (기존: fire-and-forget)
+                const genRes = await fetch('/api/workflow/generate-images', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(reqBody)
-                }).catch(e => {
-                    console.error('이미지 생성 백엔드 오류:', e);
-                    showToast('이미지 생성 요청 실패: ' + e.message, 'error');
                 });
+                if (!genRes.ok) {
+                    const errText = await genRes.text().catch(() => '');
+                    throw new Error(`서버 응답 오류 (${genRes.status}): ${errText.slice(0, 200)}`);
+                }
 
                 checkImageProgress(sceneCount);
             } catch (e) {
@@ -4882,12 +4939,11 @@
             const actionsEl = document.getElementById('image-actions');
             const controlBtns = document.getElementById('gen-control-buttons');
 
-            genPollInterval = setInterval(async () => {
-                if (genIsPaused) return; // 일시정지면 스킵
-                if (genIsStopped) {
-                    clearInterval(genPollInterval);
-                    return;
-                }
+            // ★ setTimeout 재귀로 진행률 기반 동적 폴링 간격 적용
+            let _currentPct = 0;
+            async function _pollImageProgress() {
+                if (genIsPaused) { genPollInterval = setTimeout(_pollImageProgress, 2500); return; }
+                if (genIsStopped) { genPollInterval = null; return; }
                 pollCount++;
                 try {
                     const res = await fetch(`/api/workflow/session/${sessionId}`);
@@ -4920,6 +4976,7 @@
 
                     // 상단 바 업데이트 (에러 포함한 전체 진행률)
                     const pct = total > 0 ? Math.round((doneCount / total) * 100) : 0;
+                    _currentPct = pct;
                     progressBar.style.width = `${pct}%`;
                     statusCount.innerText = `${genCount}/${total}`;
 
@@ -4937,16 +4994,29 @@
 
                     // 전체 완료
                     if (doneCount >= total) {
-                        clearInterval(genPollInterval);
                         genPollInterval = null;
                         statusText.innerText = `✅ ${genCount}/${total} 이미지 생성 완료!`;
-                        statusSub.innerText = errors.length > 0 ? `⚠️ ${errors.length}개 씬에서 오류 발생 — 개별 재생성 가능` : '모든 씬이 정상 생성되었습니다';
+                        statusSub.innerText = errors.length > 0 ? `⚠️ ${errors.length}개 씬에서 오류 발생 — 아래 버튼으로 재생성 가능` : '모든 씬이 정상 생성되었습니다';
                         progressBar.style.width = '100%';
                         controlBtns.style.display = 'none';
                         actionsEl.style.display = 'flex';
                         // 생성 버튼 복원
                         const startBtn = document.getElementById('btn-start-gen');
                         if (startBtn) { startBtn.disabled = false; startBtn.innerText = '🎨 전체 이미지 생성'; }
+                        // ★ 실패 씬이 있으면 일괄 재생성 버튼 표시
+                        if (errors.length > 0) {
+                            let retryBtn = document.getElementById('btn-retry-failed');
+                            if (!retryBtn) {
+                                retryBtn = document.createElement('button');
+                                retryBtn.id = 'btn-retry-failed';
+                                retryBtn.className = 'btn btn-warning btn-sm';
+                                retryBtn.style.cssText = 'margin-top:6px;';
+                                actionsEl.parentElement.insertBefore(retryBtn, actionsEl);
+                            }
+                            retryBtn.innerText = `🔄 실패 ${errors.length}개 씬 재생성`;
+                            retryBtn.style.display = 'inline-block';
+                            retryBtn.onclick = () => retryFailedScenes(errors.map(e => e.scene_number));
+                        }
                         // 이미지 편집 버튼 활성화
                         const editBtn = document.getElementById('btn-to-edit');
                         if (editBtn) {
@@ -4954,6 +5024,7 @@
                             editBtn.disabled = !hasImages;
                             editBtn.title = hasImages ? '' : '먼저 이미지를 생성하세요';
                         }
+                        return; // 완료 → 다음 폴링 안 함
                     }
                 } catch (e) {
                     console.error('진행률 확인 오류:', e);
@@ -4963,16 +5034,22 @@
                         statusSub.innerText = '⚠️ 서버 연결이 불안정합니다. 재시도 중...';
                     }
                     if (consecutiveErrors >= 10) {
-                        clearInterval(genPollInterval);
                         genPollInterval = null;
                         statusText.innerText = '⚠️ 서버 연결이 끊어졌습니다';
                         statusSub.innerText = '네트워크를 확인하고 페이지를 새로고침하세요. 이미 생성된 이미지는 서버에 보존됩니다.';
                         controlBtns.style.display = 'none';
                         actionsEl.style.display = 'flex';
                         showToast('서버 연결 실패 — 진행률 확인이 중단되었습니다', 'error');
+                        return; // 에러 종료 → 다음 폴링 안 함
                     }
                 }
-            }, 2500);
+                // ★ 진행률 기반 동적 폴링 간격 (50%↑: 2초, 90%↑: 1.5초)
+                let nextDelay = 2500;
+                if (_currentPct >= 90) nextDelay = 1500;
+                else if (_currentPct >= 50) nextDelay = 2000;
+                genPollInterval = setTimeout(_pollImageProgress, nextDelay);
+            }
+            genPollInterval = setTimeout(_pollImageProgress, 2500);
         }
 
         function pauseGeneration() {
@@ -4991,7 +5068,7 @@
             if (!confirm('이미지 생성을 중단하시겠습니까?\n이미 생성된 이미지는 유지됩니다.')) return;
             genIsStopped = true;
             if (genPollInterval) {
-                clearInterval(genPollInterval);
+                clearTimeout(genPollInterval);
                 genPollInterval = null;
             }
 
@@ -5019,22 +5096,59 @@
             if (startBtn) { startBtn.disabled = false; startBtn.innerText = '🎨 전체 이미지 생성'; }
         }
 
+        // ★ 실패 씬 일괄 재생성
+        async function retryFailedScenes(sceneNumbers) {
+            const retryBtn = document.getElementById('btn-retry-failed');
+            if (retryBtn) { retryBtn.disabled = true; retryBtn.innerText = '🔄 재생성 중...'; }
+            
+            let successCount = 0;
+            for (const sn of sceneNumbers) {
+                const idx = sn - 1;  // scene_number → 0-based index
+                try {
+                    await regenerateOneImage(idx, null);
+                    successCount++;
+                } catch (e) {
+                    console.error(`씬 ${sn} 재생성 실패:`, e);
+                }
+                // 씬 간 2초 딜레이 (rate limit 방지)
+                if (sceneNumbers.indexOf(sn) < sceneNumbers.length - 1) {
+                    await new Promise(r => setTimeout(r, 2000));
+                }
+            }
+            
+            if (retryBtn) {
+                if (successCount === sceneNumbers.length) {
+                    retryBtn.style.display = 'none';
+                    showToast(`✅ ${successCount}개 씬 재생성 완료!`, 'success');
+                } else {
+                    retryBtn.disabled = false;
+                    retryBtn.innerText = `🔄 실패 ${sceneNumbers.length - successCount}개 씬 재생성`;
+                    showToast(`${successCount}/${sceneNumbers.length}개 재생성 완료, ${sceneNumbers.length - successCount}개 여전히 실패`, 'warning');
+                }
+            }
+        }
+
         async function regenerateOneImage(sceneIndex, btnElement) {
             const btn = btnElement || document.querySelector(`#scene-card-${sceneIndex} .regen-btn`);
-            if (!btn) return;
-            const origText = btn.innerText;
-            btn.innerText = '⏳ 재생성 중...';
-            btn.disabled = true;
+            if (btn) {
+                var origText = btn.innerText;
+                btn.innerText = '⏳ 재생성 중...';
+                btn.disabled = true;
+            }
 
             // 카드도 로딩 상태로 전환
             updateSceneCard(sceneIndex, 'generating');
 
             try {
-                const model = 'nano-banana-pro'; // Gemini 3.0 Preview 고정
+                // ★ 프리셋 레퍼런스를 세션에 적용 (전체 생성과 동일하게)
+                await applyPresetReferencesToSession();
+                
+                const model = 'nano-banana-pro';
+                const ratio = document.getElementById('gen-aspect-ratio') ? document.getElementById('gen-aspect-ratio').value : '4:5';
                 const res = await fetch('/api/workflow/regenerate-image', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ session_id: sessionId, scene_index: sceneIndex, model: model })
+                    body: JSON.stringify({ session_id: sessionId, scene_index: sceneIndex, model: model, aspect_ratio: ratio })
                 });
 
                 if (!res.ok) {
@@ -5058,8 +5172,7 @@
                 updateSceneCard(sceneIndex, 'error');
                 showToast('재생성 실패: ' + e.message, 'error');
             } finally {
-                btn.innerText = origText;
-                btn.disabled = false;
+                if (btn) { btn.innerText = origText || '🔄'; btn.disabled = false; }
             }
         }
 
@@ -5333,6 +5446,11 @@
 
         async function publishToInstagram() {
             if (!sessionId) { showToast('세션이 없습니다.', 'error'); return; }
+            // ★ 중복 발행 방지: 이미 발행된 경우 확인
+            const _pubBtn = document.querySelector('[onclick="publishToInstagram()"]');
+            if (_pubBtn && _pubBtn._published) {
+                if (!confirm('이미 발행된 콘텐츠를 다시 발행할까요?')) return;
+            }
 
             // 이미지 0장 방어
             const seriesImgs = getSeriesImages();
@@ -5358,9 +5476,11 @@
 
             if (!confirm(`${seriesImgs.length}장의 이미지를 인스타그램에 발행합니다. 계속할까요?`)) return;
 
-            // 버튼 로딩 상태
+            // 버튼 로딩 상태 + 예약 버튼도 동시 비활성화 (중복 요청 방지)
             const pubBtn = document.querySelector('[onclick="publishToInstagram()"]');
-            if (pubBtn) { pubBtn.disabled = true; pubBtn._origText = pubBtn.innerText; pubBtn.innerText = '⏳ 발행 중...'; }
+            const schedBtn = document.querySelector('[onclick="schedulePublish()"]');
+            if (pubBtn) { pubBtn.disabled = true; pubBtn._origText = pubBtn.innerText; pubBtn.innerHTML = '<span style="display:inline-block;animation:spin 1s linear infinite;">⏳</span> 발행 중...'; }
+            if (schedBtn) { schedBtn.disabled = true; }
 
             try {
                 const res = await fetch('/api/workflow/publish', {
@@ -5376,8 +5496,23 @@
                 const data = await res.json();
                 if (data.success) {
                     showToast('인스타그램 발행 완료!', 'success');
-                    if (pubBtn) pubBtn.innerText = '✅ 발행 완료!';
-                    setTimeout(function() { if (pubBtn) { pubBtn.innerText = pubBtn._origText || '📸 인스타그램 즉시 발행'; pubBtn.disabled = false; } }, 3000);
+                    // ★ 성공 배너 표시
+                    let banner = document.getElementById('publish-success-banner');
+                    if (!banner) {
+                        banner = document.createElement('div');
+                        banner.id = 'publish-success-banner';
+                        banner.style.cssText = 'background:#198754;color:#fff;padding:10px 16px;border-radius:8px;margin-top:8px;display:flex;align-items:center;justify-content:space-between;font-size:0.85rem;';
+                        if (pubBtn) pubBtn.parentElement.insertBefore(banner, pubBtn.nextSibling);
+                    }
+                    banner.innerHTML = `✅ 발행 완료! ${seriesImgs.length}장의 이미지가 인스타그램에 게시되었습니다. <button onclick="this.parentElement.remove()" style="background:none;border:none;color:#fff;cursor:pointer;font-size:1rem;">✕</button>`;
+                    banner.style.display = 'flex';
+                    // ★ 중복 발행 방지: 버튼을 "다시 발행하기"로 전환
+                    if (pubBtn) {
+                        pubBtn.innerText = '🔄 다시 발행하기';
+                        pubBtn.disabled = false;
+                        pubBtn._published = true;
+                    }
+                    if (schedBtn) schedBtn.disabled = false;
                     return;
                 } else {
                     // ★ 진단 정보 포함 에러 표시
@@ -5400,6 +5535,7 @@
             }
             // 실패 시 버튼 복원
             if (pubBtn) { pubBtn.disabled = false; pubBtn.innerText = pubBtn._origText || '📸 인스타그램 즉시 발행'; }
+            if (schedBtn) schedBtn.disabled = false;
         }
 
         // 발행 탭 진입 시 Instagram 연결 상태 확인
@@ -5539,7 +5675,20 @@
                     setTimeout(function() { if (schedBtn) { schedBtn.innerText = schedBtn._origText || '📅 예약 발행 등록'; schedBtn.disabled = false; } }, 3000);
                     return;
                 } else {
-                    showToast('예약 발행 실패: ' + (data.error || '알 수 없음'), 'error');
+                    // ★ C7: Instagram 내부 용어를 사용자 친화적 메시지로 변환
+                    let errMsg = data.error || '알 수 없음';
+                    if (errMsg.includes('whitelist') || errMsg.includes('permission')) {
+                        errMsg = 'Instagram API 제한으로 예약 기능을 사용할 수 없습니다. 즉시 발행을 이용해주세요.';
+                    } else if (errMsg.includes('carousel') || errMsg.includes('container')) {
+                        errMsg = '이미지 처리 중 오류가 발생했습니다. 이미지를 확인 후 다시 시도해주세요.';
+                    } else if (errMsg.includes('token') || errMsg.includes('auth')) {
+                        errMsg = 'Instagram 인증이 만료되었습니다. 인증 탭에서 다시 연결해주세요.';
+                    }
+                    showToast('예약 발행 실패: ' + errMsg, 'error');
+                    // ★ C9: 예약 실패 시 즉시 발행 대체 복구 옵션
+                    if (confirm('예약 발행에 실패했습니다. 즉시 발행으로 대체할까요?')) {
+                        publishToInstagram();
+                    }
                 }
             } catch (e) {
                 showToast('예약 발행 오류: ' + e.message, 'error');
@@ -5909,7 +6058,7 @@
                 ${shapeCSS.fontStyle ? 'font-style:'+shapeCSS.fontStyle+';' : ''}
                 ${hasClipPath ? 'filter:' + (shapeCSS.dropShadow || 'drop-shadow(1px 1px 0 #333) drop-shadow(-1px -1px 0 #333)') + ';' : 'box-shadow:' + (shapeCSS.boxShadow || '0 2px 8px rgba(0,0,0,0.15)') + ';'}
                 word-break: keep-all;
-                text-align: ${isNarr ? 'center' : 'left'};
+                text-align: ${bubble.text_align || (isNarr ? 'center' : 'left')};
                 display: flex; align-items: center; justify-content: center;
                 user-select: none;
             `;
@@ -6158,6 +6307,14 @@
                         <label style="font-size:0.7rem; display:flex; align-items:center; gap:2px; cursor:pointer; white-space:nowrap;" title="볼드 처리">
                             <input type="checkbox" ${boldChecked} onchange="toggleBubbleBold(${i}, this.checked)"> <b>B</b>
                         </label>
+                        <!-- 텍스트 정렬 버튼 -->
+                        <div style="display:flex; gap:1px; margin-left:auto;">
+                            ${['left','center','right'].map(a => `<button onclick="updateBubbleTextAlign(${i},'${a}')" title="정렬: ${a}"
+                                style="font-size:0.7rem; padding:1px 5px; border:1px solid var(--border); border-radius:3px; cursor:pointer;
+                                       background:${(bubble.text_align||'left')===a?'var(--accent)':'var(--bg-input)'};
+                                       color:${(bubble.text_align||'left')===a?'#fff':'var(--text)'};">
+                                {% raw %}${{left:'◧',center:'≡',right:'◨'}[a]}{% endraw %}</button>`).join('')}
+                        </div>
                     </div>
 
                     <!-- 2행: 색상 + 꼬리 방향 -->
@@ -6330,6 +6487,17 @@
             }
         }
 
+        function updateBubbleTextAlign(idx, align) {
+            const layer = bubbleLayers[bubbleCurrentScene];
+            if (layer && layer.bubbles[idx]) {
+                saveSnapshot();
+                layer.bubbles[idx].text_align = align;
+                renderCSSOverlay(layer);
+                renderBubbleEditCards(layer);
+                saveBubbleLayerToServer();
+            }
+        }
+
         function toggleBubbleVisible(idx) {
             const layer = bubbleLayers[bubbleCurrentScene];
             if (layer && layer.bubbles[idx]) {
@@ -6358,7 +6526,8 @@
                 position: "top-center", shape: "round",
                 x: 10 + offset, y: 5 + offset, w: 40, h: 14,
                 bg_color: "#FFFFFF", text_color: "#000000", border_color: "#333333",
-                font_size: 18, visible: true, opacity: 0.95, bold: false
+                font_size: 18, visible: true, opacity: 0.95, bold: false,
+                text_align: 'left'
             });
             renderBubbleEditor();
         }
@@ -6374,7 +6543,8 @@
                 x: 5, y: 78, w: 90, h: 12,
                 bg_color: "rgba(0,0,0,0.7)", text_color: "#FFFFFF", border_color: "transparent",
                 font_size: 15, visible: true, opacity: 0.85, bold: true,
-                font_family: "Nanum Gothic"
+                font_family: "Nanum Gothic",
+                text_align: 'center'
             });
             renderBubbleEditor();
         }
@@ -7642,10 +7812,11 @@
             }
         } catch (e) {
             console.warn('프리셋 레퍼런스 적용 실패:', e);
+            showToast('프리셋 레퍼런스 적용에 실패했습니다. 이미지 생성 시 기본 설정이 사용됩니다.', 'warning');
         }
     }
 
-    function selectPresetForStory(preset) {
+    async function selectPresetForStory(preset) {
         _activePreset = preset;
 
         // 캐릭터 이름 자동 반영 (구조적 입력)
@@ -7659,6 +7830,11 @@
         renderStoryPresetGallery();
         renderPresetGallery(); // 프리셋관리 탭도 동기화
         showToast(`프리셋 "${preset.name}" 선택됨 — 캐릭터 이름 반영 완료`, 'success');
+
+        // ★ 프리셋 선택 즉시 세션에 레퍼런스 적용 (이미지 생성 전 누락 방지)
+        if (sessionId) {
+            await applyPresetReferencesToSession();
+        }
     }
 
     // ============================================
