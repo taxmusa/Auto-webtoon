@@ -53,7 +53,10 @@ class GeminiGenerator(ImageGeneratorBase):
             raise ImportError("Google GenAI library is not installed")
         if not api_key:
             raise ValueError("Gemini API 키가 설정되지 않았습니다. .env 파일의 GEMINI_API_KEY를 확인해주세요.")
-        self.client = genai.Client(api_key=api_key)
+        self.client = genai.Client(
+            api_key=api_key,
+            http_options=types.HttpOptions(timeout=180_000)  # 180초 (밀리초 단위)
+        )
         self.model = model
 
     @staticmethod
@@ -186,8 +189,8 @@ class GeminiGenerator(ImageGeneratorBase):
             elif aspect_ratio:
                 logger.info(f"[Gemini] ImageConfig 미지원 SDK — 프롬프트 힌트로 비율 {aspect_ratio} 전달")
 
-            async def _async_generate():
-                return await self.client.aio.models.generate_content(
+            def _sync_generate():
+                return self.client.models.generate_content(
                     model=self.model,
                     contents=contents,
                     config=types.GenerateContentConfig(**_gen_config_kwargs)
@@ -227,7 +230,7 @@ class GeminiGenerator(ImageGeneratorBase):
             for attempt in range(1, max_attempts + 1):
                 try:
                     response = await asyncio.wait_for(
-                        _async_generate(),
+                        asyncio.to_thread(_sync_generate),
                         timeout=IMAGE_GENERATION_TIMEOUT
                     )
                     logger.info("Gemini API 응답 %.1f초 (attempt=%d, model=%s, refs=[%s], contents_len=%d)", 

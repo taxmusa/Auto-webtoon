@@ -24,8 +24,12 @@ class GeminiService:
     def __init__(self):
         settings = get_settings()
         self._api_key = settings.gemini_api_key or ""
-        self.client = genai.Client(api_key=self._api_key) if self._api_key else None
+        self.client = genai.Client(
+            api_key=self._api_key,
+            http_options=types.HttpOptions(timeout=180_000)  # 180초 (밀리초 단위)
+        ) if self._api_key else None
         self._default_model = "gemini-3-flash-preview"
+        self.last_used_model: Optional[str] = None
 
     async def detect_field(self, keyword: str, model: str = "gemini-3-flash-preview") -> FieldInfo:
         """AI를 사용하여 키워드에서 분야, 기준 년도, 법정 검증 필요성 자동 감지 - 모델 fallback 지원"""
@@ -34,13 +38,14 @@ class GeminiService:
         logger = logging.getLogger(__name__)
         current_year_str = str(datetime.datetime.now().year)
         
-        # Fallback 모델 순서 정의 (3.0 계열만 사용)
+        # Fallback 모델 순서 정의
         FALLBACK_MODELS = {
-            "gemini-3-pro-preview": ["gemini-3-flash-preview"],
-            "gemini-3-flash-preview": []
+            "gemini-3-pro-preview": ["gemini-3-flash-preview", "gemini-2.0-flash"],
+            "gemini-3-flash-preview": ["gemini-2.0-flash"],
+            "gemini-2.0-flash": []
         }
         
-        models_to_try = [model] + FALLBACK_MODELS.get(model, [])
+        models_to_try = [model] + FALLBACK_MODELS.get(model, ["gemini-2.0-flash"])
         
         prompt = f"""키워드 "{keyword}"를 분석하여 다음 정보를 JSON 형식으로 반환하세요.
         현재 시각은 {current_year_str}년입니다. 특별한 언급이 없으면 기준 년도는 {current_year_str}년으로 설정하세요.
@@ -72,7 +77,8 @@ class GeminiService:
                 try:
                     logger.info(f"[detect_field] 시도 중: {try_model} (attempt {attempt})")
                     response = await asyncio.wait_for(
-                        self.client.aio.models.generate_content(
+                        asyncio.to_thread(
+                            self.client.models.generate_content,
                             model=try_model,
                             contents=prompt
                         ),
@@ -85,6 +91,7 @@ class GeminiService:
                     else:
                         raise ValueError("JSON not found in response")
                     
+                    self.last_used_model = try_model
                     logger.info(f"[detect_field] 성공: {try_model}")
                     return FieldInfo(
                         field=SpecializedField(data.get("field", "일반")),
@@ -131,10 +138,11 @@ class GeminiService:
             return [{"title": "스토리 시놉시스", "content": keyword}]
 
         FALLBACK_MODELS = {
-            "gemini-3-pro-preview": ["gemini-3-flash-preview"],
-            "gemini-3-flash-preview": []
+            "gemini-3-pro-preview": ["gemini-3-flash-preview", "gemini-2.0-flash"],
+            "gemini-3-flash-preview": ["gemini-2.0-flash"],
+            "gemini-2.0-flash": []
         }
-        models_to_try = [model] + FALLBACK_MODELS.get(model, [])
+        models_to_try = [model] + FALLBACK_MODELS.get(model, ["gemini-2.0-flash"])
 
         import datetime
         current_year_str = str(datetime.datetime.now().year)
@@ -199,7 +207,8 @@ class GeminiService:
                 try:
                     logger.info(f"[collect_data] 시도 중: {try_model} (attempt {attempt})")
                     response = await asyncio.wait_for(
-                        self.client.aio.models.generate_content(
+                        asyncio.to_thread(
+                            self.client.models.generate_content,
                             model=try_model,
                             contents=prompt
                         ),
@@ -209,6 +218,7 @@ class GeminiService:
                     match = re.search(r'\[.*\]', response.text, re.DOTALL)
                     if match:
                         result = json.loads(match.group())
+                        self.last_used_model = try_model
                         logger.info(f"[collect_data] 성공: {try_model} (attempt {attempt}), {len(result)}개 항목")
                         return result
                     else:
@@ -354,12 +364,13 @@ class GeminiService:
         char_names_list = [n.strip() for n in character_names.split(",") if n.strip()] if character_names else []
         is_monologue = monologue_mode
         
-        # Fallback 모델 순서 정의 (3.0 계열만 사용)
+        # Fallback 모델 순서 정의
         FALLBACK_MODELS = {
-            "gemini-3-pro-preview": ["gemini-3-flash-preview"],
-            "gemini-3-flash-preview": []
+            "gemini-3-pro-preview": ["gemini-3-flash-preview", "gemini-2.0-flash"],
+            "gemini-3-flash-preview": ["gemini-2.0-flash"],
+            "gemini-2.0-flash": []
         }
-        models_to_try = [model] + FALLBACK_MODELS.get(model, ["gemini-3-flash-preview"])
+        models_to_try = [model] + FALLBACK_MODELS.get(model, ["gemini-2.0-flash"])
             
         data_str = "\n".join([f"- {d['title']}: {d['content']}" for d in collected_data])
         
@@ -535,9 +546,13 @@ image_prompt 나쁜 예시:
         for try_model in models_to_try:
             try:
                 logger.info(f"[generate_story] 시도 중: {try_model}")
-                response = await self.client.aio.models.generate_content(
-                    model=try_model,
-                    contents=prompt
+                response = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        self.client.models.generate_content,
+                        model=try_model,
+                        contents=prompt
+                    ),
+                    timeout=120
                 )
                 data = json.loads(re.search(r'\{.*\}', response.text, re.DOTALL).group())
                 
@@ -564,12 +579,17 @@ image_prompt 나쁜 예시:
                         char.visual_identity = VisualIdentity(**vi_data)
                     parsed_characters.append(char)
                 
+                self.last_used_model = try_model
                 logger.info(f"[generate_story] 성공: {try_model}, 씬 수: {len(scenes)}, 캐릭터: {len(parsed_characters)}")
                 return Story(
                     title=data.get("title", keyword),
                     scenes=scenes,
                     characters=parsed_characters
                 )
+            except asyncio.TimeoutError:
+                last_error = "스토리 생성 타임아웃 (120초)"
+                logger.warning(f"[generate_story] {try_model} 타임아웃 (120초)")
+                continue
             except Exception as e:
                 last_error = e
                 logger.warning(f"[generate_story] {try_model} 실패: {str(e)}")
@@ -668,7 +688,8 @@ image_prompt 나쁜 예시:
             try:
                 logger.info(f"[generate_caption] 시도 중: {try_model}")
                 response = await asyncio.wait_for(
-                    self.client.aio.models.generate_content(
+                    asyncio.to_thread(
+                        self.client.models.generate_content,
                         model=try_model,
                         contents=prompt
                     ),
@@ -711,6 +732,7 @@ image_prompt 나쁜 예시:
                     body = _re.sub(r' +', ' ', body)
                     expert_tip = " ".join(expert_tip.split())
                 
+                self.last_used_model = try_model
                 logger.info(f"[generate_caption] 성공: {try_model}")
                 return InstagramCaption(
                     hook=hook,
@@ -802,9 +824,13 @@ image_prompt 나쁜 예시:
         for try_model in models_to_try:
             try:
                 logger.info(f"[extract_style] 시도 중: {try_model}")
-                response = await self.client.aio.models.generate_content(
-                    model=try_model,
-                    contents=[STYLE_EXTRACTION_PROMPT, image_part]
+                response = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        self.client.models.generate_content,
+                        model=try_model,
+                        contents=[STYLE_EXTRACTION_PROMPT, image_part]
+                    ),
+                    timeout=60
                 )
                 
                 text = response.text
@@ -844,5 +870,9 @@ def get_gemini_service() -> GeminiService:
     if _gemini_service is None:
         _gemini_service = GeminiService()
     return _gemini_service
+
+def get_gemini_client():
+    """싱글톤 GeminiService의 Client 반환 (매번 새로 만들지 않고 재사용)"""
+    return get_gemini_service().client
 
 

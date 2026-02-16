@@ -288,14 +288,11 @@ class SmartTranslator:
     def _ai_translate(self, text: str) -> Optional[str]:
         """Gemini AI로 번역 (429 재시도 포함)."""
         try:
-            from google import genai as _genai
-
-            api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY", "")
-            if not api_key:
+            from app.services.gemini_service import get_gemini_client
+            client = get_gemini_client()
+            if not client:
                 logger.warning("[SmartTranslator] Gemini API 키 없음")
                 return None
-
-            client = _genai.Client(api_key=api_key)
 
             max_retries = 2
             for attempt in range(max_retries + 1):
@@ -329,13 +326,10 @@ class SmartTranslator:
         """여러 텍스트를 하나의 Gemini 호출로 일괄 번역."""
         results = {}
         try:
-            from google import genai as _genai
-
-            api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY", "")
-            if not api_key:
+            from app.services.gemini_service import get_gemini_client
+            client = get_gemini_client()
+            if not client:
                 return results
-
-            client = _genai.Client(api_key=api_key)
 
             # {index: text} → JSON 으로 구성
             batch_map = {str(idx): text for idx, text in items.items()}

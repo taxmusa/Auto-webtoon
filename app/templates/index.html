@@ -179,10 +179,10 @@
             display: flex;
             border: 1px solid var(--border);
             border-radius: 10px;
-            margin-bottom: 0.6rem;
+            margin-bottom: 0.4rem;
             background: var(--bg-card);
             overflow: hidden;
-            min-height: 120px;
+            min-height: 100px;
         }
         .scene-card.cover-scene {
             border: 2px solid var(--primary);
@@ -193,11 +193,11 @@
         }
         .scene-card-left {
             flex: 7;
-            padding: 0.6rem 0.7rem;
+            padding: 0.4rem 0.6rem;
             min-width: 0;
             display: flex;
             flex-direction: column;
-            gap: 0.3rem;
+            gap: 0.2rem;
         }
         .scene-card-right {
             flex: 3;
@@ -206,7 +206,7 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 0.5rem;
+            padding: 0.35rem;
             min-width: 140px;
             max-width: 250px;
             background: rgba(0,0,0,0.01);
@@ -214,7 +214,7 @@
         .scene-img-area {
             width: 100%;
             aspect-ratio: 4 / 5;
-            max-height: 280px;
+            max-height: 240px;
             border-radius: 8px;
             overflow: hidden;
             display: flex;
@@ -233,7 +233,7 @@
         .scene-img-actions {
             display: flex;
             gap: 4px;
-            margin-top: 6px;
+            margin-top: 4px;
             width: 100%;
             justify-content: center;
         }
@@ -255,7 +255,7 @@
         .scene-img-status {
             font-size: 0.65rem;
             color: var(--text-muted);
-            margin-top: 4px;
+            margin-top: 2px;
             text-align: center;
         }
         .char-counter {
@@ -274,8 +274,8 @@
             background: var(--bg-card);
             border: 1px solid var(--border);
             border-radius: 10px;
-            padding: 0.8rem 1rem;
-            margin-top: 1rem;
+            padding: 0.6rem 0.8rem;
+            margin-top: 0.7rem;
         }
         .gen-control-bar .gen-bar-header {
             display: flex;
@@ -2421,11 +2421,18 @@
                             if (subP) subP.textContent = '분야별 전문 자료를 정리하고 있습니다...';
                         }
                     }
-                    if (elapsed >= 30 && elapsed < 31) {
+                    if (elapsed >= 20 && elapsed < 21) {
                         const msgP = elEl.parentElement;
                         if (msgP) {
                             const subP = msgP.nextElementSibling;
-                            if (subP) subP.textContent = '상세 내용을 작성 중입니다. 조금만 더 기다려 주세요...';
+                            if (subP) subP.textContent = '응답 지연 시 대체 모델로 자동 전환됩니다...';
+                        }
+                    }
+                    if (elapsed >= 40 && elapsed < 41) {
+                        const msgP = elEl.parentElement;
+                        if (msgP) {
+                            const subP = msgP.nextElementSibling;
+                            if (subP) subP.textContent = '대체 모델(gemini-2.0-flash)로 전환 시도 중...';
                         }
                     }
                 }
@@ -2480,6 +2487,14 @@
                 loadingEl.style.display = 'none';
                 reviewArea.style.display = 'block';
                 actionsEl.style.display = 'flex';
+
+                // 모델 전환 안내 메시지
+                if (data.model_switched && data.model_used) {
+                    const switchNotice = document.createElement('div');
+                    switchNotice.style.cssText = 'background:#fff3cd; color:#856404; border:1px solid #ffc107; border-radius:8px; padding:0.75rem 1rem; margin-bottom:1rem; font-size:0.85rem; display:flex; align-items:center; gap:0.5rem;';
+                    switchNotice.innerHTML = `<span style="font-size:1.1rem;">⚡</span> 요청 모델(${model})이 응답 불가하여 <strong>${data.model_used}</strong> 모델로 전환되어 수집되었습니다.`;
+                    reviewArea.insertBefore(switchNotice, reviewArea.firstChild);
+                }
             } catch (e) {
                 clearInterval(collectTimer);
                 const elapsed = Math.floor((Date.now() - collectStartTime) / 1000);
@@ -3628,6 +3643,14 @@
                 loadingEl.style.display = 'none';
                 reviewArea.style.display = 'block';
                 actionsEl.style.display = 'flex';
+
+                // 모델 전환 안내 메시지
+                if (data.model_switched && data.model_used) {
+                    const switchNotice = document.createElement('div');
+                    switchNotice.style.cssText = 'background:#fff3cd; color:#856404; border:1px solid #ffc107; border-radius:8px; padding:0.75rem 1rem; margin-bottom:1rem; font-size:0.85rem; display:flex; align-items:center; gap:0.5rem;';
+                    switchNotice.innerHTML = `<span style="font-size:1.1rem;">⚡</span> 요청 모델(${storyModel})이 응답 불가하여 <strong>${data.model_used}</strong> 모델로 전환되어 생성되었습니다.`;
+                    reviewArea.insertBefore(switchNotice, reviewArea.firstChild);
+                }
             } catch (e) {
                 console.error('스토리 생성 오류:', e);
                 if (e.name === 'AbortError') {

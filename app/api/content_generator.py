@@ -13,6 +13,7 @@ import os
 import uuid
 import json
 import logging
+import asyncio
 import base64
 import zipfile
 from io import BytesIO
@@ -509,18 +510,20 @@ async def _generate_texts(
 """
 
     try:
-        from google import genai as _genai
-        from app.core.config import get_settings
+        from app.services.gemini_service import get_gemini_client
 
-        api_key = get_settings().gemini_api_key or ""
-        if not api_key:
+        client = get_gemini_client()
+        if not client:
             raise HTTPException(
                 status_code=400,
                 detail="Gemini API 키가 설정되지 않았습니다. 설정 → AI API 키에서 입력하세요.",
             )
 
-        client = _genai.Client(api_key=api_key)
-        response = await client.aio.models.generate_content(model="gemini-3-flash-preview", contents=prompt)
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model="gemini-3-flash-preview",
+            contents=prompt
+        )
         text = response.text.strip()
 
         # JSON 파싱 (마크다운 코드 블록 제거)

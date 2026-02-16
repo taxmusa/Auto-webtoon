@@ -17,7 +17,7 @@ playwright
 
 # HTTP 요청
 httpx>=0.28.1
-aiohttp==3.9.3
+aiohttp==3.13.3
 
 # 환경 변수
 python-dotenv==1.0.1

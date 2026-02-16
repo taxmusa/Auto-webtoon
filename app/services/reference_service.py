@@ -402,7 +402,7 @@ class ReferenceService:
             raise ImportError("Google GenAI 라이브러리가 설치되지 않았습니다.")
 
         actual_model = self._resolve_model_name(model_name)
-        client = genai.Client(api_key=gemini_api_key)
+        client = genai.Client(api_key=gemini_api_key, http_options=types.HttpOptions(timeout=180_000))
 
         # 캐릭터 이름 목록
         name_list = "\n".join(
@@ -476,7 +476,7 @@ Please generate this character reference sheet image."""
             raise ImportError("Google GenAI 라이브러리가 설치되지 않았습니다.")
 
         actual_model = self._resolve_model_name(model_name)
-        client = genai.Client(api_key=gemini_api_key)
+        client = genai.Client(api_key=gemini_api_key, http_options=types.HttpOptions(timeout=180_000))
 
         def _sync_generate():
             return client.models.generate_content(
@@ -521,7 +521,7 @@ Please generate this character reference sheet image."""
         import io
 
         actual_model = self._resolve_model_name(model_name)
-        client = genai.Client(api_key=gemini_api_key)
+        client = genai.Client(api_key=gemini_api_key, http_options=types.HttpOptions(timeout=180_000))
 
         contents = [prompt]
         for label, img_bytes in ref_images:
@@ -573,7 +573,7 @@ Please generate this character reference sheet image."""
         import io
 
         actual_model = self._resolve_model_name(model_name)
-        client = genai.Client(api_key=gemini_api_key)
+        client = genai.Client(api_key=gemini_api_key, http_options=types.HttpOptions(timeout=180_000))
         char_img = Image.open(io.BytesIO(character_bytes))
 
         # 레퍼런스 체이닝: 이미지 앞에 라벨 텍스트 삽입
@@ -814,7 +814,7 @@ Please generate this character reference sheet image."""
         from PIL import Image
         import io
 
-        client = genai.Client(api_key=gemini_api_key)
+        client = genai.Client(api_key=gemini_api_key, http_options=types.HttpOptions(timeout=180_000))
 
         # 프롬프트 구성
         full_prompt = f"""다음 장면을 이미지로 생성해주세요:

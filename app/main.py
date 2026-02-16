@@ -45,11 +45,15 @@ templates = Jinja2Templates(directory="app/templates")
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request, "title": "홈 - Webtoon Auto-Generator"})
+    response = templates.TemplateResponse("index.html", {"request": request, "title": "홈 - Webtoon Auto-Generator"})
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return response
 
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
-    return templates.TemplateResponse("settings.html", {"request": request})
+    response = templates.TemplateResponse("settings.html", {"request": request})
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return response
 
 @app.on_event("shutdown")
 async def shutdown_event():

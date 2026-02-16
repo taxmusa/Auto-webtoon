@@ -135,18 +135,12 @@ async def start_workflow(request: StartWorkflowRequest):
             state=WorkflowState.INITIALIZED
         )
         
-        # 자동 모드: 분야 감지
+        # 분야 감지는 collect_data 프롬프트 내에서 자동 판단 (별도 API 호출 불필요)
         field_name = None
         requires_verification = False
         
         if mode == WorkflowMode.AUTO and request.keyword:
-            gemini = get_gemini_service()
-            # AI 자동 감지 호출 (Async) - 모델 파라미터 전달
-            field_info = await gemini.detect_field(request.keyword, request.model)
-            session.field_info = field_info
             session.state = WorkflowState.COLLECTING_INFO
-            field_name = field_info.field.value
-            requires_verification = field_info.requires_legal_verification
         
         sessions[session_id] = session
         
@@ -176,7 +170,7 @@ async def generate_story(request: GenerateStoryRequest):
     try:
         gemini = get_gemini_service()
         
-        field_info = session.field_info or await gemini.detect_field(session.keyword)
+        field_info = session.field_info or FieldInfo(field=SpecializedField.GENERAL)
         
         # 수집 데이터: 프론트엔드에서 수정본이 전달되면 우선 사용, 아니면 세션 저장본 사용
         if request.collected_data and len(request.collected_data) > 0:
@@ -230,10 +224,13 @@ async def generate_story(request: GenerateStoryRequest):
         except Exception as e:
             logger.error(f"Failed to save story history: {e}")
         
+        actual_model = gemini.last_used_model or request.model
         return {
             "session_id": session.session_id,
             "state": session.state.value,
-            "story": story.model_dump()
+            "story": story.model_dump(),
+            "model_used": actual_model,
+            "model_switched": actual_model != request.model
         }
     except Exception as e:
         import traceback
@@ -388,9 +385,13 @@ image_prompt는 AI 이미지 생성 모델에게 전달되는 시각 묘사입�
 
 image_prompt만 텍스트로 반환하세요. 다른 설명이나 JSON 없이 프롬프트 텍스트만."""
 
-        from google import genai as _genai
-        client = _genai.Client(api_key=gemini._api_key)
-        response = await client.aio.models.generate_content(model=request.model, contents=regen_prompt)
+        from app.services.gemini_service import get_gemini_client
+        client = get_gemini_client()
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model=request.model,
+            contents=regen_prompt
+        )
         new_prompt = response.text.strip().strip('"').strip("'")
         
         # 씬에 저장
@@ -803,10 +804,8 @@ class CommonCaptionRequest(BaseModel):
 @router.post("/generate-common-caption")
 async def generate_common_caption(request: CommonCaptionRequest):
     """콘텐츠 타입에 맞는 캡션 생성 (세션 불필요)"""
-    from google import genai as _genai
-    from app.core.config import get_settings as _gs
-    api_key = _gs().gemini_api_key or ""
-    client = _genai.Client(api_key=api_key)
+    from app.services.gemini_service import get_gemini_client
+    client = get_gemini_client()
 
     type_label = {
         "webtoon": "인스타그램 웹툰",
@@ -833,7 +832,11 @@ async def generate_common_caption(request: CommonCaptionRequest):
 """
 
     try:
-        response = await client.aio.models.generate_content(model="gemini-3-flash-preview", contents=prompt)
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model="gemini-3-flash-preview",
+            contents=prompt
+        )
         text = response.text.strip()
 
         import json
@@ -868,16 +871,16 @@ class TestModelRequest(BaseModel):
 @router.post("/test-model")
 async def test_model(request: TestModelRequest):
     """특정 AI 모델의 동작 상태 확인"""
-    from google import genai as _genai
-    from app.core.config import get_settings as _gs
+    from app.services.gemini_service import get_gemini_client
     import asyncio, logging
     logger = logging.getLogger(__name__)
     
     logger.info(f"[test-model] 테스트 시작: {request.model}")
     
     try:
-        client = _genai.Client(api_key=_gs().gemini_api_key or "")
-        response = await client.aio.models.generate_content(
+        client = get_gemini_client()
+        response = await asyncio.to_thread(
+            client.models.generate_content,
             model=request.model,
             contents="Say 'Hello' in Korean"
         )
@@ -939,10 +942,12 @@ async def collect_data(request: CollectDataRequest):
         # 세션에 저장 (상세 내용 포함)
         session.collected_data = items
         
+        actual_model = gemini.last_used_model or request.model
         return {
             "session_id": session.session_id,
             "items": items,
-            "model_used": request.model
+            "model_used": actual_model,
+            "model_switched": actual_model != request.model
         }
     except asyncio.TimeoutError:
         logger.error(f"[collect_data] 전체 타임아웃 - 모델: {request.model}")
@@ -1091,7 +1096,11 @@ JSON 형식으로 응답:
 """
     
     try:
-        response = await gemini.model.generate_content_async(prompt)
+        response = await asyncio.to_thread(
+            gemini.client.models.generate_content,
+            model=request.model,
+            contents=prompt
+        )
         import json
         import re
         
