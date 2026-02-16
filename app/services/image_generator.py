@@ -28,7 +28,6 @@ class ImageGeneratorBase(ABC):
         self,
         prompt: str,
         reference_images: Optional[List[bytes]] = None,
-        size: str = "1024x1536",
         quality: str = "medium",
         seed: Optional[int] = None
     ) -> Union[bytes, str]:
@@ -38,8 +37,7 @@ class ImageGeneratorBase(ABC):
     async def edit_with_reference(
         self,
         prompt: str,
-        reference_image: bytes,
-        size: str = "1024x1536"
+        reference_image: bytes
     ) -> bytes:
         pass
 
@@ -95,7 +93,7 @@ class GeminiGenerator(ImageGeneratorBase):
         logger.warning(f"[_extract_image_bytes] 예상 외 타입: {type(raw_data)}")
         return raw_data if raw_data else b""
 
-    async def generate(self, prompt, reference_images=None, size="1024x1024", quality="medium", seed=None,
+    async def generate(self, prompt, reference_images=None, quality="medium", seed=None,
                        method_image=None, style_image=None, prev_scene_image=None, prev_scene_summaries=None,
                        prev_scene_number=None, aspect_ratio=None):
         """Gemini 이미지 생성 — 3종 레퍼런스 + 이전 씬 체이닝 지원
@@ -188,8 +186,8 @@ class GeminiGenerator(ImageGeneratorBase):
             elif aspect_ratio:
                 logger.info(f"[Gemini] ImageConfig 미지원 SDK — 프롬프트 힌트로 비율 {aspect_ratio} 전달")
 
-            def _sync_generate():
-                return self.client.models.generate_content(
+            async def _async_generate():
+                return await self.client.aio.models.generate_content(
                     model=self.model,
                     contents=contents,
                     config=types.GenerateContentConfig(**_gen_config_kwargs)
@@ -229,7 +227,7 @@ class GeminiGenerator(ImageGeneratorBase):
             for attempt in range(1, max_attempts + 1):
                 try:
                     response = await asyncio.wait_for(
-                        asyncio.to_thread(_sync_generate),
+                        _async_generate(),
                         timeout=IMAGE_GENERATION_TIMEOUT
                     )
                     logger.info("Gemini API 응답 %.1f초 (attempt=%d, model=%s, refs=[%s], contents_len=%d)", 
@@ -328,8 +326,8 @@ class GeminiGenerator(ImageGeneratorBase):
             logger.error("Gemini Image Generation Failed (%.1f초, type=%s): %s", time.time() - t0, error_type or "unknown", e)
             raise type(e)(friendly) from e
 
-    async def edit_with_reference(self, prompt, reference_image, size="1024x1024"):
-        return await self.generate(prompt, reference_images=[reference_image], size=size)
+    async def edit_with_reference(self, prompt, reference_image):
+        return await self.generate(prompt, reference_images=[reference_image])
 
 
 # ────────────────────────────────────────────
@@ -342,7 +340,12 @@ _GEMINI_MODEL_MAP = {
 }
 
 
+_generator_cache: dict[str, GeminiGenerator] = {}
+
 def get_generator(model_name: str, api_key: str) -> ImageGeneratorBase:
-    """model_name 을 기반으로 Gemini Generator 인스턴스를 반환"""
+    """model_name 을 기반으로 Gemini Generator 인스턴스를 반환 (동일 키+모델은 캐싱)"""
     real_model = _GEMINI_MODEL_MAP.get(model_name, model_name)
-    return GeminiGenerator(api_key, real_model)
+    cache_key = f"{api_key}:{real_model}"
+    if cache_key not in _generator_cache:
+        _generator_cache[cache_key] = GeminiGenerator(api_key, real_model)
+    return _generator_cache[cache_key]

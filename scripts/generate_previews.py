@@ -82,7 +82,7 @@ async def generate_previews():
                     full_prompt += ", wide shot, scenery, establishing shot"
                 
                 # 이미지 생성 (1024x1024)
-                image_bytes = await generator.generate(full_prompt, size="1024x1024")
+                image_bytes = await generator.generate(full_prompt, aspect_ratio="4:5")
                 
                 # 저장
                 with open(preview_path, "wb") as f:

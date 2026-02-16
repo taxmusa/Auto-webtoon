@@ -71,7 +71,7 @@ async def main():
         prompt = f"A high quality character portrait showing clearly the style of {style['name']}. {style['prompt']}. Masterpiece, best quality, solo character, centered."
         
         try:
-            image_data = await generator.generate(prompt, size="1024x1024", quality="standard")
+            image_data = await generator.generate(prompt, quality="standard", aspect_ratio="4:5")
             
             if isinstance(image_data, bytes):
                 with open(preview_path, "wb") as f:

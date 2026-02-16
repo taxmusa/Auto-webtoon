@@ -4,7 +4,9 @@ Gemini AI 서비스 - 텍스트 생성
 - 스토리 생성
 - 캡션 생성
 """
-import google.generativeai as genai
+from google import genai
+from google.genai import types
+import asyncio
 from typing import Optional
 import json
 import re
@@ -17,13 +19,13 @@ from app.models.models import (
 
 
 class GeminiService:
-    """Gemini AI 서비스"""
+    """Gemini AI 서비스 — 신형 google.genai SDK 사용"""
     
     def __init__(self):
         settings = get_settings()
-        if settings.gemini_api_key:
-            genai.configure(api_key=settings.gemini_api_key)
-        self.model = genai.GenerativeModel("gemini-3-flash-preview")
+        self._api_key = settings.gemini_api_key or ""
+        self.client = genai.Client(api_key=self._api_key) if self._api_key else None
+        self._default_model = "gemini-3-flash-preview"
 
     async def detect_field(self, keyword: str, model: str = "gemini-3-flash-preview") -> FieldInfo:
         """AI를 사용하여 키워드에서 분야, 기준 년도, 법정 검증 필요성 자동 감지 - 모델 fallback 지원"""
@@ -66,32 +68,47 @@ class GeminiService:
         }}"""
 
         for try_model in models_to_try:
-            try:
-                logger.info(f"[detect_field] 시도 중: {try_model}")
-                current_model = genai.GenerativeModel(try_model)
-                response = await current_model.generate_content_async(prompt)
-                text = response.text
-                match = re.search(r'\{.*\}', text, re.DOTALL)
-                if match:
-                    data = json.loads(match.group())
-                else:
-                    raise ValueError("JSON not found in response")
-                
-                logger.info(f"[detect_field] 성공: {try_model}")
-                return FieldInfo(
-                    field=SpecializedField(data.get("field", "일반")),
-                    target_year=data.get("target_year", current_year_str),
-                    requires_legal_verification=data.get("requires_legal_verification", False),
-                    reason=data.get("reason"),
-                    confidence_score=0.9
-                )
-            except Exception as e:
-                logger.warning(f"[detect_field] {try_model} 실패: {str(e)}")
-                if try_model != models_to_try[-1]:
-                    continue
+            for attempt in range(1, 3):  # 모델당 최대 2회 시도
+                try:
+                    logger.info(f"[detect_field] 시도 중: {try_model} (attempt {attempt})")
+                    response = await asyncio.wait_for(
+                        self.client.aio.models.generate_content(
+                            model=try_model,
+                            contents=prompt
+                        ),
+                        timeout=30
+                    )
+                    text = response.text
+                    match = re.search(r'\{.*\}', text, re.DOTALL)
+                    if match:
+                        data = json.loads(match.group())
+                    else:
+                        raise ValueError("JSON not found in response")
+                    
+                    logger.info(f"[detect_field] 성공: {try_model}")
+                    return FieldInfo(
+                        field=SpecializedField(data.get("field", "일반")),
+                        target_year=data.get("target_year", current_year_str),
+                        requires_legal_verification=data.get("requires_legal_verification", False),
+                        reason=data.get("reason"),
+                        confidence_score=0.9
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(f"[detect_field] {try_model} 타임아웃 (attempt {attempt})")
+                    if attempt < 2:
+                        await asyncio.sleep(2)
+                        continue
+                except Exception as e:
+                    err_str = str(e).lower()
+                    is_transient = "504" in err_str or "503" in err_str or "unavailable" in err_str or "deadline" in err_str
+                    logger.warning(f"[detect_field] {try_model} 실패 (attempt {attempt}): {e}")
+                    if is_transient and attempt < 2:
+                        await asyncio.sleep(3)
+                        continue
+                break  # 비일시적 에러 → 다음 모델로
         
-        # 모든 모델 실패 시 기본값 반환
-        logger.error(f"[detect_field] 모든 모델 실패")
+        # 모든 모델 실패 시 기본값 반환 (에러가 아닌 기본값 → 자료 수집은 계속 진행)
+        logger.error(f"[detect_field] 모든 모델 실패 → 기본값(일반) 반환")
         return FieldInfo(field=SpecializedField.GENERAL, target_year=current_year_str)
 
     @staticmethod
@@ -103,69 +120,44 @@ class GeminiService:
         synopsis_keywords = ("스토리", "씬", "장면", "인스타툰", "만들", "그리")
         return any(w in k for w in synopsis_keywords)
 
-    async def collect_data(self, keyword: str, field_info: FieldInfo, model: str = "gemini-3-flash-preview", expert_mode: bool = False) -> list:
-        """주제와 관련된 상세 자료 수집 (제목 + 본문) - 모델 fallback 지원, 전문가 모드 지원"""
+    async def collect_data(self, keyword: str, field_info: Optional[FieldInfo] = None, model: str = "gemini-3-flash-preview", expert_mode: bool = False) -> list:
+        """주제와 관련된 상세 자료 수집 (1회 API 호출로 분야 판단 + 자료 수집 동시 수행)"""
         import logging
         logger = logging.getLogger(__name__)
 
-        # 스토리 시놉시스 감지: 긴 문장 또는 웹툰/스토리 제작 의도 시 자료 수집 API 호출 없이 그대로 전달
+        # 스토리 시놉시스 감지
         if self.is_synopsis_keyword(keyword):
             logger.info("[collect_data] 스토리 시놉시스로 판단하여 API 호출 없이 통과")
             return [{"title": "스토리 시놉시스", "content": keyword}]
 
-        # Fallback 모델 순서 정의 (3.0 계열만 사용)
         FALLBACK_MODELS = {
             "gemini-3-pro-preview": ["gemini-3-flash-preview"],
             "gemini-3-flash-preview": []
         }
-        
         models_to_try = [model] + FALLBACK_MODELS.get(model, [])
-        
-        # 최신 년도 주입
+
         import datetime
         current_year_str = str(datetime.datetime.now().year)
 
+        # 분야 힌트: field_info가 있으면 사용, 없으면 AI가 자동 판단
+        field_hint = ""
+        if field_info and field_info.field.value != "일반":
+            field_hint = f"(참고: 이 키워드는 '{field_info.field.value}' 분야로 판단됨, 기준 년도: {field_info.target_year})"
+
         if expert_mode:
-            # 분야별 전문가 프롬프트
-            field_specific = {
-                "TAX": (
-                    "당신은 세무사/회계사 수준의 세무 전문가입니다.\n"
-                    "- 관련 세법 조항(소득세법, 법인세법, 상속증여세법 등)의 정확한 조/항/호를 명시하세요\n"
-                    "- 공제 금액, 세율, 신고 기한 등 정확한 숫자를 기재하세요\n"
-                    "- 일반인이 자주 놓치는 절세 전략이나 주의사항을 포함하세요\n"
-                    "- 최근 개정된 세법 내용이 있다면 반드시 언급하세요"
-                ),
-                "LAW": (
-                    "당신은 변호사 수준의 법률 전문가입니다.\n"
-                    "- 관련 법조문(민법, 형법, 상법 등)의 정확한 조항을 명시하세요\n"
-                    "- 관련 판례가 있다면 판례번호와 핵심 판시사항을 포함하세요\n"
-                    "- 실무에서 자주 발생하는 분쟁 사례와 대처 방법을 설명하세요"
-                ),
-                "FINANCE": (
-                    "당신은 공인재무설계사(CFP) 수준의 금융 전문가입니다.\n"
-                    "- 금융상품의 수익률, 위험도, 세제 혜택을 구체적으로 비교하세요\n"
-                    "- 관련 금융 규제나 소비자 보호 제도를 명시하세요"
-                ),
-                "MEDICAL": (
-                    "당신은 의학 전문가입니다.\n"
-                    "- 의학적 근거(연구, 가이드라인)를 기반으로 작성하세요\n"
-                    "- 증상, 원인, 예방법을 구체적으로 설명하세요"
-                ),
-            }
-            field_key = field_info.field.value if hasattr(field_info.field, 'value') else str(field_info.field)
-            expert_instruction = field_specific.get(field_key, (
-                "당신은 해당 분야의 최고 수준 전문가입니다.\n"
-                "- 전문 용어와 함께 일반인도 이해할 수 있는 설명을 병행하세요\n"
-                "- 구체적 수치, 사례, 근거를 반드시 포함하세요"
-            ))
-            
-            prompt = f"""{expert_instruction}
+            prompt = f"""당신은 해당 분야의 최고 수준 전문가입니다.
+키워드를 분석하여 해당 분야(세무/법률/노무/금융/의학/부동산 등)를 자동 판단하고, 그 분야 전문가 수준으로 작성하세요.
+{field_hint}
 
 키워드 "{keyword}"에 대해 전문가 수준의 상세 자료를 작성하세요.
 
 [핵심 지침]
 1. 기준 년도: {current_year_str}년 최신 정보 기준으로 작성하세요.
-2. 분야: {field_info.field.value} (기준 년도: {field_info.target_year})
+2. 키워드의 분야를 자동 판단하여 해당 분야 전문가처럼 작성하세요.
+   - 세무: 세법 조항, 공제 금액, 세율, 신고 기한 등 정확한 숫자 기재
+   - 법률: 법조문, 판례번호, 분쟁 사례 포함
+   - 금융: 수익률, 위험도, 세제 혜택 비교
+   - 기타: 구체적 수치, 사례, 근거 포함
 
 [전문가 모드 요청 사항]
 1. 제목과 상세 본문 내용을 포함하여 **8~12개**의 항목으로 정리하세요.
@@ -182,54 +174,72 @@ class GeminiService:
 ]"""
         else:
             prompt = f"""키워드 "{keyword}"에 대해 SNS(인스타그램/블로그)용 콘텐츠 제작을 위한 상세 자료를 수집해 주세요.
+{field_hint}
+
+[핵심 지침]
+1. 기준 년도: 무조건 최신 {current_year_str}년 (또는 그 이후) 정보를 기준으로 작성하세요.
+   - 사용자가 특정 년도를 명시하지 않았다면, 자동으로 {current_year_str}년 개정 내용을 적용해야 합니다.
+2. 분야 자동 판단: 키워드를 보고 해당 분야(세무/법률/노무/금융/의학/부동산/교육/기술/일반)를 자동 판단하여 전문 지식을 바탕으로 작성하세요.
+
+[요청 사항]
+1. 제목과 상세 본문 내용을 포함하여 5~8개의 항목으로 정리하세요.
+2. 실제 법령, 개정안, 정확한 공제 금액 등 구체적인 수치를 반드시 포함하세요.
+3. 인스타그램 카드뉴스나 웹툰으로 설명하기 좋은 정보 위주로 선정하세요.
+4. "일반"적인 내용보다는 "전문적이고 실질적인 팁"을 포함하세요.
+
+[출력 형식 (JSON)]
+[
+    {{"title": "자료 제목1", "content": "상세 설명 내용 ({current_year_str}년 기준)..."}},
+    ...
+]"""
         
-        [핵심 지침]
-        1. 기준 년도: 무조건 최신 {current_year_str}년 (또는 그 이후) 정보를 기준으로 작성하세요.
-           - 사용자가 특정 년도를 명시하지 않았다면, 자동으로 {current_year_str}년 개정 내용을 적용해야 합니다.
-        2. 분야 자동 판단: 키워드를 보고 해당 분야의 전문 지식을 바탕으로 작성하세요.
-           (입력된 분야 참고: {field_info.field.value}, 기준 년도: {field_info.target_year})
-        
-        [요청 사항]
-        1. 제목과 상세 본문 내용을 포함하여 5~8개의 항목으로 정리하세요.
-        2. 실제 법령, 개정안, 정확한 공제 금액 등 구체적인 수치를 반드시 포함하세요.
-        3. 인스타그램 카드뉴스나 웹툰으로 설명하기 좋은 정보 위주로 선정하세요.
-        4. "일반"적인 내용보다는 "전문적이고 실질적인 팁"을 포함하세요.
-        
-        [출력 형식 (JSON)]
-        [
-            {{"title": "자료 제목1", "content": "상세 설명 내용 ({current_year_str}년 기준)..."}},
-            ...
-        ]"""
-        
-        import asyncio
         last_error = None
         for try_model in models_to_try:
-            try:
-                logger.info(f"[collect_data] 시도 중: {try_model}")
-                current_model = genai.GenerativeModel(try_model)
-                response = await asyncio.wait_for(
-                    current_model.generate_content_async(prompt),
-                    timeout=90
-                )
-                # JSON 파싱 (리스트 형태 추출)
-                match = re.search(r'\[.*\]', response.text, re.DOTALL)
-                if match:
-                    result = json.loads(match.group())
-                    logger.info(f"[collect_data] 성공: {try_model}, {len(result)}개 항목")
-                    return result
-                else:
-                    raise ValueError("JSON list not found in response")
-                    
-            except Exception as e:
-                last_error = e
-                logger.warning(f"[collect_data] {try_model} 실패: {str(e)}")
-                if try_model != models_to_try[-1]:
-                    logger.info(f"[collect_data] 다음 모델로 시도: {models_to_try[models_to_try.index(try_model)+1]}")
-                continue
+            for attempt in range(1, 4):  # 모델당 최대 3회 시도
+                try:
+                    logger.info(f"[collect_data] 시도 중: {try_model} (attempt {attempt})")
+                    response = await asyncio.wait_for(
+                        self.client.aio.models.generate_content(
+                            model=try_model,
+                            contents=prompt
+                        ),
+                        timeout=90
+                    )
+                    # JSON 파싱 (리스트 형태 추출)
+                    match = re.search(r'\[.*\]', response.text, re.DOTALL)
+                    if match:
+                        result = json.loads(match.group())
+                        logger.info(f"[collect_data] 성공: {try_model} (attempt {attempt}), {len(result)}개 항목")
+                        return result
+                    else:
+                        raise ValueError("JSON list not found in response")
+
+                except asyncio.TimeoutError:
+                    last_error = "Gemini API 응답 시간 초과 (90초)"
+                    logger.warning(f"[collect_data] {try_model} 타임아웃 (attempt {attempt})")
+                    if attempt < 3:
+                        wait = 3 * attempt
+                        logger.info(f"[collect_data] {wait}초 후 재시도")
+                        await asyncio.sleep(wait)
+                        continue
+                except Exception as e:
+                    last_error = e
+                    err_str = str(e).lower()
+                    is_transient = any(k in err_str for k in ["504", "503", "unavailable", "deadline", "rate", "429", "quota", "resource_exhausted"])
+                    logger.warning(f"[collect_data] {try_model} 실패 (attempt {attempt}): {e}")
+                    if is_transient and attempt < 3:
+                        wait = 5 * attempt
+                        logger.info(f"[collect_data] 일시적 에러 → {wait}초 후 재시도")
+                        await asyncio.sleep(wait)
+                        continue
+                break  # 비일시적 에러 → 다음 모델로
+
+            if try_model != models_to_try[-1]:
+                logger.info(f"[collect_data] 다음 모델로 전환: {models_to_try[models_to_try.index(try_model)+1]}")
         
-        # 모든 모델 실패
-        logger.error(f"[collect_data] 모든 모델 실패. 마지막 오류: {last_error}")
-        return [{"title": keyword, "content": f"정보를 불러오지 못했습니다. ({last_error}) 다시 시도해 주세요."}]
+        # 모든 모델 실패 → 예외 raise (엔드포인트에서 적절한 HTTP 코드로 처리)
+        logger.error(f"[collect_data] 모든 모델·재시도 실패. 마지막 오류: {last_error}")
+        raise RuntimeError(f"자료 수집 실패: {last_error}")
 
     @staticmethod
     def _build_character_names_prompt(
@@ -525,8 +535,10 @@ image_prompt 나쁜 예시:
         for try_model in models_to_try:
             try:
                 logger.info(f"[generate_story] 시도 중: {try_model}")
-                current_model = genai.GenerativeModel(try_model)
-                response = await current_model.generate_content_async(prompt)
+                response = await self.client.aio.models.generate_content(
+                    model=try_model,
+                    contents=prompt
+                )
                 data = json.loads(re.search(r'\{.*\}', response.text, re.DOTALL).group())
                 
                 scenes = []
@@ -591,7 +603,6 @@ image_prompt 나쁜 예시:
     ) -> InstagramCaption:
         """인스타그램 캡션 생성 - 모델 fallback + 재시도 + 캐릭터명 후처리 제거"""
         import logging
-        import asyncio
         logger = logging.getLogger(__name__)
 
         # Fallback 모델 순서 (빠른 모델 우선)
@@ -656,10 +667,12 @@ image_prompt 나쁜 예시:
         for try_model in models_to_try:
             try:
                 logger.info(f"[generate_caption] 시도 중: {try_model}")
-                current_model = genai.GenerativeModel(try_model)
                 response = await asyncio.wait_for(
-                    current_model.generate_content_async(prompt),
-                    timeout=30  # 60초→30초 단축 (cold start 대비 fallback 사용)
+                    self.client.aio.models.generate_content(
+                        model=try_model,
+                        contents=prompt
+                    ),
+                    timeout=30
                 )
                 text = response.text.strip()
                 
@@ -780,23 +793,19 @@ image_prompt 나쁜 예시:
         elif image_data[:4] == b'RIFF':
             mime_type = "image/webp"
 
-        # inline_data 형태로 이미지 전달 (PIL 변환 없이 직접 bytes 사용)
-        image_part = {
-            "inline_data": {
-                "mime_type": mime_type,
-                "data": image_data
-            }
-        }
+        # 신형 SDK: Part.from_bytes로 이미지 전달
+        image_part = types.Part.from_bytes(data=image_data, mime_type=mime_type)
 
         # Fallback 모델 순서 (사용자 요청: 3.0 Pro 등 고성능 모델 전용)
-        # model_list.txt 확인 결과 1.5-pro는 없음. 2.5-pro 사용.
         models_to_try = ["gemini-3-pro-preview", "gemini-3-flash-preview"]
 
         for try_model in models_to_try:
             try:
                 logger.info(f"[extract_style] 시도 중: {try_model}")
-                model = genai.GenerativeModel(try_model)
-                response = await model.generate_content_async([STYLE_EXTRACTION_PROMPT, image_part])
+                response = await self.client.aio.models.generate_content(
+                    model=try_model,
+                    contents=[STYLE_EXTRACTION_PROMPT, image_part]
+                )
                 
                 text = response.text
                 # 로깅 추가 (디버깅용)

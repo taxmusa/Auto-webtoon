@@ -39,17 +39,6 @@ sessions: dict[str, WorkflowSession] = {}
 stop_signals: dict[str, bool] = {}
 
 # ★ 공통 헬퍼: aspect_ratio → 이미지 사이즈 변환 (전체 생성 + 개별 재생성 통일)
-def get_image_size_for_ratio(aspect_ratio: str) -> str:
-    """aspect_ratio 문자열을 Gemini 이미지 크기로 변환"""
-    ar_map = {
-        "4:5": "1024x1280",
-        "9:16": "1024x1820",
-        "1:1": "1024x1024",
-        "16:9": "1820x1024",
-    }
-    return ar_map.get(aspect_ratio, "1024x1280")
-
-
 def _resolve_api_key(model_name: str) -> str:
     """Gemini API 키를 반환하는 헬퍼"""
     from app.core.config import get_settings
@@ -100,7 +89,7 @@ class GenerateImagesRequest(BaseModel):
     session_id: str
     style: str = "webtoon"
     sub_style: str = "normal"
-    aspect_ratio: str = "1:1"
+    aspect_ratio: str = "4:5"
     model: str = "nano-banana-pro"  # Gemini 3.0 Preview 고정
     
     # Style System 2.0
@@ -399,12 +388,9 @@ image_prompt는 AI 이미지 생성 모델에게 전달되는 시각 묘사입�
 
 image_prompt만 텍스트로 반환하세요. 다른 설명이나 JSON 없이 프롬프트 텍스트만."""
 
-        import google.generativeai as genai
-        api_key = gemini.api_key
-        genai.configure(api_key=api_key)
-        
-        model = genai.GenerativeModel(request.model)
-        response = model.generate_content(regen_prompt)
+        from google import genai as _genai
+        client = _genai.Client(api_key=gemini._api_key)
+        response = await client.aio.models.generate_content(model=request.model, contents=regen_prompt)
         new_prompt = response.text.strip().strip('"').strip("'")
         
         # 씬에 저장
@@ -484,7 +470,7 @@ async def generate_preview(request: GeneratePreviewRequest):
         logger.info(f"미리보기 생성 시작 (model={request.model}, prompt_len={len(prompt)}자)")
         
         image_data = await asyncio.wait_for(
-            generator.generate(prompt, size="1024x1024", quality="standard"),
+            generator.generate(prompt, quality="standard", aspect_ratio="4:5"),
             timeout=95.0
         )
 
@@ -568,7 +554,6 @@ async def _run_image_generation(request: GenerateImagesRequest):
             if style_ref_bytes:
                 style_ref_bytes = PILImg.open(BIO(style_ref_bytes))
 
-        scene_size = get_image_size_for_ratio(request.aspect_ratio or "4:5")
         os.makedirs("output", exist_ok=True)
 
         async def generate_single_scene(scene, ref_image_bytes=None,
@@ -584,12 +569,10 @@ async def _run_image_generation(request: GenerateImagesRequest):
                     sub_style_name=sub_style,
                     aspect_ratio=request.aspect_ratio
                 )
-                size = scene_size
                 _prev_sn = scene.scene_number - 1 if prev_scene_image else None
                 image_data = await generator.generate(
                     prompt,
                     reference_images=[ref_image_bytes] if ref_image_bytes else None,
-                    size=size,
                     method_image=method_bytes,
                     style_image=style_bytes,
                     prev_scene_image=prev_scene_image,
@@ -662,6 +645,7 @@ async def _run_image_generation(request: GenerateImagesRequest):
             mode_str = f"레퍼런스({'+'.join(mode_parts)})" if mode_parts else "독립 생성"
             logger.info(f"[생성] 씬 {scene.scene_number}/{len(session.story.scenes)} — {mode_str}")
 
+            # 내부 재시도(image_generator.py)가 4회까지 자동 처리하므로 외부 재시도 불필요
             res = await generate_single_scene(
                 scene,
                 ref_image_bytes=character_ref_bytes,
@@ -671,20 +655,7 @@ async def _run_image_generation(request: GenerateImagesRequest):
                 prev_scene_summaries=prev_scene_summaries
             )
             if res.get("status") == "error":
-                logger.warning(f"[재시도] 씬 {scene.scene_number} 첫 시도 실패: {res.get('error', '')} → 5초 후 재시도")
-                await asyncio.sleep(5)
-                res = await generate_single_scene(
-                    scene,
-                    ref_image_bytes=character_ref_bytes,
-                    method_bytes=method_ref_bytes,
-                    style_bytes=style_ref_bytes,
-                    prev_scene_image=prev_scene_image,
-                    prev_scene_summaries=prev_scene_summaries
-                )
-                if res.get("status") == "error":
-                    logger.error(f"[재시도] 씬 {scene.scene_number} 재시도도 실패: {res.get('error', '')}")
-                else:
-                    logger.info(f"[재시도] 씬 {scene.scene_number} 재시도 성공!")
+                logger.error(f"씬 {scene.scene_number} 생성 실패: {res.get('error', '')}")
 
             if res.get("image_bytes"):
                 generated_scene_images.clear()
@@ -716,6 +687,8 @@ async def _run_image_generation(request: GenerateImagesRequest):
         session = sessions.get(request.session_id)
         if session:
             session.state = WorkflowState.REVIEWING_IMAGES
+            # 에러 메시지를 세션에 저장 → 프론트 폴링 시 사용자에게 전달
+            session.last_error = f"이미지 생성 중 오류: {str(e)[:200]}"
 
 
 @router.post("/generate-images")
@@ -830,12 +803,10 @@ class CommonCaptionRequest(BaseModel):
 @router.post("/generate-common-caption")
 async def generate_common_caption(request: CommonCaptionRequest):
     """콘텐츠 타입에 맞는 캡션 생성 (세션 불필요)"""
-    import google.generativeai as genai
-
+    from google import genai as _genai
     from app.core.config import get_settings as _gs
     api_key = _gs().gemini_api_key or ""
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-3-flash-preview")
+    client = _genai.Client(api_key=api_key)
 
     type_label = {
         "webtoon": "인스타그램 웹툰",
@@ -862,7 +833,7 @@ async def generate_common_caption(request: CommonCaptionRequest):
 """
 
     try:
-        response = model.generate_content(prompt)
+        response = await client.aio.models.generate_content(model="gemini-3-flash-preview", contents=prompt)
         text = response.text.strip()
 
         import json
@@ -897,15 +868,19 @@ class TestModelRequest(BaseModel):
 @router.post("/test-model")
 async def test_model(request: TestModelRequest):
     """특정 AI 모델의 동작 상태 확인"""
-    import google.generativeai as genai
-    import logging
+    from google import genai as _genai
+    from app.core.config import get_settings as _gs
+    import asyncio, logging
     logger = logging.getLogger(__name__)
     
     logger.info(f"[test-model] 테스트 시작: {request.model}")
     
     try:
-        model = genai.GenerativeModel(request.model)
-        response = await model.generate_content_async("Say 'Hello' in Korean")
+        client = _genai.Client(api_key=_gs().gemini_api_key or "")
+        response = await client.aio.models.generate_content(
+            model=request.model,
+            contents="Say 'Hello' in Korean"
+        )
         
         return {
             "model": request.model,
@@ -952,18 +927,12 @@ async def collect_data(request: CollectDataRequest):
 
     gemini = get_gemini_service()
     
-    # AI를 사용해 상세 정보 수집
+    # AI를 사용해 상세 정보 수집 (1회 API 호출로 분야 판단 + 자료 수집 동시 수행)
     try:
         logger.info(f"[collect_data] 모델: {request.model}, 키워드: {request.keyword}")
 
-        # 스토리 시놉시스면 분야 감지 생략 (타임아웃 방지)
-        if gemini.is_synopsis_keyword(request.keyword):
-            field_info = FieldInfo(field=SpecializedField.GENERAL, target_year=str(datetime.now().year))
-            logger.info("[collect_data] 스토리 시놉시스로 분야 감지 생략")
-        else:
-            field_info = session.field_info or await gemini.detect_field(request.keyword, request.model)
-            logger.info(f"[collect_data] 분야 감지 완료: {field_info.field}")
-        
+        # 세션에 이미 분야 정보가 있으면 힌트로 전달 (없으면 AI가 자동 판단)
+        field_info = session.field_info if hasattr(session, 'field_info') else None
         items = await gemini.collect_data(request.keyword, field_info, request.model, request.expert_mode)
         logger.info(f"[collect_data] 자료 수집 완료: {len(items)}개 항목 (전문가모드: {request.expert_mode})")
         
@@ -975,11 +944,28 @@ async def collect_data(request: CollectDataRequest):
             "items": items,
             "model_used": request.model
         }
+    except asyncio.TimeoutError:
+        logger.error(f"[collect_data] 전체 타임아웃 - 모델: {request.model}")
+        return JSONResponse(
+            status_code=504,
+            content={"detail": "AI 응답이 시간 초과되었습니다. 잠시 후 다시 시도해 주세요."}
+        )
     except Exception as e:
         logger.error(f"[collect_data] 오류 발생 - 모델: {request.model}, 에러: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"자료 수집 오류 ({request.model}): {str(e)}")
+        err_str = str(e).lower()
+        if "504" in err_str or "deadline" in err_str or "unavailable" in err_str:
+            return JSONResponse(
+                status_code=504,
+                content={"detail": "AI 서버가 일시적으로 바쁩니다. 잠시 후 다시 시도해 주세요."}
+            )
+        if "429" in err_str or "rate" in err_str or "quota" in err_str:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "AI 요청 한도를 초과했습니다. 1분 후 다시 시도해 주세요."}
+            )
+        raise HTTPException(status_code=500, detail=f"자료 수집 오류: {str(e)}")
 
 
 class ParseManualContentRequest(BaseModel):
@@ -1193,9 +1179,7 @@ async def regenerate_image(request: RegenerateImageRequest):
     generator = get_generator(model_name, api_key)
     
     try:
-        # ★ aspect_ratio에 따라 동적 사이즈 결정 (공통 헬퍼 사용)
         ar = request.aspect_ratio or "4:5"
-        size = get_image_size_for_ratio(ar)
         
         # ★ Gemini 재생성: 3종 레퍼런스 + 씬 체이닝 지원
         from app.services.reference_service import ReferenceService
@@ -1241,7 +1225,6 @@ async def regenerate_image(request: RegenerateImageRequest):
         image_data = await generator.generate(
             prompt,
             reference_images=[character_ref] if character_ref else None,
-            size=size,
             method_image=method_ref,
             style_image=style_ref,
             prev_scene_image=prev_scene_image,
@@ -1844,7 +1827,7 @@ async def generate_thumbnail(request: ThumbnailGenerateRequest):
 
         model_name = session.settings.image.model or "gpt-image-1"
         generator = get_generator(model_name, api_key)
-        image_bytes = await generator.generate(cover_prompt, size="1024x1024", quality="medium")
+        image_bytes = await generator.generate(cover_prompt, quality="medium", aspect_ratio="4:5")
 
         if not isinstance(image_bytes, bytes):
             raise HTTPException(status_code=500, detail="이미지 생성 실패")

@@ -509,7 +509,7 @@ async def _generate_texts(
 """
 
     try:
-        import google.generativeai as genai
+        from google import genai as _genai
         from app.core.config import get_settings
 
         api_key = get_settings().gemini_api_key or ""
@@ -519,10 +519,8 @@ async def _generate_texts(
                 detail="Gemini API 키가 설정되지 않았습니다. 설정 → AI API 키에서 입력하세요.",
             )
 
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-3-flash-preview")
-
-        response = model.generate_content(prompt)
+        client = _genai.Client(api_key=api_key)
+        response = await client.aio.models.generate_content(model="gemini-3-flash-preview", contents=prompt)
         text = response.text.strip()
 
         # JSON 파싱 (마크다운 코드 블록 제거)

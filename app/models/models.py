@@ -521,6 +521,7 @@ class WorkflowSession(BaseModel):
     # ★ 이미지 편집 단계 관련
     global_tone_adjustments: List[dict] = Field(default_factory=list)  # 전체 톤 조절 이력
     bubble_layers: List[BubbleLayer] = Field(default_factory=list)     # ★ 비파괴 말풍선 레이어
+    last_error: Optional[str] = None  # 백그라운드 작업 실패 시 에러 메시지
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
 

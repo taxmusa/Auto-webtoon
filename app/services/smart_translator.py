@@ -288,21 +288,21 @@ class SmartTranslator:
     def _ai_translate(self, text: str) -> Optional[str]:
         """Gemini AI로 번역 (429 재시도 포함)."""
         try:
-            import google.generativeai as genai
+            from google import genai as _genai
 
             api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY", "")
             if not api_key:
                 logger.warning("[SmartTranslator] Gemini API 키 없음")
                 return None
 
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel("gemini-3-flash-preview")
+            client = _genai.Client(api_key=api_key)
 
             max_retries = 2
             for attempt in range(max_retries + 1):
                 try:
-                    response = model.generate_content(
-                        self._build_translation_prompt(text)
+                    response = client.models.generate_content(
+                        model="gemini-3-flash-preview",
+                        contents=self._build_translation_prompt(text)
                     )
                     translated = response.text.strip()
                     # 따옴표 제거
@@ -329,14 +329,13 @@ class SmartTranslator:
         """여러 텍스트를 하나의 Gemini 호출로 일괄 번역."""
         results = {}
         try:
-            import google.generativeai as genai
+            from google import genai as _genai
 
             api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY", "")
             if not api_key:
                 return results
 
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel("gemini-3-flash-preview")
+            client = _genai.Client(api_key=api_key)
 
             # {index: text} → JSON 으로 구성
             batch_map = {str(idx): text for idx, text in items.items()}
@@ -345,7 +344,9 @@ class SmartTranslator:
             max_retries = 2
             for attempt in range(max_retries + 1):
                 try:
-                    response = model.generate_content(
+                    response = client.models.generate_content(
+                        model="gemini-3-flash-preview",
+                        contents=(
                         "You are a strict Korean-to-English LITERAL translator for AI image generation prompts.\n\n"
                         "CRITICAL RULES:\n"
                         "1. Translate LITERALLY. Do NOT interpret, rephrase, or be creative.\n"
@@ -357,6 +358,7 @@ class SmartTranslator:
                         "EXAMPLES:\n"
                         '{"0": "밝은 카페에서 커피를 마시는 여성"} → {"0": "A woman drinking coffee in a bright cafe"}\n\n'
                         f"Translate:\n{batch_json}"
+                        )
                     )
                     raw = response.text.strip()
                     # JSON 파싱

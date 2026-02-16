@@ -44,7 +44,7 @@ No text, no words, no letters. High quality image.
         generator = OpenAIGenerator(model=MODEL, api_key=api_key)
         
         # Generate
-        image_data = await generator.generate(full_prompt, size="1024x1024", quality="standard")
+        image_data = await generator.generate(full_prompt, quality="standard", aspect_ratio="4:5")
         
         # Save
         filename = f"{style_key}.png"

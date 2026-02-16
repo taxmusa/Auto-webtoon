@@ -39,7 +39,7 @@ async def generate_thumbnails():
 
         try:
             # Generate Image (1024x1024 for thumbnails)
-            image_data = await generator.generate(prompt, size="1024x1024", quality="standard")
+            image_data = await generator.generate(prompt, quality="standard", aspect_ratio="4:5")
             
             # Save Image
             filename = f"{style_id}.png"
