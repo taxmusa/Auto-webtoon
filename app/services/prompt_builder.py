@@ -476,7 +476,7 @@ def build_scene_chaining_context(
             else:
                 prev_summaries.append(f"- 장면 {sn}: {title}")
 
-    # ★ 최근 3개 씬만 유지 (토큰 절약 + 프롬프트 길이 제한 방지)
+    # ★ 최근 3개 씬만 유지 (일관성 우선, 토큰·길이 제한 방지)
     if len(prev_summaries) > 3:
         prev_summaries = prev_summaries[-3:]
 

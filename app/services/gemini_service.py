@@ -94,11 +94,25 @@ class GeminiService:
         logger.error(f"[detect_field] 모든 모델 실패")
         return FieldInfo(field=SpecializedField.GENERAL, target_year=current_year_str)
 
+    @staticmethod
+    def is_synopsis_keyword(keyword: str) -> bool:
+        """스토리 시놉시스로 볼 입력인지 여부 (자료 수집/분야감지 생략용)"""
+        k = (keyword or "").strip()
+        if len(k) >= 80:
+            return True
+        synopsis_keywords = ("스토리", "씬", "장면", "인스타툰", "만들", "그리")
+        return any(w in k for w in synopsis_keywords)
+
     async def collect_data(self, keyword: str, field_info: FieldInfo, model: str = "gemini-3-flash-preview", expert_mode: bool = False) -> list:
         """주제와 관련된 상세 자료 수집 (제목 + 본문) - 모델 fallback 지원, 전문가 모드 지원"""
         import logging
         logger = logging.getLogger(__name__)
-        
+
+        # 스토리 시놉시스 감지: 긴 문장 또는 웹툰/스토리 제작 의도 시 자료 수집 API 호출 없이 그대로 전달
+        if self.is_synopsis_keyword(keyword):
+            logger.info("[collect_data] 스토리 시놉시스로 판단하여 API 호출 없이 통과")
+            return [{"title": "스토리 시놉시스", "content": keyword}]
+
         # Fallback 모델 순서 정의 (3.0 계열만 사용)
         FALLBACK_MODELS = {
             "gemini-3-pro-preview": ["gemini-3-flash-preview"],
@@ -187,13 +201,16 @@ class GeminiService:
             ...
         ]"""
         
+        import asyncio
         last_error = None
         for try_model in models_to_try:
             try:
                 logger.info(f"[collect_data] 시도 중: {try_model}")
                 current_model = genai.GenerativeModel(try_model)
-                response = await current_model.generate_content_async(prompt)
-                
+                response = await asyncio.wait_for(
+                    current_model.generate_content_async(prompt),
+                    timeout=90
+                )
                 # JSON 파싱 (리스트 형태 추출)
                 match = re.search(r'\[.*\]', response.text, re.DOTALL)
                 if match:
@@ -242,8 +259,8 @@ class GeminiService:
             if not valid_chars:
                 return ""
             
-            # 독백 모드 체크
-            is_monologue = monologue_mode or len(valid_chars) == 1
+            # 독백 모드: 사용자가 명시적으로 켠 경우만 (캐릭터 1명이어도 자동 독백 안 함)
+            is_monologue = monologue_mode
             if is_monologue:
                 mono_name = monologue_character.strip() if monologue_character else valid_chars[0]["name"]
                 return (
@@ -274,7 +291,7 @@ class GeminiService:
         if not names:
             return ""
 
-        is_monologue = monologue_mode or len(names) == 1
+        is_monologue = monologue_mode
         mono_char = monologue_character.strip() if monologue_character else (names[0] if len(names) == 1 else "")
 
         if is_monologue and mono_char:
@@ -323,9 +340,9 @@ class GeminiService:
         if not rule_settings:
             rule_settings = RuleSettings()
 
-        # 독백 모드 판단: 명시적 활성화 또는 이름 1개
+        # 독백 모드: 사용자가 명시적으로 켠 경우만 (캐릭터 1명이어도 자동 독백 안 함)
         char_names_list = [n.strip() for n in character_names.split(",") if n.strip()] if character_names else []
-        is_monologue = monologue_mode or len(char_names_list) == 1
+        is_monologue = monologue_mode
         
         # Fallback 모델 순서 정의 (3.0 계열만 사용)
         FALLBACK_MODELS = {

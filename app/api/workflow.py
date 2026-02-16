@@ -14,7 +14,7 @@ from app.models.models import (
     ManualPromptOverrides, ThumbnailData, ThumbnailSource, ThumbnailPosition,
     SeriesInfo, SeriesEpisode, ToBeContinuedStyle, GeneratedImage,
     BubbleLayer, BubbleOverlay, BubblePosition, BubbleShape, CHARACTER_COLORS,
-    InstagramCaption
+    InstagramCaption, FieldInfo
 )
 from app.services.gemini_service import get_gemini_service
 from app.services.image_generator import get_generator
@@ -508,225 +508,160 @@ async def generate_preview(request: GeneratePreviewRequest):
         return JSONResponse(status_code=500, content={"detail": f"Preview generation failed: {str(e)}"})
 
 
-@router.post("/generate-images")
-async def generate_images(request: GenerateImagesRequest):
-    """이미지 일괄 생성 (Style System 2.0)"""
+async def _run_image_generation(request: GenerateImagesRequest):
+    """백그라운드에서 실행: 씬 전처리, 레퍼런스 로드, 씬별 이미지 생성 루프. 완료 시 session.state = REVIEWING_IMAGES."""
     session = sessions.get(request.session_id)
     if not session or not session.story:
-        raise HTTPException(status_code=404, detail="Session or story not found")
-    
-    session.state = WorkflowState.GENERATING_IMAGES
-    
-    # Settings storage
-    session.settings.image.model = request.model
-    session.settings.image.character_style_id = request.character_style_id
-    session.settings.image.background_style_id = request.background_style_id
-    session.settings.image.sub_style = request.sub_style
-    if request.manual_overrides:
-        session.settings.image.manual_overrides = ManualPromptOverrides(**request.manual_overrides)
+        logger.warning(f"[이미지 생성] 세션 없음 또는 스토리 없음: {request.session_id}")
+        return
+    try:
+        from app.services.reference_service import ReferenceService
+        from app.services.prompt_builder import build_scene_chaining_context
+        from app.models.models import GeneratedImage
 
-    import asyncio
-        
-    # Load styles
-    char_style = get_character_style(request.character_style_id) if request.character_style_id else None
-    bg_style = get_background_style(request.background_style_id) if request.background_style_id else None
-    overrides = session.settings.image.manual_overrides
-    sub_style = request.sub_style
+        # Load styles
+        char_style = get_character_style(request.character_style_id) if request.character_style_id else None
+        bg_style = get_background_style(request.background_style_id) if request.background_style_id else None
+        overrides = session.settings.image.manual_overrides
+        sub_style = request.sub_style
 
-    # Select generator — API 키 자동 선택
-    api_key = _resolve_api_key(request.model)
-    generator = get_generator(request.model, api_key)
-    
-    generated_images = []
-    
-    # ★★★ 씬 설명 전처리: 숫자/인포그래픽 → 시각적 비유 변환 ★★★
-    # "1.5억 증여" 같은 텍스트를 AI가 깨진 글자로 그리지 않도록
-    # Gemini로 시각적 비유로 변환한다.
-    if session.story and session.story.scenes:
-        try:
-            from app.services.scene_preprocessor import preprocess_scenes_for_image_gen
-            session.story.scenes = await preprocess_scenes_for_image_gen(
-                session.story.scenes
-            )
-            logger.info("[전처리] 씬 설명 전처리 완료 (숫자/인포그래픽 → 시각적 비유)")
-        except Exception as pp_err:
-            logger.warning(f"[전처리] 씬 설명 전처리 실패, 원본 유지: {pp_err}")
+        api_key = _resolve_api_key(request.model)
+        generator = get_generator(request.model, api_key)
 
-    # ★★★ 3종 레퍼런스 이미지 로드 ★★★
-    # 사용자가 설정한 Character/Method/Style 레퍼런스를 로드
-    from app.services.reference_service import ReferenceService
-    from app.services.prompt_builder import build_scene_chaining_context
-    
-    ref_service = ReferenceService(request.session_id)
-    logger.info(f"[레퍼런스] 세션 디렉토리: {ref_service.ref_dir}")
-    ref_data = ref_service.load_for_model(request.model) if request.use_reference_images else {}
-    
-    character_ref_bytes = ref_data.get("character")  # Character.jpg
-    method_ref_bytes = ref_data.get("method")        # Method.jpg
-    style_ref_bytes = ref_data.get("style")          # Style.jpg
-    
-    # 디버그: 각 레퍼런스 파일 크기 로그
-    logger.info(f"[레퍼런스] Character: {len(character_ref_bytes) if character_ref_bytes else 'None'}bytes, "
-                f"Method: {len(method_ref_bytes) if method_ref_bytes else 'None'}bytes, "
-                f"Style: {len(style_ref_bytes) if style_ref_bytes else 'None'}bytes")
-    
-    # Gemini 모델 판별
-    model_lower = request.model.lower() if request.model else ""
-    is_gemini = any(k in model_lower for k in ["gemini", "nano-banana"])
-    
-    # 레퍼런스 상태 로그
-    ref_status = []
-    if character_ref_bytes: ref_status.append("Character")
-    if method_ref_bytes: ref_status.append("Method")
-    if style_ref_bytes: ref_status.append("Style")
-    logger.info(f"[레퍼런스] 사용 가능: {', '.join(ref_status) if ref_status else '없음'} (모델: {request.model})")
+        # ★★★ 씬 설명 전처리 ★★★
+        if session.story and session.story.scenes:
+            try:
+                from app.services.scene_preprocessor import preprocess_scenes_for_image_gen
+                session.story.scenes = await preprocess_scenes_for_image_gen(session.story.scenes)
+                logger.info("[전처리] 씬 설명 전처리 완료 (숫자/인포그래픽 → 시각적 비유)")
+            except Exception as pp_err:
+                logger.warning(f"[전처리] 씬 설명 전처리 실패, 원본 유지: {pp_err}")
 
-    # ★ 성능 최적화: 레퍼런스 이미지를 PIL로 한 번만 변환 (매 씬마다 반복 방지)
-    if is_gemini:
-        from PIL import Image as PILImg
-        from io import BytesIO as BIO
-        if character_ref_bytes:
-            character_ref_bytes = PILImg.open(BIO(character_ref_bytes))
-        if method_ref_bytes:
-            method_ref_bytes = PILImg.open(BIO(method_ref_bytes))
-        if style_ref_bytes:
-            style_ref_bytes = PILImg.open(BIO(style_ref_bytes))
+        # ★★★ 3종 레퍼런스 비동기 로드 ★★★
+        ref_service = ReferenceService(request.session_id)
+        logger.info(f"[레퍼런스] 세션 디렉토리: {ref_service.ref_dir}")
+        ref_data = await ref_service.load_for_model(request.model) if request.use_reference_images else {}
 
-    # ★ 속도 최적화: 루프 밖에서 1회만 계산
-    scene_size = get_image_size_for_ratio(request.aspect_ratio or "4:5")
-    os.makedirs("output", exist_ok=True)
-    async def generate_single_scene(scene, ref_image_bytes=None,
-                                     method_bytes=None, style_bytes=None,
-                                     prev_scene_image=None, prev_scene_summaries=None):
-        """단일 씬 이미지 생성 — 3종 레퍼런스 + 씬 체이닝 지원"""
-        try:
-            prompt = build_styled_prompt(
-                scene=scene,
-                characters=session.story.characters,
-                character_style=char_style,
-                background_style=bg_style,
-                manual_overrides=overrides,
-                sub_style_name=sub_style,
-                aspect_ratio=request.aspect_ratio
-            )
-            
-            size = scene_size
-            
-            # Gemini: 3종 레퍼런스 + 이전 씬 체이닝을 모두 활용
-            # 일관성 체이닝: prev_scene_number 전달하여 라벨에 장면 번호 포함
-            _prev_sn = scene.scene_number - 1 if prev_scene_image else None
-            image_data = await generator.generate(
-                prompt,
-                reference_images=[ref_image_bytes] if ref_image_bytes else None,
-                size=size,
-                method_image=method_bytes,
-                style_image=style_bytes,
-                prev_scene_image=prev_scene_image,
-                prev_scene_summaries=prev_scene_summaries,
-                prev_scene_number=_prev_sn,
-                aspect_ratio=request.aspect_ratio
-            )
-            ref_count = sum(1 for x in [ref_image_bytes, method_bytes, style_bytes] if x)
-            logger.info(f"[Gemini] 씬 {scene.scene_number}: {ref_count}종 레퍼런스"
-                        f"{' + 씬체이닝' if prev_scene_image else ''}")
-            
-            # 파일 저장 (비동기 I/O)
-            filename = f"scene_{scene.scene_number}_{uuid.uuid4().hex[:6]}.png"
-            filepath = os.path.join("output", filename)
-            
-            if isinstance(image_data, bytes):
-                def _save_file():
-                    with open(filepath, "wb") as f:
-                        f.write(image_data)
-                await asyncio.to_thread(_save_file)
-            
-            return {
-                "scene_number": scene.scene_number,
-                "prompt_used": prompt,
-                "local_path": filepath,
-                "status": "generated",
-                "image_bytes": image_data if isinstance(image_data, bytes) else b""
-            }
-        except Exception as e:
-            import traceback
-            logger.error(f"Error generating scene {scene.scene_number}: {e}\n{traceback.format_exc()}")
-            return {
-                "scene_number": scene.scene_number,
-                "prompt_used": "Error",
-                "status": "error",
-                "error": str(e)
-            }
+        character_ref_bytes = ref_data.get("character")
+        method_ref_bytes = ref_data.get("method")
+        style_ref_bytes = ref_data.get("style")
 
-    # ★★★ 레퍼런스 + 씬 체이닝 통합 생성 루프 ★★★
-    #
-    # [전략]
-    #   Gemini: 3종 레퍼런스 + 이전 씬 이미지/요약 → 최고 일관성
-    #
-    # [씬 체이닝]
-    #   씬 2+부터 직전 씬 이미지 + 이전 씬 텍스트 요약 전달
-    #   "현재 프롬프트 우선, 직전 씬은 캐릭터 외형 참고용"
-    from app.models.models import GeneratedImage
-    session.images = []
-    stop_signals[request.session_id] = False
-    
-    # 생성된 씬 이미지 저장 (체이닝용)
-    generated_scene_images = {}  # {scene_number: image_bytes}
-    
-    # ★ 시리즈 필터링: target_series가 지정되면 해당 시리즈 씬만 생성
-    scenes_to_generate = session.story.scenes
-    if request.target_series and session.story.series_info:
-        episodes = session.story.series_info.episodes
-        target_ep = next((ep for ep in episodes if ep.episode_number == request.target_series), None)
-        if target_ep:
-            scenes_to_generate = session.story.scenes[target_ep.scene_start:target_ep.scene_end]
-            logger.info(f"[시리즈] 시리즈 {request.target_series} 씬만 생성: 인덱스 {target_ep.scene_start}~{target_ep.scene_end-1} ({len(scenes_to_generate)}장)")
-    
-    for scene_idx, scene in enumerate(scenes_to_generate):
-        if stop_signals.get(request.session_id, False):
-            logger.info(f"[STOP] 세션 {request.session_id} 이미지 생성 중단됨 "
-                        f"({len(session.images)}/{len(session.story.scenes)} 완료)")
-            break
-        
-        # ★ 씬 간 딜레이: 첫 씬 제외, Gemini rate limit 방지
-        if scene_idx > 0:
-            await asyncio.sleep(2)
-        
-        # 씬 체이닝: 직전 씬 이미지 + 이전 씬 텍스트 요약
-        prev_scene_image = None
-        prev_scene_summaries = None
-        
-        if request.scene_chaining and scene.scene_number > 1:
-            prev_summaries, prev_sn = build_scene_chaining_context(
-                session.story.scenes, scene.scene_number
-            )
-            prev_scene_summaries = prev_summaries if prev_summaries else None
-            
-            # 직전 씬 이미지 로드
-            if prev_sn and prev_sn in generated_scene_images:
-                prev_scene_image = generated_scene_images[prev_sn]
-        
-        mode_parts = []
-        if character_ref_bytes: mode_parts.append("Character")
-        if method_ref_bytes: mode_parts.append("Method")
-        if style_ref_bytes: mode_parts.append("Style")
-        if prev_scene_image: mode_parts.append("체이닝")
-        mode_str = f"레퍼런스({'+'.join(mode_parts)})" if mode_parts else "독립 생성"
-        
-        logger.info(f"[생성] 씬 {scene.scene_number}/{len(session.story.scenes)} — {mode_str}")
-        
-        res = await generate_single_scene(
-            scene,
-            ref_image_bytes=character_ref_bytes,
-            method_bytes=method_ref_bytes,
-            style_bytes=style_ref_bytes,
-            prev_scene_image=prev_scene_image,
-            prev_scene_summaries=prev_scene_summaries
-        )
-        
-        # ★ 실패 시 5초 대기 후 1회 자동 재시도
-        if res.get("status") == "error":
-            logger.warning(f"[재시도] 씬 {scene.scene_number} 첫 시도 실패: {res.get('error', '')} → 5초 후 재시도")
-            await asyncio.sleep(5)
+        logger.info(f"[레퍼런스] Character: {len(character_ref_bytes) if character_ref_bytes else 'None'}bytes, "
+                    f"Method: {len(method_ref_bytes) if method_ref_bytes else 'None'}bytes, "
+                    f"Style: {len(style_ref_bytes) if style_ref_bytes else 'None'}bytes")
+
+        model_lower = request.model.lower() if request.model else ""
+        is_gemini = any(k in model_lower for k in ["gemini", "nano-banana"])
+        ref_status = []
+        if character_ref_bytes: ref_status.append("Character")
+        if method_ref_bytes: ref_status.append("Method")
+        if style_ref_bytes: ref_status.append("Style")
+        logger.info(f"[레퍼런스] 사용 가능: {', '.join(ref_status) if ref_status else '없음'} (모델: {request.model})")
+
+        if is_gemini:
+            from PIL import Image as PILImg
+            from io import BytesIO as BIO
+            if character_ref_bytes:
+                character_ref_bytes = PILImg.open(BIO(character_ref_bytes))
+            if method_ref_bytes:
+                method_ref_bytes = PILImg.open(BIO(method_ref_bytes))
+            if style_ref_bytes:
+                style_ref_bytes = PILImg.open(BIO(style_ref_bytes))
+
+        scene_size = get_image_size_for_ratio(request.aspect_ratio or "4:5")
+        os.makedirs("output", exist_ok=True)
+
+        async def generate_single_scene(scene, ref_image_bytes=None,
+                                         method_bytes=None, style_bytes=None,
+                                         prev_scene_image=None, prev_scene_summaries=None):
+            try:
+                prompt = build_styled_prompt(
+                    scene=scene,
+                    characters=session.story.characters,
+                    character_style=char_style,
+                    background_style=bg_style,
+                    manual_overrides=overrides,
+                    sub_style_name=sub_style,
+                    aspect_ratio=request.aspect_ratio
+                )
+                size = scene_size
+                _prev_sn = scene.scene_number - 1 if prev_scene_image else None
+                image_data = await generator.generate(
+                    prompt,
+                    reference_images=[ref_image_bytes] if ref_image_bytes else None,
+                    size=size,
+                    method_image=method_bytes,
+                    style_image=style_bytes,
+                    prev_scene_image=prev_scene_image,
+                    prev_scene_summaries=prev_scene_summaries,
+                    prev_scene_number=_prev_sn,
+                    aspect_ratio=request.aspect_ratio
+                )
+                ref_count = sum(1 for x in [ref_image_bytes, method_bytes, style_bytes] if x)
+                logger.info(f"[Gemini] 씬 {scene.scene_number}: {ref_count}종 레퍼런스"
+                            f"{' + 씬체이닝' if prev_scene_image else ''}")
+                filename = f"scene_{scene.scene_number}_{uuid.uuid4().hex[:6]}.png"
+                filepath = os.path.join("output", filename)
+                if isinstance(image_data, bytes):
+                    def _save_file():
+                        with open(filepath, "wb") as f:
+                            f.write(image_data)
+                    await asyncio.to_thread(_save_file)
+                return {
+                    "scene_number": scene.scene_number,
+                    "prompt_used": prompt,
+                    "local_path": filepath,
+                    "status": "generated",
+                    "image_bytes": image_data if isinstance(image_data, bytes) else b""
+                }
+            except Exception as e:
+                import traceback
+                logger.error(f"Error generating scene {scene.scene_number}: {e}\n{traceback.format_exc()}")
+                return {
+                    "scene_number": scene.scene_number,
+                    "prompt_used": "Error",
+                    "status": "error",
+                    "error": str(e)
+                }
+
+        session.images = []
+        stop_signals[request.session_id] = False
+        generated_scene_images = {}
+
+        scenes_to_generate = session.story.scenes
+        if request.target_series and session.story.series_info:
+            episodes = session.story.series_info.episodes
+            target_ep = next((ep for ep in episodes if ep.episode_number == request.target_series), None)
+            if target_ep:
+                scenes_to_generate = session.story.scenes[target_ep.scene_start:target_ep.scene_end]
+                logger.info(f"[시리즈] 시리즈 {request.target_series} 씬만 생성: 인덱스 {target_ep.scene_start}~{target_ep.scene_end-1} ({len(scenes_to_generate)}장)")
+
+        for scene_idx, scene in enumerate(scenes_to_generate):
+            if stop_signals.get(request.session_id, False):
+                logger.info(f"[STOP] 세션 {request.session_id} 이미지 생성 중단됨 "
+                            f"({len(session.images)}/{len(session.story.scenes)} 완료)")
+                break
+            if scene_idx > 0:
+                await asyncio.sleep(1)
+
+            prev_scene_image = None
+            prev_scene_summaries = None
+            if request.scene_chaining and scene.scene_number > 1:
+                prev_summaries, prev_sn = build_scene_chaining_context(
+                    session.story.scenes, scene.scene_number
+                )
+                prev_scene_summaries = prev_summaries if prev_summaries else None
+                if prev_sn and prev_sn in generated_scene_images:
+                    prev_scene_image = generated_scene_images[prev_sn]
+
+            mode_parts = []
+            if character_ref_bytes: mode_parts.append("Character")
+            if method_ref_bytes: mode_parts.append("Method")
+            if style_ref_bytes: mode_parts.append("Style")
+            if prev_scene_image: mode_parts.append("체이닝")
+            mode_str = f"레퍼런스({'+'.join(mode_parts)})" if mode_parts else "독립 생성"
+            logger.info(f"[생성] 씬 {scene.scene_number}/{len(session.story.scenes)} — {mode_str}")
+
             res = await generate_single_scene(
                 scene,
                 ref_image_bytes=character_ref_bytes,
@@ -736,40 +671,77 @@ async def generate_images(request: GenerateImagesRequest):
                 prev_scene_summaries=prev_scene_summaries
             )
             if res.get("status") == "error":
-                logger.error(f"[재시도] 씬 {scene.scene_number} 재시도도 실패: {res.get('error', '')}")
+                logger.warning(f"[재시도] 씬 {scene.scene_number} 첫 시도 실패: {res.get('error', '')} → 5초 후 재시도")
+                await asyncio.sleep(5)
+                res = await generate_single_scene(
+                    scene,
+                    ref_image_bytes=character_ref_bytes,
+                    method_bytes=method_ref_bytes,
+                    style_bytes=style_ref_bytes,
+                    prev_scene_image=prev_scene_image,
+                    prev_scene_summaries=prev_scene_summaries
+                )
+                if res.get("status") == "error":
+                    logger.error(f"[재시도] 씬 {scene.scene_number} 재시도도 실패: {res.get('error', '')}")
+                else:
+                    logger.info(f"[재시도] 씬 {scene.scene_number} 재시도 성공!")
+
+            if res.get("image_bytes"):
+                generated_scene_images.clear()
+                generated_scene_images[scene.scene_number] = res["image_bytes"]
+
+            if res.get("local_path"):
+                img = GeneratedImage(
+                    scene_number=res["scene_number"],
+                    prompt_used=res["prompt_used"],
+                    local_path=res["local_path"],
+                    status="generated"
+                )
             else:
-                logger.info(f"[재시도] 씬 {scene.scene_number} 재시도 성공!")
-        
-        # 체이닝용 이미지 저장 (직전 씬만 보관하여 메모리 절약)
-        if res.get("image_bytes"):
-            generated_scene_images.clear()
-            generated_scene_images[scene.scene_number] = res["image_bytes"]
-        
-        if res.get("local_path"):
-            img = GeneratedImage(
-                scene_number=res["scene_number"],
-                prompt_used=res["prompt_used"],
-                local_path=res["local_path"],
-                status="generated"
-            )
-        else:
-            img = GeneratedImage(
-                scene_number=res["scene_number"],
-                prompt_used=res.get("prompt_used", "Error"),
-                local_path="",
-                status="error"
-            )
-        session.images.append(img)
-    
-    # 중단 신호 정리
-    stop_signals.pop(request.session_id, None)
-    session.state = WorkflowState.REVIEWING_IMAGES
-    
-    return {
-        "session_id": session.session_id,
-        "state": session.state.value,
-        "images": [img.model_dump() for img in session.images]
-    }
+                img = GeneratedImage(
+                    scene_number=res["scene_number"],
+                    prompt_used=res.get("prompt_used", "Error"),
+                    local_path="",
+                    status="error"
+                )
+            session.images.append(img)
+
+        stop_signals.pop(request.session_id, None)
+        session.state = WorkflowState.REVIEWING_IMAGES
+        logger.info(f"[이미지 생성] 완료: 세션 {request.session_id}, {len(session.images)}장")
+    except Exception as e:
+        import traceback
+        logger.error(f"[이미지 생성] 백그라운드 실패: {e}\n{traceback.format_exc()}")
+        stop_signals.pop(request.session_id, None)
+        session = sessions.get(request.session_id)
+        if session:
+            session.state = WorkflowState.REVIEWING_IMAGES
+
+
+@router.post("/generate-images")
+async def generate_images(request: GenerateImagesRequest):
+    """이미지 일괄 생성 (Style System 2.0) — 작업 시작만 하고 즉시 202 반환, 진행률은 세션 API 폴링"""
+    session = sessions.get(request.session_id)
+    if not session or not session.story:
+        raise HTTPException(status_code=404, detail="Session or story not found")
+
+    session.state = WorkflowState.GENERATING_IMAGES
+    session.settings.image.model = request.model
+    session.settings.image.character_style_id = request.character_style_id
+    session.settings.image.background_style_id = request.background_style_id
+    session.settings.image.sub_style = request.sub_style
+    if request.manual_overrides:
+        session.settings.image.manual_overrides = ManualPromptOverrides(**request.manual_overrides)
+
+    asyncio.create_task(_run_image_generation(request))
+    return JSONResponse(
+        status_code=202,
+        content={
+            "session_id": session.session_id,
+            "state": "generating",
+            "message": "이미지 생성이 백그라운드에서 시작되었습니다. 진행률은 세션 API로 조회하세요."
+        }
+    )
 
 
 class StopGenerationRequest(BaseModel):
@@ -954,7 +926,7 @@ async def test_model(request: TestModelRequest):
 # ============================================
 
 class CollectDataRequest(BaseModel):
-    session_id: str
+    session_id: Optional[str] = None
     keyword: str
     model: str = "gemini-3-flash-preview"
     expert_mode: bool = False
@@ -962,23 +934,35 @@ class CollectDataRequest(BaseModel):
 
 @router.post("/collect-data")
 async def collect_data(request: CollectDataRequest):
-    """자료 수집"""
+    """자료 수집. 세션이 없으면 자동 생성하여 프롬프트만으로 진행 가능하게 함."""
     import logging
     logger = logging.getLogger(__name__)
-    
-    session = sessions.get(request.session_id)
+
+    session = sessions.get(request.session_id) if request.session_id else None
     if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    
+        new_id = str(uuid.uuid4())
+        session = WorkflowSession(
+            session_id=new_id,
+            mode=WorkflowMode.AUTO,
+            keyword=request.keyword,
+            state=WorkflowState.COLLECTING_INFO
+        )
+        sessions[new_id] = session
+        logger.info(f"[collect_data] 세션 없음 → 새 세션 생성: {new_id}")
+
     gemini = get_gemini_service()
     
     # AI를 사용해 상세 정보 수집
     try:
         logger.info(f"[collect_data] 모델: {request.model}, 키워드: {request.keyword}")
-        
-        # 사용자 선택 모델 전달
-        field_info = session.field_info or await gemini.detect_field(request.keyword, request.model)
-        logger.info(f"[collect_data] 분야 감지 완료: {field_info.field}")
+
+        # 스토리 시놉시스면 분야 감지 생략 (타임아웃 방지)
+        if gemini.is_synopsis_keyword(request.keyword):
+            field_info = FieldInfo(field=SpecializedField.GENERAL, target_year=str(datetime.now().year))
+            logger.info("[collect_data] 스토리 시놉시스로 분야 감지 생략")
+        else:
+            field_info = session.field_info or await gemini.detect_field(request.keyword, request.model)
+            logger.info(f"[collect_data] 분야 감지 완료: {field_info.field}")
         
         items = await gemini.collect_data(request.keyword, field_info, request.model, request.expert_mode)
         logger.info(f"[collect_data] 자료 수집 완료: {len(items)}개 항목 (전문가모드: {request.expert_mode})")
@@ -1219,7 +1203,7 @@ async def regenerate_image(request: RegenerateImageRequest):
         
         ref_service = ReferenceService(request.session_id)
         logger.info(f"[재생성] 세션 디렉토리: {ref_service.ref_dir}")
-        ref_data = ref_service.load_for_model(model_name)
+        ref_data = await ref_service.load_for_model(model_name)
         character_ref = ref_data.get("character")
         method_ref = ref_data.get("method")
         style_ref = ref_data.get("style")

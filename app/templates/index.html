@@ -2420,6 +2420,12 @@
                     throw new Error(data.detail || `서버 오류 (${res.status})`);
                 }
 
+                // 세션이 없었을 때 백엔드가 새로 만들었을 수 있음 → 저장
+                if (data.session_id) {
+                    sessionId = data.session_id;
+                    localStorage.setItem('lastSessionId', sessionId);
+                }
+
                 collectedData = data.items || [];
 
                 if (collectedData.length === 0) {
@@ -4107,14 +4113,7 @@
             const chars = getCharactersInput();
             const hidden = document.getElementById('character-names-input');
             if (hidden) hidden.value = chars.map(c => c.name).join(', ');
-            // 독백 모드 자동 감지 — 이름이 실제로 입력된 캐릭터만 카운트
-            const filledChars = chars.filter(c => c.name && c.name.trim().length > 0);
-            const check = document.getElementById('monologue-mode-check');
-            if (filledChars.length === 1 && check && !check.checked) {
-                check.checked = true;
-                onMonologueModeChange();
-                showToast('캐릭터 1명 — 독백 모드 자동 활성화', 'info');
-            }
+            // 독백 모드는 사용자가 체크할 때만 활성화 (자동 감지 제거)
             updateMonologueCharList();
             updateAddCharBtn();
         }
@@ -4744,6 +4743,7 @@
         // --- Step 5: 이미지 생성 ---
         var genPollInterval = null;  // 폴링 interval
         var genIsStopped = false;    // 중단 플래그
+        var genStartTime = 0;        // 전체 생성 시작 시각 (경과 표시용)
         var genIsPaused = false;     // 일시정지 플래그
 
         function getImageUrl(localPath) {
@@ -4886,40 +4886,48 @@
             const model = 'nano-banana-pro';
             const ratio = document.getElementById('gen-aspect-ratio').value;
 
-            try {
-                // 첫 번째 씬 "생성 중" 표시
-                updateSceneImage(0, 'generating');
+            // 첫 번째 씬 "생성 중" 표시
+            updateSceneImage(0, 'generating');
 
-                const reqBody = {
-                    session_id: sessionId,
-                    character_style_id: null,
-                    background_style_id: null,
-                    trained_character_id: null,
-                    sub_style: "",
-                    manual_overrides: { character_style_prompt: "", background_style_prompt: "", style_prompt: "", additional_instructions: "" },
-                    model: model,
-                    aspect_ratio: ratio,
-                    use_reference_images: true,
-                    scene_chaining: true
-                };
+            const reqBody = {
+                session_id: sessionId,
+                character_style_id: null,
+                background_style_id: null,
+                trained_character_id: null,
+                sub_style: "",
+                manual_overrides: { character_style_prompt: "", background_style_prompt: "", style_prompt: "", additional_instructions: "" },
+                model: model,
+                aspect_ratio: ratio,
+                use_reference_images: true,
+                scene_chaining: true
+            };
 
-                // ★ fetch 응답 확인 후 폴링 시작 (기존: fire-and-forget)
-                const genRes = await fetch('/api/workflow/generate-images', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(reqBody)
-                });
-                if (!genRes.ok) {
-                    const errText = await genRes.text().catch(() => '');
-                    throw new Error(`서버 응답 오류 (${genRes.status}): ${errText.slice(0, 200)}`);
+            // ★ fire-and-forget: 요청 후 즉시 폴링 시작 → 생성 중 실시간 진행률 표시 (202 수신 시 폴링)
+            fetch('/api/workflow/generate-images', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(reqBody)
+            })
+            .then(async (res) => {
+                if (!res.ok) {
+                    const errText = await res.text().catch(() => '');
+                    throw new Error(`서버 응답 오류 (${res.status}): ${errText.slice(0, 200)}`);
                 }
-
+                // 202 Accepted: 백그라운드 생성 시작 → 즉시 폴링으로 진행률 표시
+                if (res.status === 202) {
+                    genStartTime = Date.now();
+                    checkImageProgress(sceneCount);
+                    return;
+                }
+                // 하위 호환: 200이 오면 완료된 응답이어도 폴링으로 UI 동기화
+                genStartTime = Date.now();
                 checkImageProgress(sceneCount);
-            } catch (e) {
+            })
+            .catch((e) => {
                 showToast('이미지 생성 시작 오류: ' + e.message, 'error');
                 document.getElementById('btn-start-gen').disabled = false;
                 document.getElementById('btn-start-gen').innerText = '🎨 전체 이미지 생성';
-            }
+            });
         }
 
         // 하위 호환 래퍼 (기존 코드에서 호출할 수 있으므로 유지)
@@ -4980,12 +4988,15 @@
                     progressBar.style.width = `${pct}%`;
                     statusCount.innerText = `${genCount}/${total}`;
 
+                    const totalElapsed = genStartTime ? Math.floor((Date.now() - genStartTime) / 1000) : 0;
+                    const elapsedStr = totalElapsed >= 60 ? `${Math.floor(totalElapsed/60)}분 ${totalElapsed%60}초` : `${totalElapsed}초`;
+
                     if (genCount > 0 && genCount < total) {
                         statusText.innerText = `🎨 ${genCount}/${total} 생성 완료`;
-                        statusSub.innerText = `씬 ${doneCount + 1} 생성 중... (씬당 약 15~30초)`;
+                        statusSub.innerText = `씬 ${doneCount + 1} 생성 중 (경과 ${elapsedStr}) · 씬당 약 15~30초`;
                     } else if (genCount === 0) {
                         statusText.innerText = '🎨 이미지 생성 중...';
-                        statusSub.innerText = pollCount > 3 ? '씬 1 생성 중... (첫 씬은 조금 더 걸립니다)' : '첫 번째 씬을 생성하고 있습니다...';
+                        statusSub.innerText = pollCount > 3 ? `씬 1 생성 중 (경과 ${elapsedStr}) · 첫 씬은 조금 더 걸립니다` : '첫 번째 씬을 생성하고 있습니다...';
                     }
 
                     if (errors.length > 0) {
@@ -5110,9 +5121,9 @@
                 } catch (e) {
                     console.error(`씬 ${sn} 재생성 실패:`, e);
                 }
-                // 씬 간 2초 딜레이 (rate limit 방지)
+                // 씬 간 1초 딜레이 (rate limit 방지)
                 if (sceneNumbers.indexOf(sn) < sceneNumbers.length - 1) {
-                    await new Promise(r => setTimeout(r, 2000));
+                    await new Promise(r => setTimeout(r, 1000));
                 }
             }
             

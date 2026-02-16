@@ -747,17 +747,21 @@ Please generate this character reference sheet image."""
     # 모델별 레퍼런스 적용
     # ============================================
 
-    def load_for_model(self, model_name: str = "") -> Dict[str, Optional[bytes]]:
-        """레퍼런스 이미지 3종을 모두 로드하여 반환
-        
-        Gemini 3.0 Preview로 모델 고정이므로 항상 3장 전부 반환.
-        3종 레퍼런스 체이닝: Character + Method + Style 항상 첨부
-        """
+    def _load_for_model_sync(self) -> Dict[str, Optional[bytes]]:
+        """동기: 레퍼런스 3종 파일 I/O (스레드 풀에서 호출용)"""
         return {
             "character": self.load_reference("character"),
             "method": self.load_reference("method"),
             "style": self.load_reference("style"),
         }
+
+    async def load_for_model(self, model_name: str = "") -> Dict[str, Optional[bytes]]:
+        """레퍼런스 이미지 3종을 비동기 로드 (I/O를 스레드 풀에서 실행해 이벤트 루프 블로킹 방지)
+        
+        Gemini 3.0 Preview로 모델 고정이므로 항상 3장 전부 반환.
+        3종 레퍼런스 체이닝: Character + Method + Style 항상 첨부
+        """
+        return await asyncio.to_thread(self._load_for_model_sync)
 
     @staticmethod
     def get_model_reference_info(model_name: str = "") -> Dict[str, str]:
@@ -779,7 +783,7 @@ Please generate this character reference sheet image."""
         prompt: str = "두 캐릭터가 카페에서 대화하는 따뜻한 장면"
     ) -> bytes:
         """현재 레퍼런스로 테스트 이미지 1장 생성"""
-        refs = self.load_for_model(model_name)
+        refs = await self.load_for_model(model_name)
         model_lower = model_name.lower() if model_name else ""
 
         # Gemini 계열: 3종 레퍼런스 + 프롬프트
