@@ -1543,11 +1543,12 @@
                     <div class="card" style="padding: 1.5rem;">
                         <h2 class="card-title" style="font-size: 1.25rem;">📝 캡션 및 태그 수정</h2>
                         <button class="btn" onclick="generateCaption()"
-                            style="width:100%; margin-bottom:0.75rem; font-size:0.85rem; padding:8px;
-                                   background:transparent; color:var(--accent); border:2px solid var(--accent);
-                                   transition:all 0.2s;"
-                            onmouseenter="this.style.background='var(--accent)';this.style.color='#fff';"
-                            onmouseleave="this.style.background='transparent';this.style.color='var(--accent)';">
+                            style="width:100%; margin-bottom:0.75rem; font-size:0.95rem; padding:12px 16px;
+                                   background:linear-gradient(135deg, var(--primary), #a855f7);
+                                   color:#fff; border:none; border-radius:8px; font-weight:700;
+                                   box-shadow:0 2px 8px rgba(99,102,241,0.3); transition:all 0.2s;"
+                            onmouseenter="this.style.opacity='0.85'; this.style.transform='translateY(-1px)';"
+                            onmouseleave="this.style.opacity='1'; this.style.transform='translateY(0)';">
                             ✨ AI 캡션 자동 채우기
                         </button>
                         <div class="form-group">
@@ -3644,6 +3645,12 @@
                 reviewArea.style.display = 'block';
                 actionsEl.style.display = 'flex';
 
+                // 이미지 생성 컨트롤 바 표시
+                if (storyData.scenes && storyData.scenes.length > 0) {
+                    const genBar = document.getElementById('gen-control-bar');
+                    if (genBar) genBar.style.display = 'block';
+                }
+
                 // 모델 전환 안내 메시지
                 if (data.model_switched && data.model_used) {
                     const switchNotice = document.createElement('div');
@@ -4117,6 +4124,7 @@
         // 씬 설명 인라인 수정
         function updateSceneDesc(idx, value) {
             storyData.scenes[idx].scene_description = value.trim();
+            storyData.scenes[idx].image_prompt = null;
             scheduleSceneSync();
         }
 
@@ -5551,6 +5559,38 @@
             if (pubBtn) { pubBtn.disabled = true; pubBtn._origText = pubBtn.innerText; pubBtn.innerHTML = '<span style="display:inline-block;animation:spin 1s linear infinite;">⏳</span> 발행 중...'; }
             if (schedBtn) { schedBtn.disabled = true; }
 
+            // ★ 진행 상황 표시 영역 생성
+            let progressEl = document.getElementById('publish-progress');
+            if (!progressEl) {
+                progressEl = document.createElement('div');
+                progressEl.id = 'publish-progress';
+                progressEl.style.cssText = 'font-size:0.82rem; color:var(--text-muted); padding:8px 12px; margin-top:6px; line-height:1.6; background:rgba(99,102,241,0.06); border-radius:6px; border:1px solid rgba(99,102,241,0.15);';
+                if (pubBtn) pubBtn.parentElement.insertBefore(progressEl, pubBtn.nextSibling);
+            }
+            const imgCount = seriesImgs.length;
+            const publishSteps = [
+                { msg: '📤 이미지 업로드 준비 중...', delay: 0 },
+                { msg: '☁️ 클라우드에 이미지 업로드 중... (1/' + imgCount + ')', delay: 2000 },
+                { msg: '☁️ 클라우드에 이미지 업로드 중... (' + Math.ceil(imgCount / 2) + '/' + imgCount + ')', delay: 5000 },
+                { msg: '🔍 이미지 URL 검증 중...', delay: 8000 },
+                { msg: '📸 Instagram API에 발행 요청 중...', delay: 11000 },
+                { msg: '⏳ Instagram 처리 대기 중...', delay: 18000 },
+                { msg: '⏳ 아직 처리 중입니다. 조금만 더 기다려주세요...', delay: 30000 },
+            ];
+            const publishTimers = [];
+            publishSteps.forEach(function(s) {
+                publishTimers.push(setTimeout(function() {
+                    if (progressEl) progressEl.textContent = s.msg;
+                }, s.delay));
+            });
+
+            // 진행 상황 정리 헬퍼
+            function cleanupProgress() {
+                publishTimers.forEach(function(t) { clearTimeout(t); });
+                var el = document.getElementById('publish-progress');
+                if (el) el.remove();
+            }
+
             try {
                 const res = await fetch('/api/workflow/publish', {
                     method: 'POST',
@@ -5563,6 +5603,7 @@
                     })
                 });
                 const data = await res.json();
+                cleanupProgress();
                 if (data.success) {
                     showToast('인스타그램 발행 완료!', 'success');
                     // ★ 성공 배너 표시
@@ -5600,6 +5641,7 @@
                     console.error('[발행 실패 진단]', data);
                 }
             } catch (e) {
+                cleanupProgress();
                 showToast('발행 오류: ' + e.message, 'error');
             }
             // 실패 시 버튼 복원
@@ -6104,7 +6146,7 @@
             const isNarr = bubble.type === 'narration';
             const isBold = bubble.bold || shapeCSS.fontWeight;
             const fontFamily = bubble.font_family || layerFont;
-            const fontSize = Math.round((bubble.font_size || 18) * fontScale);
+            const fontSize = Math.round((bubble.font_size || 20) * fontScale);
 
             const div = document.createElement('div');
             div.dataset.bubbleIdx = idx;
@@ -6370,7 +6412,7 @@
                         <select onchange="updateBubbleShape(${i}, this.value)" style="font-size: 0.7rem; padding: 2px 4px; flex: 1;" title="말풍선 모양">
                             ${shapeOptions}
                         </select>
-                        <input type="number" value="${bubble.font_size||18}" min="8" max="48" step="1"
+                        <input type="number" value="${bubble.font_size||20}" min="8" max="48" step="1"
                             onchange="updateBubbleFontSize(${i}, this.value)"
                             style="font-size: 0.7rem; padding: 2px 4px; width:48px; border:1px solid var(--border); border-radius:4px; background:var(--bg-input); color:var(--text); text-align:center;" title="글자 크기">
                         <label style="font-size:0.7rem; display:flex; align-items:center; gap:2px; cursor:pointer; white-space:nowrap;" title="볼드 처리">
@@ -6439,7 +6481,7 @@
                                 tail_direction: j % 2 === 0 ? 'bottom-left' : 'bottom-right',
                                 tail: j % 2 === 0 ? 'bottom-left' : 'bottom-right',
                                 bg_color: '#FFFFFF', text_color: '#000000', border_color: '#333333',
-                                font_size: 18, visible: true, opacity: 0.95, bold: false,
+                                font_size: 20, visible: true, opacity: 0.95, bold: false,
                                 x: 10 + (j % 5) * 8, y: 5 + j * 16, w: 40, h: 14
                             });
                         });
@@ -6595,7 +6637,7 @@
                 position: "top-center", shape: "round",
                 x: 10 + offset, y: 5 + offset, w: 40, h: 14,
                 bg_color: "#FFFFFF", text_color: "#000000", border_color: "#333333",
-                font_size: 18, visible: true, opacity: 0.95, bold: false,
+                font_size: 20, visible: true, opacity: 0.95, bold: false,
                 text_align: 'left'
             });
             renderBubbleEditor();
@@ -6708,7 +6750,7 @@
                     x: 10 + offset, y: 5 + (i * 16),
                     w: 40, h: 14,
                     bg_color: '#FFFFFF', text_color: '#000000', border_color: '#333333',
-                    font_size: 18, visible: true, opacity: 0.95, bold: false
+                    font_size: 20, visible: true, opacity: 0.95, bold: false
                 });
             }
 

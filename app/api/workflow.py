@@ -303,7 +303,7 @@ async def update_scenes_bulk(request: BulkUpdateScenesRequest):
                 if scene.scene_number == sn:
                     if "scene_description" in scene_data and scene_data["scene_description"]:
                         scene.scene_description = scene_data["scene_description"]
-                    if "image_prompt" in scene_data and scene_data["image_prompt"] is not None:
+                    if "image_prompt" in scene_data:
                         scene.image_prompt = scene_data["image_prompt"]
                     if "dialogues" in scene_data and scene_data["dialogues"]:
                         from app.models.models import Dialogue
