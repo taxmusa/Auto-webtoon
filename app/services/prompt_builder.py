@@ -306,7 +306,7 @@ Characters in this scene:
 
     _scene_visual = ""
     if hasattr(scene, 'image_prompt') and scene.image_prompt:
-        _scene_visual = _clean_scene_desc(scene.image_prompt)
+        _scene_visual = scene.image_prompt
     else:
         _scene_visual = _clean_scene_desc(scene.scene_description or "")
 

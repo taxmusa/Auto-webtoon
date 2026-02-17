@@ -4009,6 +4009,30 @@
                                 rows="2">${(s.scene_description||'').replace(/</g,'&lt;')}</textarea>
                         </div>
 
+                        <!-- 이미지 프롬프트 토글 -->
+                        <div style="margin-top:2px;">
+                            <div onclick="toggleImagePrompt(${idx})" style="cursor:pointer; font-size:0.65rem; color:var(--primary); display:flex; align-items:center; gap:3px; padding:2px 0; user-select:none;">
+                                <span id="img-prompt-arrow-${idx}" style="font-size:0.6rem; transition:transform 0.2s;">▶</span>
+                                <span>🎨 이미지 프롬프트 보기</span>
+                            </div>
+                            <div id="img-prompt-area-${idx}" style="display:none; margin-top:2px;">
+                                <textarea id="img-prompt-text-${idx}"
+                                    oninput="storyData.scenes[${idx}].image_prompt = this.value;"
+                                    style="width:100%; border:1px solid rgba(99,102,241,0.3); border-radius:6px; padding:4px 7px; font-size:0.75rem; background:rgba(99,102,241,0.04); resize:vertical; min-height:48px; font-family:inherit; box-sizing:border-box; color:var(--text); line-height:1.4;"
+                                    rows="3" placeholder="이미지 생성에 사용되는 프롬프트 (직접 편집 가능)">${(s.image_prompt||'').replace(/</g,'&lt;')}</textarea>
+                                <div style="display:flex; justify-content:flex-end; gap:4px; margin-top:3px;">
+                                    <button onclick="regenAIPrompt(${idx}, this)"
+                                        style="background:none; border:1px solid var(--text-muted); color:var(--text-muted); cursor:pointer; padding:2px 8px; border-radius:5px; font-size:0.65rem; font-weight:600; transition:all 0.2s;"
+                                        onmouseenter="this.style.borderColor='var(--primary)';this.style.color='var(--primary)';"
+                                        onmouseleave="this.style.borderColor='var(--text-muted)';this.style.color='var(--text-muted)';"
+                                        title="현재 씬 설명을 기반으로 AI가 이미지 프롬프트를 새로 작성합니다">🔄 AI 프롬프트 재생성</button>
+                                    <button onclick="saveImagePrompt(${idx})"
+                                        style="background:var(--primary); color:#fff; border:none; cursor:pointer; padding:2px 10px; border-radius:5px; font-size:0.65rem; font-weight:600; transition:all 0.2s;"
+                                        title="편집한 프롬프트를 서버에 즉시 저장합니다">💾 수정 반영</button>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- 대사 목록 -->
                         ${s.dialogues.map((d, dIdx) => {
                             const dLen = (d.text || '').length;
@@ -4124,8 +4148,66 @@
         // 씬 설명 인라인 수정
         function updateSceneDesc(idx, value) {
             storyData.scenes[idx].scene_description = value.trim();
-            storyData.scenes[idx].image_prompt = null;
             scheduleSceneSync();
+        }
+
+        // 이미지 프롬프트 토글
+        function toggleImagePrompt(idx) {
+            const area = document.getElementById(`img-prompt-area-${idx}`);
+            const arrow = document.getElementById(`img-prompt-arrow-${idx}`);
+            if (!area) return;
+            const isHidden = area.style.display === 'none';
+            area.style.display = isHidden ? 'block' : 'none';
+            if (arrow) arrow.style.transform = isHidden ? 'rotate(90deg)' : 'rotate(0deg)';
+        }
+
+        // 이미지 프롬프트 수정 반영 (즉시 서버 동기화)
+        async function saveImagePrompt(idx) {
+            const textarea = document.getElementById(`img-prompt-text-${idx}`);
+            if (textarea) {
+                storyData.scenes[idx].image_prompt = textarea.value.trim();
+            }
+            const ok = await syncScenesToBackend();
+            if (ok) {
+                showToast('이미지 프롬프트 반영 완료', 'success');
+            } else {
+                showToast('프롬프트 동기화 실패', 'error');
+            }
+        }
+
+        // AI 프롬프트 재생성 (Gemini로 씬 설명 기반 새 프롬프트 생성)
+        async function regenAIPrompt(idx, btnEl) {
+            const scene = storyData.scenes[idx];
+            if (!scene || !scene.scene_description) {
+                showToast('씬 설명이 비어있어 AI 프롬프트를 생성할 수 없습니다.', 'warning');
+                return;
+            }
+            const origText = btnEl ? btnEl.innerText : '';
+            if (btnEl) { btnEl.innerText = '⏳ 생성 중...'; btnEl.disabled = true; }
+            try {
+                const res = await fetch('/api/workflow/regenerate-image-prompt', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        scene_number: scene.scene_number
+                    })
+                });
+                if (!res.ok) throw new Error('서버 오류 (' + res.status + ')');
+                const data = await res.json();
+                if (data.success && data.image_prompt) {
+                    storyData.scenes[idx].image_prompt = data.image_prompt;
+                    const textarea = document.getElementById(`img-prompt-text-${idx}`);
+                    if (textarea) textarea.value = data.image_prompt;
+                    showToast('AI 프롬프트 재생성 완료', 'success');
+                } else {
+                    throw new Error(data.detail || '프롬프트 생성 실패');
+                }
+            } catch (e) {
+                showToast('AI 프롬프트 재생성 실패: ' + e.message, 'error');
+            } finally {
+                if (btnEl) { btnEl.innerText = origText || '🔄 AI 프롬프트 재생성'; btnEl.disabled = false; }
+            }
         }
 
         // 나레이션 인라인 수정
@@ -5217,6 +5299,8 @@
             updateSceneCard(sceneIndex, 'generating');
 
             try {
+                // ★ 편집 내용 서버 동기화 (대사/씬설명/프롬프트 누락 방지)
+                await syncScenesToBackend();
                 // ★ 프리셋 레퍼런스를 세션에 적용 (전체 생성과 동일하게)
                 await applyPresetReferencesToSession();
                 
