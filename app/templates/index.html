@@ -15,18 +15,22 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         :root {
-            --primary: #6366f1;
-            --primary-hover: #4f46e5;
-            --primary-light: #e0e7ff;
-            --bg: #0f172a;
-            --bg-card: #1e293b;
-            --bg-input: #334155;
-            --text: #f1f5f9;
-            --text-muted: #94a3b8;
-            --border: #475569;
-            --success: #22c55e;
-            --warning: #f59e0b;
-            --danger: #ef4444;
+            /* ── Slate Studio Theme ── */
+            --primary: #2563EB;
+            --primary-hover: #1D4ED8;
+            --primary-light: #DBEAFE;
+            --bg: #F2F4F7;
+            --bg-card: #FFFFFF;
+            --bg-input: #EBF0F7;
+            --text: #1A2332;
+            --text-muted: #6B7C96;
+            --border: #DDE2EA;
+            --success: #16A34A;
+            --warning: #D97706;
+            --danger: #DC2626;
+            /* Slate 전용 추가 변수 */
+            --shadow-sm: 0 1px 4px rgba(26,35,50,0.06);
+            --shadow-md: 0 4px 16px rgba(26,35,50,0.08);
         }
 
         * {
@@ -55,7 +59,7 @@
         .logo {
             font-size: 1.25rem;
             font-weight: 700;
-            background: linear-gradient(135deg, var(--primary), #a855f7);
+            background: linear-gradient(135deg, var(--primary), #60A5FA);
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -64,12 +68,12 @@
         .api-badge {
             padding: 2px 8px;
             border-radius: 4px;
-            background: rgba(148,163,184,0.1);
+            background: rgba(107,124,150,0.1);
             color: var(--text-muted);
             font-weight: 500;
             transition: all 0.2s;
         }
-        .api-badge:hover { background: rgba(148,163,184,0.2); }
+        .api-badge:hover { background: rgba(107,124,150,0.2); }
         @keyframes slideIn { from { transform: translateY(-10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
         /* Progress Steps */
@@ -186,7 +190,7 @@
         }
         .scene-card.cover-scene {
             border: 2px solid var(--primary);
-            background: linear-gradient(135deg, rgba(99,102,241,0.05), rgba(139,92,246,0.05));
+            background: linear-gradient(135deg, rgba(37,99,235,0.05), rgba(37,99,235,0.04));
         }
         .scene-card.warn-scene {
             border-color: var(--warning);
@@ -209,7 +213,7 @@
             padding: 0.35rem;
             min-width: 140px;
             max-width: 250px;
-            background: rgba(0,0,0,0.01);
+            background: rgba(26,35,50,0.01);
         }
         .scene-img-area {
             width: 100%;
@@ -250,7 +254,7 @@
         .scene-img-actions button:hover {
             border-color: var(--primary);
             color: var(--primary);
-            background: rgba(99,102,241,0.06);
+            background: rgba(37,99,235,0.06);
         }
         .scene-img-status {
             font-size: 0.65rem;
@@ -771,7 +775,7 @@
         <a href="/" class="logo" style="text-decoration: none;">🎨 Webtoon Auto-Generator Pro</a>
         <div style="display: flex; gap: 0.75rem; align-items: center;">
             <button class="btn btn-secondary" onclick="toggleProjectPanel()" id="btn-project-manager"
-                style="font-size:0.78rem; padding:5px 14px; border-radius:8px; display:inline-flex; align-items:center; gap:4px; background:rgba(99,102,241,0.12); border:1px solid rgba(99,102,241,0.25); color:var(--primary);">
+                style="font-size:0.78rem; padding:5px 14px; border-radius:8px; display:inline-flex; align-items:center; gap:4px; background:rgba(37,99,235,0.12); border:1px solid rgba(37,99,235,0.25); color:var(--primary);">
                 📂 저장 및 불러오기
             </button>
             <span id="login-status" style="font-size: 0.875rem; color: var(--text-muted);">Guest User</span>
@@ -810,7 +814,7 @@
     <div class="progress-bar">
         <div class="steps">
             <!-- 프리셋관리 탭: 워크플로우 바깥, 별도 색상 -->
-            <div class="step" data-step="preset" onclick="navigateToStep('preset')" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;border-radius:8px;padding:6px 14px;font-weight:700;cursor:pointer;">🎨 프리셋</div>
+            <div class="step" data-step="preset" onclick="navigateToStep('preset')" style="background:linear-gradient(135deg,#1D4ED8,#2563EB);color:#fff;border-radius:8px;padding:6px 14px;font-weight:700;cursor:pointer;">🎨 프리셋</div>
             <div class="step-line" style="opacity:0.3;"></div>
             <!-- 워크플로우 탭 1~6 -->
             <div class="step active" data-step="1" onclick="navigateToStep(1)"><span class="step-num">1</span> 시작</div>
@@ -862,7 +866,7 @@
                                 <option value="gemini-3-pro-preview">Gemini 3.0 Pro (고성능)</option>
                             </select>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: var(--text-muted); margin-top: 4px; padding: 4px 8px; background: rgba(99,102,241,0.06); border-radius: 6px; border: 1px solid rgba(99,102,241,0.15);">
+                        <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: var(--text-muted); margin-top: 4px; padding: 4px 8px; background: rgba(37,99,235,0.06); border-radius: 6px; border: 1px solid rgba(37,99,235,0.15);">
                             <span style="font-weight: 600; color: var(--primary);">이미지 생성 AI:</span>
                             <span>Gemini 3.0 Pro Image (고정) — 최고 품질의 이미지를 위해 항상 Pro 모델을 사용합니다.</span>
                         </div>
@@ -952,7 +956,7 @@
                         다음과 같은 구성을 추천합니다.</p>
 
                     <div>
-                        <label style="font-weight: 600;">총 제작 씬(Scene) 개수 <span style="font-size:0.75rem; color:var(--primary); font-weight:700; background:rgba(99,102,241,0.1); padding:2px 6px; border-radius:4px; margin-left:4px;">표지 포함</span></label>
+                        <label style="font-weight: 600;">총 제작 씬(Scene) 개수 <span style="font-size:0.75rem; color:var(--primary); font-weight:700; background:rgba(37,99,235,0.1); padding:2px 6px; border-radius:4px; margin-left:4px;">표지 포함</span></label>
                         <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.5rem;">
                             <input type="number" id="total-scene-count" value="8" min="3"
                                 style="width: 80px; text-align: center; font-size: 1.25rem;">
@@ -1014,7 +1018,7 @@
                 <!-- 하위 호환용 hidden input -->
                 <input type="hidden" id="character-names-input" value="">
                 <!-- 독백 모드 -->
-                <div style="display:flex; align-items:center; gap:8px; margin-top:8px; padding:6px 10px; background:rgba(99,102,241,0.04); border-radius:8px; border:1px solid var(--border);">
+                <div style="display:flex; align-items:center; gap:8px; margin-top:8px; padding:6px 10px; background:rgba(37,99,235,0.04); border-radius:8px; border:1px solid var(--border);">
                     <label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-size:0.82rem; white-space:nowrap;">
                         <input type="checkbox" id="monologue-mode-check" onchange="onMonologueModeChange()">
                         <span>🎤 독백 모드</span>
@@ -1093,7 +1097,7 @@
                         </div>
                     </div>
                     <!-- 시리즈 분할 설정 패널 -->
-                    <div id="series-split-panel" style="display:none; background: linear-gradient(135deg, rgba(99,102,241,0.05), rgba(99,102,241,0.12)); border: 1.5px solid var(--primary); border-radius: 10px; padding: 1rem; margin-bottom: 1rem;">
+                    <div id="series-split-panel" style="display:none; background: linear-gradient(135deg, rgba(37,99,235,0.05), rgba(37,99,235,0.12)); border: 1.5px solid var(--primary); border-radius: 10px; padding: 1rem; margin-bottom: 1rem;">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
                             <h3 style="margin:0; font-size:0.95rem;">📚 시리즈 분할 설정</h3>
                             <span style="font-size:0.75rem; color:var(--text-muted);" id="series-total-scenes-info"></span>
@@ -1224,7 +1228,7 @@
                     </div>
 
                     <!-- 순서 가이드 배너 -->
-                    <div style="background:rgba(99,102,241,0.1); border:1px solid var(--primary); border-radius:8px; padding:12px 16px; margin-bottom:1.5rem; font-size:0.9rem;">
+                    <div style="background:rgba(37,99,235,0.1); border:1px solid var(--primary); border-radius:8px; padding:12px 16px; margin-bottom:1.5rem; font-size:0.9rem;">
                         <strong>화풍 일관성 가이드:</strong> 1.캐릭터 → 2.연출 → 3.스타일 순서로 생성하면 AI가 이전 이미지를 참조하여 동일한 화풍을 유지합니다.
                     </div>
 
@@ -1544,9 +1548,9 @@
                         <h2 class="card-title" style="font-size: 1.25rem;">📝 캡션 및 태그 수정</h2>
                         <button class="btn" onclick="generateCaption()"
                             style="width:100%; margin-bottom:0.75rem; font-size:0.95rem; padding:12px 16px;
-                                   background:linear-gradient(135deg, var(--primary), #a855f7);
+                                   background:linear-gradient(135deg, var(--primary), #60A5FA);
                                    color:#fff; border:none; border-radius:8px; font-weight:700;
-                                   box-shadow:0 2px 8px rgba(99,102,241,0.3); transition:all 0.2s;"
+                                   box-shadow:0 2px 8px rgba(37,99,235,0.3); transition:all 0.2s;"
                             onmouseenter="this.style.opacity='0.85'; this.style.transform='translateY(-1px)';"
                             onmouseleave="this.style.opacity='1'; this.style.transform='translateY(0)';">
                             ✨ AI 캡션 자동 채우기
@@ -1581,7 +1585,7 @@
                             </div>
                             <div style="display:flex; gap:0.4rem; align-items:center;">
                                 <a id="pub-ig-link" href="#" target="_blank" style="display:none; font-size:0.72rem; color:white; background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888); padding:3px 8px; border-radius:4px; text-decoration:none; white-space:nowrap;">📸 Instagram 열기</a>
-                                <a href="/settings" style="font-size:0.72rem; color:var(--primary); text-decoration:none; background:rgba(99,102,241,0.1); padding:3px 8px; border-radius:4px; border:1px solid rgba(99,102,241,0.2); white-space:nowrap;">⚙️ 설정</a>
+                                <a href="/settings" style="font-size:0.72rem; color:var(--primary); text-decoration:none; background:rgba(37,99,235,0.1); padding:3px 8px; border-radius:4px; border:1px solid rgba(37,99,235,0.2); white-space:nowrap;">⚙️ 설정</a>
                             </div>
                         </div>
                     </div>
@@ -3143,13 +3147,13 @@
             const len = el.value.length;
             counter.textContent = `${len}/${limit}`;
             if (len > limit) {
-                counter.style.color = '#ef4444';
+                counter.style.color = '#DC2626';
                 el.style.borderColor = '#ef4444';
             } else if (len > limit * 0.8) {
-                counter.style.color = '#f59e0b';
+                counter.style.color = '#D97706';
                 el.style.borderColor = '';
             } else {
-                counter.style.color = '#22c55e';
+                counter.style.color = '#16A34A';
                 el.style.borderColor = '';
             }
         }
@@ -3819,7 +3823,7 @@
                 const safeC = c.replace(/'/g, "&#39;");
                 if (isActive) {
                     return `<span onclick="toggleCharInScene(${sceneIdx}, '${safeC}')" 
-                        style="display:inline-flex; align-items:center; gap:2px; background:rgba(99,102,241,0.2); color:var(--primary); padding:3px 10px; border-radius:14px; font-size:0.72rem; font-weight:700; cursor:pointer; border:1.5px solid var(--primary); user-select:none; transition:all 0.15s;" 
+                        style="display:inline-flex; align-items:center; gap:2px; background:rgba(37,99,235,0.2); color:var(--primary); padding:3px 10px; border-radius:14px; font-size:0.72rem; font-weight:700; cursor:pointer; border:1.5px solid var(--primary); user-select:none; transition:all 0.15s;" 
                         title="클릭하면 이 씬에서 제외">✓ ${c}</span>`;
                 } else {
                     return `<span onclick="toggleCharInScene(${sceneIdx}, '${safeC}')" 
@@ -4023,7 +4027,7 @@
                             <div id="img-prompt-area-${idx}" style="display:none; margin-top:2px;">
                                 <textarea id="img-prompt-text-${idx}"
                                     oninput="storyData.scenes[${idx}].image_prompt = this.value;"
-                                    style="width:100%; border:1px solid rgba(99,102,241,0.3); border-radius:6px; padding:4px 7px; font-size:0.75rem; background:rgba(99,102,241,0.04); resize:vertical; min-height:48px; font-family:inherit; box-sizing:border-box; color:var(--text); line-height:1.4;"
+                                    style="width:100%; border:1px solid rgba(37,99,235,0.3); border-radius:6px; padding:4px 7px; font-size:0.75rem; background:rgba(37,99,235,0.04); resize:vertical; min-height:48px; font-family:inherit; box-sizing:border-box; color:var(--text); line-height:1.4;"
                                     rows="3" placeholder="이미지 생성에 사용되는 프롬프트 (직접 편집 가능)">${(s.image_prompt||'').replace(/</g,'&lt;')}</textarea>
                                 <div style="display:flex; justify-content:flex-end; gap:4px; margin-top:3px;">
                                     <button onclick="regenAIPrompt(${idx}, this)"
@@ -4057,7 +4061,7 @@
                         }).join('')}
 
                         <!-- 대사 추가 (인라인) -->
-                        <div style="background:rgba(99,102,241,0.05); border:1.5px dashed var(--primary); border-radius:6px; padding:0.3rem 0.4rem; display:flex; align-items:flex-start; gap:3px;">
+                        <div style="background:rgba(37,99,235,0.05); border:1.5px dashed var(--primary); border-radius:6px; padding:0.3rem 0.4rem; display:flex; align-items:flex-start; gap:3px;">
                             <div style="padding-top:4px;">${renderSpeakerSelect(idx, -1, '')}</div>
                             <textarea id="new-dialogue-text-${idx}" placeholder="새 대사 입력 후 Enter"
                                 onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault(); addDialogueInline(${idx});}"
@@ -4109,7 +4113,7 @@
                 <div style="text-align:center; padding:1rem 0;">
                     <button onclick="addEmptyScene()"
                         style="background:var(--bg-card); border:2px dashed var(--primary); color:var(--primary); cursor:pointer; padding:10px 24px; border-radius:10px; font-size:0.85rem; font-weight:600; transition:all 0.2s;"
-                        onmouseover="this.style.background='rgba(99,102,241,0.08)'"
+                        onmouseover="this.style.background='rgba(37,99,235,0.08)'"
                         onmouseout="this.style.background='var(--bg-card)'">
                         ＋ 씬 추가
                     </button>
@@ -5653,7 +5657,7 @@
             if (!progressEl) {
                 progressEl = document.createElement('div');
                 progressEl.id = 'publish-progress';
-                progressEl.style.cssText = 'font-size:0.82rem; color:var(--text-muted); padding:8px 12px; margin-top:6px; line-height:1.6; background:rgba(99,102,241,0.06); border-radius:6px; border:1px solid rgba(99,102,241,0.15);';
+                progressEl.style.cssText = 'font-size:0.82rem; color:var(--text-muted); padding:8px 12px; margin-top:6px; line-height:1.6; background:rgba(37,99,235,0.06); border-radius:6px; border:1px solid rgba(37,99,235,0.15);';
                 if (pubBtn) pubBtn.parentElement.insertBefore(progressEl, pubBtn.nextSibling);
             }
             const imgCount = seriesImgs.length;
@@ -5700,7 +5704,7 @@
                     if (!banner) {
                         banner = document.createElement('div');
                         banner.id = 'publish-success-banner';
-                        banner.style.cssText = 'background:#198754;color:#fff;padding:10px 16px;border-radius:8px;margin-top:8px;display:flex;align-items:center;justify-content:space-between;font-size:0.85rem;';
+                        banner.style.cssText = 'background:#16A34A;color:#fff;padding:10px 16px;border-radius:8px;margin-top:8px;display:flex;align-items:center;justify-content:space-between;font-size:0.85rem;';
                         if (pubBtn) pubBtn.parentElement.insertBefore(banner, pubBtn.nextSibling);
                     }
                     banner.innerHTML = `✅ 발행 완료! ${seriesImgs.length}장의 이미지가 인스타그램에 게시되었습니다. <button onclick="this.parentElement.remove()" style="background:none;border:none;color:#fff;cursor:pointer;font-size:1rem;">✕</button>`;
@@ -7462,7 +7466,7 @@
 
             // 뱃지
             const badge = p.source === 'builtin'
-                ? '<span style="font-size:0.65rem; padding:1px 6px; border-radius:3px; background:rgba(99,102,241,0.2); color:var(--primary);">내장</span>'
+                ? '<span style="font-size:0.65rem; padding:1px 6px; border-radius:3px; background:rgba(37,99,235,0.2); color:var(--primary);">내장</span>'
                 : '<span style="font-size:0.65rem; padding:1px 6px; border-radius:3px; background:rgba(16,185,129,0.2); color:#10b981;">커스텀</span>';
 
             // 캐릭터 이름 태그
@@ -7515,7 +7519,7 @@
                 preview.innerHTML = `<img src="${imgUrl}" style="width:100%; height:100%; object-fit:cover;">`;
                 status.innerText = '설정됨';
                 status.style.background = 'rgba(16,185,129,0.2)';
-                status.style.color = '#10b981';
+                status.style.color = '#16A34A';
             } else {
                 preview.innerHTML = '<span style="color:var(--text-muted); font-size:0.8rem; text-align:center; padding:1rem;">프리뷰 영역<br><span style="font-size:0.7rem;">AI 생성 또는 파일 버튼으로 설정</span></span>';
                 status.innerText = '미설정';
@@ -7585,7 +7589,7 @@
                 const status = document.getElementById(`ref-status-${refType}`);
                 status.innerText = '설정됨';
                 status.style.background = 'rgba(16,185,129,0.2)';
-                status.style.color = '#10b981';
+                status.style.color = '#16A34A';
 
                 showToast(`${refType} 레퍼런스 업로드 완료`, 'success');
             }
@@ -7690,8 +7694,8 @@
         // 상태 배지 업데이트
         if (statusEl) {
             statusEl.innerText = '생성 중...';
-            statusEl.style.background = 'rgba(99,102,241,0.2)';
-            statusEl.style.color = '#818cf8';
+            statusEl.style.background = 'rgba(37,99,235,0.2)';
+            statusEl.style.color = '#1D4ED8';
         }
 
         // 경과 시간 타이머
@@ -7775,7 +7779,7 @@
                 if (statusEl) {
                     statusEl.innerText = `AI 생성됨 (${elapsed}초)`;
                     statusEl.style.background = 'rgba(16,185,129,0.2)';
-                    statusEl.style.color = '#10b981';
+                    statusEl.style.color = '#16A34A';
                 }
                 showToast(`${label} 레퍼런스 AI 생성 완료! (${elapsed}초)`, 'success');
                 // 히스토리에 추가
