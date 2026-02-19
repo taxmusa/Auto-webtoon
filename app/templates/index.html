@@ -1667,9 +1667,9 @@
                         <div>
                             <label style="font-size: 0.8rem; font-weight: 600;">슬라이드 수</label>
                             <div style="display:flex; align-items:center; gap:4px;">
-                                <button onclick="adjustCount('carousel',-1)" style="width:28px;height:28px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);">-</button>
+                                <button onclick="adjustCount('carousel',-1)" style="width:28px;height:28px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);color:var(--text);">-</button>
                                 <input type="number" id="carousel-slide-count" value="5" min="1" max="10" style="width:50px; text-align:center; padding:4px;">
-                                <button onclick="adjustCount('carousel',1)" style="width:28px;height:28px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);">+</button>
+                                <button onclick="adjustCount('carousel',1)" style="width:28px;height:28px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);color:var(--text);">+</button>
                             </div>
                         </div>
                         <div>
@@ -1683,8 +1683,8 @@
                         <label style="font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; display:block;">비율</label>
                         <div style="display:flex; gap:6px;">
                             <button class="ratio-btn active" data-type="carousel" data-ratio="1:1" onclick="selectRatio('carousel','1:1')" style="padding:4px 12px; border:2px solid var(--primary); border-radius:6px; cursor:pointer; font-size:0.75rem; background:var(--primary); color:#fff;">1:1</button>
-                            <button class="ratio-btn" data-type="carousel" data-ratio="4:5" onclick="selectRatio('carousel','4:5')" style="padding:4px 12px; border:2px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.75rem; background:var(--bg);">4:5</button>
-                            <button class="ratio-btn" data-type="carousel" data-ratio="9:16" onclick="selectRatio('carousel','9:16')" style="padding:4px 12px; border:2px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.75rem; background:var(--bg);">9:16</button>
+                            <button class="ratio-btn" data-type="carousel" data-ratio="4:5" onclick="selectRatio('carousel','4:5')" style="padding:4px 12px; border:2px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.75rem; background:var(--bg); color:var(--text);">4:5</button>
+                            <button class="ratio-btn" data-type="carousel" data-ratio="9:16" onclick="selectRatio('carousel','9:16')" style="padding:4px 12px; border:2px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.75rem; background:var(--bg); color:var(--text);">9:16</button>
                         </div>
                     </div>
 
@@ -1887,9 +1887,9 @@
                         <div>
                             <label style="font-size: 0.8rem; font-weight: 600;">카드 수</label>
                             <div style="display:flex; align-items:center; gap:4px;">
-                                <button onclick="adjustCount('cardnews',-1)" style="width:28px;height:28px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);">-</button>
+                                <button onclick="adjustCount('cardnews',-1)" style="width:28px;height:28px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);color:var(--text);">-</button>
                                 <input type="number" id="cardnews-card-count" value="5" min="1" max="10" style="width:50px; text-align:center; padding:4px;">
-                                <button onclick="adjustCount('cardnews',1)" style="width:28px;height:28px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);">+</button>
+                                <button onclick="adjustCount('cardnews',1)" style="width:28px;height:28px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);color:var(--text);">+</button>
                             </div>
                         </div>
                         <div>
@@ -1901,9 +1901,9 @@
                     <div style="margin-bottom: 1rem;">
                         <label style="font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; display:block;">비율</label>
                         <div style="display:flex; gap:6px;">
-                            <button class="ratio-btn" data-type="cardnews" data-ratio="1:1" onclick="selectRatio('cardnews','1:1')" style="padding:4px 12px; border:2px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.75rem; background:var(--bg);">1:1</button>
+                            <button class="ratio-btn" data-type="cardnews" data-ratio="1:1" onclick="selectRatio('cardnews','1:1')" style="padding:4px 12px; border:2px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.75rem; background:var(--bg); color:var(--text);">1:1</button>
                             <button class="ratio-btn active" data-type="cardnews" data-ratio="4:5" onclick="selectRatio('cardnews','4:5')" style="padding:4px 12px; border:2px solid var(--primary); border-radius:6px; cursor:pointer; font-size:0.75rem; background:var(--primary); color:#fff;">4:5</button>
-                            <button class="ratio-btn" data-type="cardnews" data-ratio="9:16" onclick="selectRatio('cardnews','9:16')" style="padding:4px 12px; border:2px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.75rem; background:var(--bg);">9:16</button>
+                            <button class="ratio-btn" data-type="cardnews" data-ratio="9:16" onclick="selectRatio('cardnews','9:16')" style="padding:4px 12px; border:2px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.75rem; background:var(--bg); color:var(--text);">9:16</button>
                         </div>
                     </div>
 
@@ -2350,8 +2350,8 @@
             const reviewArea = document.getElementById('data-review-area');
             const actionsEl = document.getElementById('data-actions');
 
-            // 로딩 메시지 변경 (수동 모드용)
-            loadingEl.querySelector('div:last-child').innerText = '입력하신 내용을 정리하고 있습니다...';
+            // 로딩 메시지 변경 (수동 모드용) — innerHTML로 구조 초기화 (자동 모드에서 <p>로 교체될 수 있음)
+            loadingEl.innerHTML = '<div class="spinner"></div><div>입력하신 내용을 정리하고 있습니다...</div>';
             loadingEl.style.display = 'block';
             reviewArea.style.display = 'none';
             actionsEl.style.display = 'none';
@@ -2800,9 +2800,9 @@
                             class="tmpl-card ${t.id === 'centered' ? 'active' : ''}"
                             style="width:48px;height:48px;border:2px solid ${t.id === 'centered' ? 'var(--primary)' : 'var(--border)'};border-radius:6px;cursor:pointer;background:var(--bg);display:flex;flex-direction:column;align-items:${t.lines === 'left' ? 'flex-start' : 'center'};justify-content:center;padding:6px;gap:3px;"
                             title="${t.label}">
-                            <div style="width:${t.lines === 'highlight' ? '70%' : '60%'};height:3px;background:${t.lines === 'highlight' ? 'var(--primary)' : '#999'};border-radius:1px;"></div>
-                            <div style="width:80%;height:2px;background:#ccc;border-radius:1px;"></div>
-                            <div style="width:50%;height:2px;background:#ccc;border-radius:1px;"></div>
+                            <div style="width:${t.lines === 'highlight' ? '70%' : '60%'};height:3px;background:${t.lines === 'highlight' ? 'var(--primary)' : 'var(--text-muted)'};border-radius:1px;"></div>
+                            <div style="width:80%;height:2px;background:var(--border);border-radius:1px;"></div>
+                            <div style="width:50%;height:2px;background:var(--border);border-radius:1px;"></div>
                         </button>
                     `).join('');
                 }
@@ -2962,6 +2962,11 @@
                 if (progressBar) progressBar.style.width = '100%';
                 if (progressText) progressText.textContent = '렌더링 완료!';
 
+                if (!resp.ok) {
+                    let errMsg = `서버 오류 (${resp.status})`;
+                    try { const errData = await resp.json(); errMsg = errData.detail || errMsg; } catch { errMsg = await resp.text() || errMsg; }
+                    throw new Error(errMsg);
+                }
                 const data = await resp.json();
                 if (data.success) {
                     renderContentPreview(type, data.images);
@@ -2971,7 +2976,7 @@
                     if (statusEl) statusEl.innerHTML = `❌ 렌더링 오류: ${data.detail || '알 수 없음'}`;
                 }
             } catch (err) {
-                if (statusEl) statusEl.innerHTML = `❌ 네트워크 오류: ${err.message}`;
+                if (statusEl) statusEl.innerHTML = `❌ 렌더링 오류: ${err.message}`;
             }
             // 3초 후 진행률 숨기기
             setTimeout(() => { if (progressEl) progressEl.style.display = 'none'; }, 3000);
@@ -3118,7 +3123,7 @@
                 const isSel = btn.dataset.ratio === ratio;
                 btn.style.borderColor = isSel ? 'var(--primary)' : 'var(--border)';
                 btn.style.background = isSel ? 'var(--primary)' : 'var(--bg)';
-                btn.style.color = isSel ? '#fff' : 'inherit';
+                btn.style.color = isSel ? '#fff' : 'var(--text)';
                 btn.classList.toggle('active', isSel);
             });
         }
