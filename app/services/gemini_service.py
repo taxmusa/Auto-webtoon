@@ -349,7 +349,8 @@ class GeminiService:
         character_names: str = "",
         characters_input: list = None,
         monologue_mode: bool = False,
-        monologue_character: str = ""
+        monologue_character: str = "",
+        include_cover: bool = True
     ) -> Story:
         """규칙 기반 스토리 생성 - 모델 fallback 지원"""
         import logging
@@ -419,6 +420,34 @@ class GeminiService:
 2. 질문자는 짧게, 전문가는 충분히 설명하는 형태로 작성하세요.
 3. 내용이 많으면 2~3개 씬에 나눠서 설명해도 됩니다. 억지로 한 씬에 압축하지 마세요."""
         
+        # 표지 포함 여부에 따른 프롬프트 구성
+        if include_cover:
+            cover_constraint = f"1. 총 씬 개수: {scene_count} (표지 1장 + 본문 {scene_count - 1}장)"
+            cover_instruction = """[표지 씬 — 반드시 scene_number: 0으로 생성]
+- 표지(썸네일)는 scene_number를 반드시 0으로 설정하세요.
+- 주인공(첫 번째 캐릭터) 1명만 등장합니다.
+- 대사는 딱 1개: 전체 스토리를 대변하는 임팩트 있고 호기심을 유발하는 한 마디 (예: "이거 알면 인생이 달라져요!", "모르면 손해! 지금 알려드릴게요")
+- 나레이션은 없습니다.
+- image_prompt: 주인공을 중심으로 한 시선을 끄는 포즈. 정면 또는 약간 측면 앵글. 배경은 주제와 어울리는 심플한 배경. 미디엄 샷 또는 클로즈업.
+- 표정과 감정은 스토리 주제에 맞게 자유롭게 선택 (놀란, 궁금한, 자신감 있는, 당황한, 진지한 등 — 주제가 충격적이면 놀란 표정, 꿀팁이면 자신감, 경고성이면 걱정 등)
+- 표지 씬 다음에 본문 씬들이 scene_number: 1부터 시작합니다."""
+            cover_example_json = f"""        {{
+            "scene_number": 0,
+            "scene_description": "표지 — 전체 스토리를 대변하는 장면",
+            "image_prompt": "주인공 클로즈업 또는 미디엄 샷. 스토리 주제에 맞는 표정(놀란/궁금한/자신감/걱정 등), 정면 응시. 주제와 어울리는 심플한 배경. 80~150자",
+            "dialogues": [
+                {{"character": "주인공 이름", "text": "전체 스토리를 대변하는 임팩트 한 마디", "emotion": "스토리에 맞는 감정"}}
+            ],
+            "narration": ""
+        }},
+        """
+        else:
+            cover_constraint = f"1. 총 씬 개수: {scene_count} (본문만 {scene_count}장, 표지 없음)"
+            cover_instruction = """[표지 없음]
+- 표지 씬을 생성하지 마세요. scene_number는 1부터 시작합니다.
+- 모든 씬이 본문 씬입니다."""
+            cover_example_json = ""
+
         prompt = f"""당신은 전문 웹툰 스토리 작가입니다. 다음 자료를 바탕으로 웹툰 스토리를 작성하세요.
 
 [자료]
@@ -431,19 +460,12 @@ class GeminiService:
 {dialogue_quality_text}
 
 [제약 조건]
-1. 총 씬 개수: {scene_count} (표지 1장 + 본문 {scene_count - 1}장)
+{cover_constraint}
 2. 한 캐릭터 대사: {max_dialogue}자 이내 (충분히 활용하세요)
 3. 한 씬당 말풍선: 최대 {rule_settings.max_bubbles_per_scene}개
 4. 나레이션: {max_narration}자 이내
 
-[표지 씬 — 반드시 scene_number: 0으로 생성]
-- 표지(썸네일)는 scene_number를 반드시 0으로 설정하세요.
-- 주인공(첫 번째 캐릭터) 1명만 등장합니다.
-- 대사는 딱 1개: 전체 스토리를 대변하는 임팩트 있고 호기심을 유발하는 한 마디 (예: "이거 알면 인생이 달라져요!", "모르면 손해! 지금 알려드릴게요")
-- 나레이션은 없습니다.
-- image_prompt: 주인공을 중심으로 한 시선을 끄는 포즈. 정면 또는 약간 측면 앵글. 배경은 주제와 어울리는 심플한 배경. 미디엄 샷 또는 클로즈업.
-- 표정과 감정은 스토리 주제에 맞게 자유롭게 선택 (놀란, 궁금한, 자신감 있는, 당황한, 진지한 등 — 주제가 충격적이면 놀란 표정, 꿀팁이면 자신감, 경고성이면 걱정 등)
-- 표지 씬 다음에 본문 씬들이 scene_number: 1부터 시작합니다.
+{cover_instruction}
 
 [지침 - 나레이션 스타일]
 - 나레이션은 완전한 문장보다는 '핵심 요약 스타일'(개조식, 명사형 종결)로 작성하세요.
@@ -521,16 +543,7 @@ image_prompt 나쁜 예시:
         }}
     ],
     "scenes": [
-        {{
-            "scene_number": 0,
-            "scene_description": "표지 — 전체 스토리를 대변하는 장면",
-            "image_prompt": "주인공 클로즈업 또는 미디엄 샷. 스토리 주제에 맞는 표정(놀란/궁금한/자신감/걱정 등), 정면 응시. 주제와 어울리는 심플한 배경. 80~150자",
-            "dialogues": [
-                {{"character": "주인공 이름", "text": "전체 스토리를 대변하는 임팩트 한 마디", "emotion": "스토리에 맞는 감정"}}
-            ],
-            "narration": ""
-        }},
-        {{
+        {cover_example_json}{{
             "scene_number": 1,
             "scene_description": "장면 스토리 설명 (어떤 상황인지)",
             "image_prompt": "AI 이미지 생성용 상세 시각 묘사 (캐릭터 위치/포즈/표정, 배경, 조명, 구도 포함. 대사 절대 금지. 80~150자)",
@@ -860,6 +873,66 @@ image_prompt 나쁜 예시:
         # 모든 모델 실패 시
         logger.error("[extract_style] 모든 모델 실패")
         raise Exception("스타일 추출에 실패했습니다. 다시 시도해주세요.")
+
+    async def generate_summary_text(self, story: "Story", style: str = "table") -> str:
+        """스토리를 분석하여 요약 텍스트 생성"""
+        import logging
+        logger = logging.getLogger(__name__)
+        if not self.client:
+            raise ValueError("Gemini API 키가 설정되지 않았습니다")
+
+        scenes_text = ""
+        for s in story.scenes:
+            if getattr(s, 'scene_type', 'normal') != 'normal':
+                continue
+            desc = s.scene_description or ""
+            dialogues = " / ".join(f"{d.character}: {d.text}" for d in (s.dialogues or []))
+            narr = s.narration or ""
+            scenes_text += f"씬 {s.scene_number}: {desc}\n대사: {dialogues}\n나레이션: {narr}\n\n"
+
+        style_instructions = {
+            "table": "핵심 포인트를 | 항목 | 내용 | 형태의 마크다운 표로 정리하세요. 3~6개 행.",
+            "text_card": "3~5줄의 핵심 요약 문단으로 작성하세요. 간결하고 임팩트 있게.",
+            "checklist": "실행 가능한 체크리스트 항목 5~8개로 정리하세요. '- [ ] 항목' 형태.",
+            "qa": "Q&A 3~4쌍으로 정리하세요. 'Q: 질문\\nA: 답변' 형태.",
+            "steps": "단계별 가이드 3~6단계로 정리하세요. '1단계: 제목 - 설명' 형태.",
+            "highlight": "한 줄 핵심 메시지로 작성하세요. 20자 이내의 임팩트 있는 한 문장."
+        }
+        style_guide = style_instructions.get(style, style_instructions["table"])
+
+        prompt = f"""다음 웹툰 스토리의 핵심 내용을 요약하세요.
+
+[스토리 제목] {story.title}
+
+[스토리 내용]
+{scenes_text}
+
+[요약 스타일]
+{style_guide}
+
+요약 텍스트만 출력하세요. 부가 설명이나 마크다운 코드블록 없이 순수 텍스트/표만 출력."""
+
+        models_to_try = ["gemini-2.0-flash", "gemini-2.0-flash-lite"]
+        for try_model in models_to_try:
+            try:
+                response = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        self.client.models.generate_content,
+                        model=try_model,
+                        contents=prompt
+                    ),
+                    timeout=30
+                )
+                text = response.text.strip()
+                text = re.sub(r'^```[a-z]*\s*', '', text, flags=re.MULTILINE)
+                text = re.sub(r'```\s*$', '', text, flags=re.MULTILINE)
+                logger.info(f"[generate_summary_text] 성공: {try_model}, style={style}")
+                return text.strip()
+            except Exception as e:
+                logger.warning(f"[generate_summary_text] {try_model} 실패: {e}")
+                continue
+
+        raise Exception("요약 텍스트 생성 실패")
 
 
 # 싱글톤 인스턴스

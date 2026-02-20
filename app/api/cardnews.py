@@ -71,6 +71,8 @@ class CardNewsRenderRequest(BaseModel):
     spacing: Optional[str] = None
     title_accent: Optional[str] = None
     bg_gradient: Optional[str] = None
+    last_page_type: Optional[str] = None
+    aspect_ratio: Optional[str] = None
 
 
 # ============================================
@@ -141,6 +143,8 @@ async def render_cardnews(session_id: str, req: Optional[CardNewsRenderRequest] 
             spacing=req.spacing,
             title_accent=req.title_accent,
             bg_gradient=req.bg_gradient,
+            last_page_type=req.last_page_type,
+            aspect_ratio=req.aspect_ratio,
         )
     return await render_content(CARDNEWS_CONFIG, session_id, common_req)
 

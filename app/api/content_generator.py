@@ -157,6 +157,8 @@ class ContentRenderRequest(BaseModel):
     spacing: Optional[str] = None
     title_accent: Optional[str] = None
     bg_gradient: Optional[str] = None
+    last_page_type: Optional[str] = None
+    aspect_ratio: Optional[str] = None
 
 
 class SingleRenderRequest(BaseModel):
@@ -334,8 +336,22 @@ async def render_content(
             session.title_accent = req.title_accent
         if req.bg_gradient is not None:
             session.bg_gradient = req.bg_gradient
+        if req.last_page_type:
+            session.last_page_type = req.last_page_type
+        if req.aspect_ratio:
+            session.aspect_ratio = req.aspect_ratio
+            w, h = _resolve_dimensions(config, req.aspect_ratio)
+            session.width = w
+            session.height = h
 
-    from app.services.render_service import render_html_to_image, build_slide_html
+    try:
+        from app.services.render_service import render_html_to_image, build_slide_html
+    except ImportError as e:
+        logger.error(f"[{config.label}] Playwright 임포트 실패: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="렌더링 엔진(Playwright)이 설치되지 않았습니다. 'pip install playwright && playwright install chromium'을 실행하세요.",
+        )
 
     output_dir = os.path.join("output", f"{config.output_prefix}_{session_id}")
     os.makedirs(output_dir, exist_ok=True)
@@ -344,40 +360,53 @@ async def render_content(
     rendered = []
     total = len(session.items)
 
-    for i, item in enumerate(session.items):
-        is_cover = (i == 0)
-        is_last = (i == total - 1) and total > 1
+    try:
+        for i, item in enumerate(session.items):
+            is_cover = (i == 0)
+            is_last = (i == total - 1) and total > 1
 
-        html = build_slide_html(
-            title=item.title,
-            body=item.body,
-            page_number=f"{i + 1}/{total}",
-            bg_color=session.bg_color,
-            text_color=session.text_color,
-            accent_color=session.accent_color,
-            font_family=session.font_family,
-            width=session.width,
-            height=session.height,
-            template=session.template,
-            is_cover=is_cover,
-            is_last=is_last,
-            last_type=session.last_page_type if is_last else None,
-            title_size=session.title_size,
-            spacing=session.spacing,
-            title_accent=session.title_accent,
-            bg_gradient=session.bg_gradient,
-            logo_base64=logo_b64,
-        )
+            html = build_slide_html(
+                title=item.title,
+                body=item.body,
+                page_number=f"{i + 1}/{total}",
+                bg_color=session.bg_color,
+                text_color=session.text_color,
+                accent_color=session.accent_color,
+                font_family=session.font_family,
+                width=session.width,
+                height=session.height,
+                template=session.template,
+                is_cover=is_cover,
+                is_last=is_last,
+                last_type=session.last_page_type if is_last else None,
+                title_size=session.title_size,
+                spacing=session.spacing,
+                title_accent=session.title_accent,
+                bg_gradient=session.bg_gradient,
+                logo_base64=logo_b64,
+            )
 
-        img_path = os.path.join(output_dir, f"{config.file_prefix}_{i + 1:02d}.png")
-        await render_html_to_image(
-            html_content=html,
-            width=session.width,
-            height=session.height,
-            output_path=img_path,
+            img_path = os.path.join(output_dir, f"{config.file_prefix}_{i + 1:02d}.png")
+            await render_html_to_image(
+                html_content=html,
+                width=session.width,
+                height=session.height,
+                output_path=img_path,
+            )
+            rendered.append(
+                f"/output/{config.output_prefix}_{session_id}/{config.file_prefix}_{i + 1:02d}.png"
+            )
+    except RuntimeError as e:
+        logger.error(f"[{config.label}] Playwright 브라우저 실패: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Playwright 브라우저 시작 실패: {e}. 'playwright install chromium'을 실행하세요.",
         )
-        rendered.append(
-            f"/output/{config.output_prefix}_{session_id}/{config.file_prefix}_{i + 1:02d}.png"
+    except Exception as e:
+        logger.error(f"[{config.label}] 렌더링 중 오류 ({len(rendered)}/{total}): {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"렌더링 실패 ({len(rendered)}/{total}번째): {str(e)[:200]}",
         )
 
     session.rendered_images = rendered
@@ -410,7 +439,13 @@ async def render_single_item(
     if req.body is not None:
         item.body = req.body
 
-    from app.services.render_service import render_html_to_image, build_slide_html
+    try:
+        from app.services.render_service import render_html_to_image, build_slide_html
+    except ImportError as e:
+        raise HTTPException(
+            status_code=500,
+            detail="렌더링 엔진(Playwright)이 설치되지 않았습니다. 'pip install playwright && playwright install chromium'을 실행하세요.",
+        )
 
     total = len(session.items)
     is_cover = (idx == 0)
@@ -441,13 +476,26 @@ async def render_single_item(
     output_dir = os.path.join("output", f"{config.output_prefix}_{session_id}")
     os.makedirs(output_dir, exist_ok=True)
 
-    img_path = os.path.join(output_dir, f"{config.file_prefix}_{idx + 1:02d}.png")
-    await render_html_to_image(
-        html_content=html,
-        width=session.width,
-        height=session.height,
-        output_path=img_path,
-    )
+    try:
+        img_path = os.path.join(output_dir, f"{config.file_prefix}_{idx + 1:02d}.png")
+        await render_html_to_image(
+            html_content=html,
+            width=session.width,
+            height=session.height,
+            output_path=img_path,
+        )
+    except RuntimeError as e:
+        logger.error(f"[{config.label}] Playwright 브라우저 실패: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Playwright 브라우저 시작 실패: {e}. 'playwright install chromium'을 실행하세요.",
+        )
+    except Exception as e:
+        logger.error(f"[{config.label}] {config.item_label} {idx+1} 렌더링 실패: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"{config.item_label} {idx+1} 렌더링 실패: {str(e)[:200]}",
+        )
 
     url = f"/output/{config.output_prefix}_{session_id}/{config.file_prefix}_{idx + 1:02d}.png"
 

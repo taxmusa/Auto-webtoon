@@ -104,6 +104,12 @@ class Scene(BaseModel):
     warnings: List[str] = Field(default_factory=list) # 규칙 위반 경고
     layout_meta: Optional[dict] = Field(default_factory=dict) # 씬별 개별 레이아웃 설정
 
+    # 요약 슬라이드 / 업로드 이미지 지원
+    scene_type: str = "normal"               # "normal" | "summary" | "uploaded"
+    summary_style: Optional[str] = None      # "table" | "text_card" | "checklist" | "qa" | "steps" | "highlight"
+    summary_text: Optional[str] = None       # 요약 슬라이드용 텍스트
+    rendered_image_path: Optional[str] = None # Playwright 렌더링 결과 PNG 경로
+
 
 class SeriesPublishStatus(str, Enum):
     """시리즈별 발행 상태"""

@@ -8,22 +8,26 @@
     <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary: #6366f1;
-            --primary-hover: #4f46e5;
-            --bg: #0f172a;
-            --bg-card: #1e293b;
-            --bg-input: #334155;
-            --text: #f1f5f9;
-            --text-muted: #94a3b8;
-            --border: #475569;
-            --success: #22c55e;
-            --warning: #f59e0b;
-            --danger: #ef4444;
+            /* ── Slate Studio Theme ── */
+            --primary: #2563EB;
+            --primary-hover: #1D4ED8;
+            --primary-light: #DBEAFE;
+            --bg: #F2F4F7;
+            --bg-card: #FFFFFF;
+            --bg-input: #EBF0F7;
+            --text: #1A2332;
+            --text-muted: #6B7C96;
+            --border: #DDE2EA;
+            --success: #16A34A;
+            --warning: #D97706;
+            --danger: #DC2626;
+            --shadow-sm: 0 1px 4px rgba(26,35,50,0.06);
+            --shadow-md: 0 4px 16px rgba(26,35,50,0.08);
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Pretendard', -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
         header { background: var(--bg-card); border-bottom: 1px solid var(--border); padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
-        .logo { font-size: 1.25rem; font-weight: 700; background: linear-gradient(135deg, var(--primary), #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .logo { font-size: 1.25rem; font-weight: 700; background: linear-gradient(135deg, var(--primary), #60A5FA); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
         main { max-width: 800px; margin: 2rem auto; padding: 0 1rem 3rem; }
         h1 { font-size: 1.75rem; margin-bottom: 0.5rem; }
         .page-desc { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem; }
@@ -135,7 +139,7 @@
 
             <!-- 설정/수정 폼 (접기) -->
             <div id="ig-setup" class="collapse">
-                <div style="background:linear-gradient(135deg,rgba(99,102,241,0.04),rgba(99,102,241,0.1)); border-radius:8px; padding:1rem;">
+                <div style="background:linear-gradient(135deg,rgba(37,99,235,0.04),rgba(37,99,235,0.1)); border-radius:8px; padding:1rem;">
                     <div style="font-weight:600; font-size:0.85rem; margin-bottom:0.75rem;">🔧 Instagram 연결 설정</div>
 
                     <!-- Step 1 -->

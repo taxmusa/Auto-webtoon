@@ -74,6 +74,9 @@ class GenerateStoryRequest(BaseModel):
     collected_data: Optional[List[dict]] = None  # 프론트엔드에서 수정된 수집 데이터
     monologue_mode: bool = False  # 독백 모드 (1인 캐릭터만 등장)
     monologue_character: str = ""  # 독백 시 사용할 캐릭터 이름
+    include_cover: bool = True       # 표지(썸네일) 씬 포함 여부
+    include_summary: bool = True     # 요약 슬라이드 포함 여부
+    summary_style: str = "table"     # 요약 스타일
 
 
 class UpdateSceneRequest(BaseModel):
@@ -193,26 +196,50 @@ async def generate_story(request: GenerateStoryRequest):
         # 프로젝트 설정의 규칙 적용
         rule_settings = session.settings.rules
         
-        logger.info(f"[generate_story] 스토리 생성 시작 - keyword: {session.keyword}, scene_count: {request.scene_count}, model: {request.model}, characters_input: {request.characters_input}")
+        ai_scene_count = request.scene_count
+        if request.include_summary:
+            ai_scene_count = max(ai_scene_count - 1, 2)
+        
+        logger.info(f"[generate_story] 스토리 생성 시작 - keyword: {session.keyword}, scene_count: {request.scene_count}(AI용: {ai_scene_count}), model: {request.model}, characters_input: {request.characters_input}")
         
         story = await gemini.generate_story(
             keyword=session.keyword,
             field_info=field_info,
             collected_data=collected_data,
-            scene_count=request.scene_count,
+            scene_count=ai_scene_count,
             character_settings=character_settings,
             rule_settings=rule_settings,
             model=request.model,
             character_names=request.character_names,
             characters_input=request.characters_input,
             monologue_mode=request.monologue_mode,
-            monologue_character=request.monologue_character
+            monologue_character=request.monologue_character,
+            include_cover=request.include_cover
         )
         
         if not story:
             raise ValueError("스토리 생성 결과가 없습니다")
         
         logger.info(f"[generate_story] 스토리 생성 완료 - 씬 수: {len(story.scenes) if story.scenes else 0}")
+        
+        # 요약 슬라이드 자동 생성 (추가 씬)
+        if request.include_summary and story:
+            summary_text = ""
+            try:
+                summary_text = await gemini.generate_summary_text(story, request.summary_style)
+            except Exception as e:
+                logger.warning(f"[generate_story] 요약 텍스트 생성 실패 (빈 요약 씬으로 추가): {e}")
+            
+            max_sn = max(s.scene_number for s in story.scenes) if story.scenes else 0
+            summary_scene = Scene(
+                scene_number=max_sn + 1,
+                scene_description="요약 슬라이드",
+                scene_type="summary",
+                summary_style=request.summary_style,
+                summary_text=summary_text,
+            )
+            story.scenes.append(summary_scene)
+            logger.info(f"[generate_story] 요약 씬 추가 완료 (scene_number={max_sn + 1}, 텍스트={'있음' if summary_text else '비어있음'})")
         
         session.story = story
         session.images = []  # 새 스토리 생성 시 이전 이미지 초기화
@@ -295,34 +322,54 @@ async def update_scenes_bulk(request: BulkUpdateScenesRequest):
     
     try:
         updated_count = 0
+        added_count = 0
         for scene_data in request.scenes:
             sn = scene_data.get("scene_number")
             if sn is None:
                 continue
-            for scene in session.story.scenes:
-                if scene.scene_number == sn:
-                    if "scene_description" in scene_data and scene_data["scene_description"]:
-                        scene.scene_description = scene_data["scene_description"]
-                    if "image_prompt" in scene_data:
-                        scene.image_prompt = scene_data["image_prompt"]
-                    if "dialogues" in scene_data and scene_data["dialogues"]:
-                        from app.models.models import Dialogue
-                        scene.dialogues = [
-                            Dialogue(
-                                character=d.get("character", ""),
-                                text=d.get("text", ""),
-                                emotion=d.get("emotion", None)
-                            )
-                            for d in scene_data["dialogues"]
-                        ]
-                    if "narration" in scene_data and scene_data["narration"] is not None:
-                        scene.narration = scene_data["narration"]
-                    scene.status = "approved"
-                    updated_count += 1
-                    break
+            existing = next((sc for sc in session.story.scenes if sc.scene_number == sn), None)
+            if existing:
+                if "scene_description" in scene_data and scene_data["scene_description"]:
+                    existing.scene_description = scene_data["scene_description"]
+                if "image_prompt" in scene_data:
+                    existing.image_prompt = scene_data["image_prompt"]
+                if "dialogues" in scene_data and scene_data["dialogues"]:
+                    from app.models.models import Dialogue
+                    existing.dialogues = [
+                        Dialogue(
+                            character=d.get("character", ""),
+                            text=d.get("text", ""),
+                            emotion=d.get("emotion", None)
+                        )
+                        for d in scene_data["dialogues"]
+                    ]
+                if "narration" in scene_data and scene_data["narration"] is not None:
+                    existing.narration = scene_data["narration"]
+                if "scene_type" in scene_data:
+                    existing.scene_type = scene_data["scene_type"]
+                if "summary_style" in scene_data:
+                    existing.summary_style = scene_data["summary_style"]
+                if "summary_text" in scene_data:
+                    existing.summary_text = scene_data["summary_text"]
+                existing.status = "approved"
+                updated_count += 1
+            else:
+                from app.models.models import Dialogue as Dlg
+                new_scene = Scene(
+                    scene_number=sn,
+                    scene_description=scene_data.get("scene_description", ""),
+                    image_prompt=scene_data.get("image_prompt"),
+                    dialogues=[Dlg(**d) for d in scene_data.get("dialogues", [])],
+                    narration=scene_data.get("narration", ""),
+                    scene_type=scene_data.get("scene_type", "normal"),
+                    summary_style=scene_data.get("summary_style"),
+                    summary_text=scene_data.get("summary_text"),
+                )
+                session.story.scenes.append(new_scene)
+                added_count += 1
         
-        logger.info(f"[update-scenes-bulk] 세션 {request.session_id}: {updated_count}개 씬 일괄 업데이트 완료")
-        return {"success": True, "updated_count": updated_count}
+        logger.info(f"[update-scenes-bulk] 세션 {request.session_id}: {updated_count}개 업데이트, {added_count}개 추가")
+        return {"success": True, "updated_count": updated_count, "added_count": added_count}
     except Exception as e:
         logger.error(f"[update-scenes-bulk] 일괄 수정 실패: {e}")
         raise HTTPException(status_code=500, detail=f"씬 일괄 수정 실패: {str(e)}")
@@ -625,6 +672,43 @@ async def _run_image_generation(request: GenerateImagesRequest):
                 logger.info(f"[STOP] 세션 {request.session_id} 이미지 생성 중단됨 "
                             f"({len(session.images)}/{len(session.story.scenes)} 완료)")
                 break
+
+            scene_type = getattr(scene, 'scene_type', 'normal')
+
+            # 요약 씬 → Playwright 자동 렌더링
+            if scene_type == 'summary':
+                logger.info(f"[생성] 씬 {scene.scene_number} — 요약 슬라이드 자동 렌더링")
+                try:
+                    from app.services.render_service import build_summary_slide_html, render_html_to_image
+                    html = build_summary_slide_html(
+                        summary_text=getattr(scene, 'summary_text', '') or '',
+                        style=getattr(scene, 'summary_style', 'text_card') or 'text_card',
+                        story_title=session.story.title if session.story else '',
+                    )
+                    out_dir = f"output/webtoon_{request.session_id}"
+                    os.makedirs(out_dir, exist_ok=True)
+                    out_path = os.path.join(out_dir, f"summary_{scene.scene_number}.png")
+                    await render_html_to_image(html, output_path=out_path)
+                    scene.rendered_image_path = out_path
+                    img = GeneratedImage(scene_number=scene.scene_number, prompt_used="summary_slide", local_path=out_path, status="generated")
+                except Exception as e:
+                    logger.warning(f"요약 슬라이드 렌더링 실패: {e}")
+                    img = GeneratedImage(scene_number=scene.scene_number, prompt_used="summary_slide", local_path="", status="error")
+                session.images.append(img)
+                continue
+
+            # 업로드 씬 → 기존 이미지 경로 사용
+            if scene_type == 'uploaded':
+                logger.info(f"[생성] 씬 {scene.scene_number} — 업로드 이미지 (건너뛰기)")
+                img = GeneratedImage(
+                    scene_number=scene.scene_number,
+                    prompt_used="uploaded_image",
+                    local_path=getattr(scene, 'rendered_image_path', '') or '',
+                    status="uploaded" if getattr(scene, 'rendered_image_path', '') else "error"
+                )
+                session.images.append(img)
+                continue
+
             if scene_idx > 0:
                 await asyncio.sleep(1)
 
@@ -1244,11 +1328,11 @@ async def regenerate_image(request: RegenerateImageRequest):
         
         # ── 재생성 전 기존 이미지 히스토리 저장 ──
         from app.services.image_editor import get_history_manager
-        old_img = session.images[request.scene_index]
-        old_history = list(old_img.image_history) if old_img.image_history else []
-        old_prompts = list(old_img.prompt_history) if old_img.prompt_history else []
+        old_img = session.images[request.scene_index] if request.scene_index < len(session.images) else None
+        old_history = list(old_img.image_history) if old_img and old_img.image_history else []
+        old_prompts = list(old_img.prompt_history) if old_img and old_img.prompt_history else []
         
-        if old_img.local_path and old_img.status == "generated" and os.path.exists(old_img.local_path):
+        if old_img and old_img.local_path and old_img.status == "generated" and os.path.exists(old_img.local_path):
             history_mgr = get_history_manager()
             hist_path = history_mgr.save_to_history(
                 old_img.local_path, request.session_id, scene.scene_number
@@ -1275,7 +1359,12 @@ async def regenerate_image(request: RegenerateImageRequest):
             image_history=old_history,
             prompt_history=old_prompts,
         )
-        session.images[request.scene_index] = new_img
+        if request.scene_index < len(session.images):
+            session.images[request.scene_index] = new_img
+        else:
+            while len(session.images) <= request.scene_index:
+                session.images.append(None)
+            session.images[request.scene_index] = new_img
         return {
             "image": new_img.model_dump(),
             "history_count": len(old_history),
@@ -2937,6 +3026,7 @@ async def load_project(request: dict):
         "success": True,
         "session_id": sid,
         "project_name": data.get("project_name", ""),
+        "keyword": session.keyword or "",
         "story": session.story.model_dump() if session.story else None,
         "images": [img.model_dump() if hasattr(img, 'model_dump') else img for img in (session.images or [])],
         "bubble_layers": [bl.model_dump() if hasattr(bl, 'model_dump') else bl for bl in (session.bubble_layers or [])],
@@ -2961,3 +3051,151 @@ async def delete_project(dirname: str):
     except Exception as e:
         logger.error(f"[delete_project] 삭제 실패: {e}")
         raise HTTPException(status_code=500, detail=f"프로젝트 삭제 실패: {str(e)}")
+
+
+# ============================================
+# 요약 슬라이드 / 이미지 업로드 엔드포인트
+# ============================================
+
+class GenerateSummaryTextRequest(BaseModel):
+    session_id: str
+    scene_number: int
+    style: str = "table"
+
+
+@router.post("/generate-summary-text")
+async def generate_summary_text_endpoint(request: GenerateSummaryTextRequest):
+    """AI로 요약 텍스트 (재)생성"""
+    session = sessions.get(request.session_id)
+    if not session or not session.story:
+        raise HTTPException(status_code=404, detail="세션 또는 스토리를 찾을 수 없습니다")
+
+    scene = next((s for s in session.story.scenes if s.scene_number == request.scene_number), None)
+    if not scene:
+        raise HTTPException(status_code=404, detail="해당 씬을 찾을 수 없습니다")
+
+    try:
+        gemini = get_gemini_service()
+        summary_text = await gemini.generate_summary_text(session.story, request.style)
+        scene.summary_text = summary_text
+        scene.summary_style = request.style
+        return {"success": True, "summary_text": summary_text}
+    except Exception as e:
+        logger.error(f"[generate-summary-text] 실패: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class RenderSummarySlideRequest(BaseModel):
+    session_id: str
+    scene_number: int
+
+
+@router.post("/render-summary-slide")
+async def render_summary_slide_endpoint(request: RenderSummarySlideRequest):
+    """요약 슬라이드를 Playwright로 PNG 렌더링"""
+    session = sessions.get(request.session_id)
+    if not session or not session.story:
+        raise HTTPException(status_code=404, detail="세션 또는 스토리를 찾을 수 없습니다")
+
+    scene = next((s for s in session.story.scenes if s.scene_number == request.scene_number), None)
+    if not scene or not getattr(scene, 'summary_text', None):
+        raise HTTPException(status_code=400, detail="요약 텍스트가 없습니다. 먼저 요약을 생성하세요.")
+
+    try:
+        from app.services.render_service import build_summary_slide_html, render_html_to_image
+        html = build_summary_slide_html(
+            summary_text=scene.summary_text,
+            style=getattr(scene, 'summary_style', 'text_card') or 'text_card',
+            story_title=session.story.title if session.story else '',
+        )
+        out_dir = f"output/webtoon_{request.session_id}"
+        os.makedirs(out_dir, exist_ok=True)
+        out_path = os.path.join(out_dir, f"summary_{scene.scene_number}.png")
+        await render_html_to_image(html, output_path=out_path)
+        scene.rendered_image_path = out_path
+
+        # session.images에도 반영
+        existing_img = next((img for img in session.images if img.scene_number == request.scene_number), None)
+        if existing_img:
+            existing_img.local_path = out_path
+            existing_img.status = "generated"
+        else:
+            session.images.append(GeneratedImage(
+                scene_number=request.scene_number,
+                prompt_used="summary_slide",
+                local_path=out_path,
+                status="generated"
+            ))
+
+        return {"success": True, "image_path": out_path}
+    except Exception as e:
+        logger.error(f"[render-summary-slide] 실패: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class AddSummarySceneRequest(BaseModel):
+    session_id: str
+    style: str = "table"
+
+
+@router.post("/add-summary-scene")
+async def add_summary_scene(request: AddSummarySceneRequest):
+    """빈 요약 슬라이드 씬 추가"""
+    session = sessions.get(request.session_id)
+    if not session or not session.story:
+        raise HTTPException(status_code=404, detail="세션 또는 스토리를 찾을 수 없습니다")
+
+    max_sn = max((s.scene_number for s in session.story.scenes), default=0)
+    new_scene = Scene(
+        scene_number=max_sn + 1,
+        scene_description="요약 슬라이드",
+        scene_type="summary",
+        summary_style=request.style,
+        summary_text="",
+    )
+    session.story.scenes.append(new_scene)
+    logger.info(f"[add-summary-scene] 세션 {request.session_id}: 요약 씬 추가 (scene_number={max_sn + 1})")
+    return {"success": True, "scene": new_scene.model_dump()}
+
+
+@router.post("/upload-scene-image")
+async def upload_scene_image(
+    session_id: str = Form(...),
+    image: UploadFile = File(...)
+):
+    """외부 이미지를 업로드하여 씬으로 추가"""
+    session = sessions.get(session_id)
+    if not session or not session.story:
+        raise HTTPException(status_code=404, detail="세션 또는 스토리를 찾을 수 없습니다")
+
+    try:
+        out_dir = f"output/webtoon_{session_id}"
+        os.makedirs(out_dir, exist_ok=True)
+        max_sn = max((s.scene_number for s in session.story.scenes), default=0)
+        new_sn = max_sn + 1
+        ext = os.path.splitext(image.filename or "upload.png")[1] or ".png"
+        save_path = os.path.join(out_dir, f"uploaded_{new_sn}{ext}")
+
+        content = await image.read()
+        with open(save_path, "wb") as f:
+            f.write(content)
+
+        new_scene = Scene(
+            scene_number=new_sn,
+            scene_description="업로드 이미지",
+            scene_type="uploaded",
+            rendered_image_path=save_path,
+        )
+        session.story.scenes.append(new_scene)
+        session.images.append(GeneratedImage(
+            scene_number=new_sn,
+            prompt_used="uploaded_image",
+            local_path=save_path,
+            status="uploaded"
+        ))
+
+        logger.info(f"[upload-scene-image] 세션 {session_id}: 이미지 업로드 완료 (scene_number={new_sn})")
+        return {"success": True, "scene": new_scene.model_dump(), "image_path": save_path}
+    except Exception as e:
+        logger.error(f"[upload-scene-image] 실패: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

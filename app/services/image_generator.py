@@ -206,7 +206,7 @@ class GeminiGenerator(ImageGeneratorBase):
             RETRY_DELAYS = {
                 "rate_limit": [5, 15, 30],      # 429: 최대 3회, 지수 백오프
                 "timeout": [10, 20],             # 타임아웃: 최대 2회
-                "server_error": [5, 10],          # 504 등 서버 에러: 최대 2회
+                "server_error": [2, 5],            # 504 등 서버 에러: 최대 2회
                 "content_empty": [1],             # 이미지 미포함: 1회
                 "safety_filter": [],              # 안전 필터: 재시도 불가
             }
@@ -310,13 +310,48 @@ class GeminiGenerator(ImageGeneratorBase):
                         continue
                     raise
 
-        except asyncio.TimeoutError:
-            logger.error("Gemini 이미지 생성 타임아웃 (%.0f초, 재시도 소진)", time.time() - t0)
-            raise TimeoutError(
-                "이미지 생성이 시간 초과되었습니다. 잠시 후 다시 시도해주세요."
-            )
         except Exception as e:
+            if isinstance(e, (asyncio.TimeoutError, TimeoutError)):
+                error_type = error_type or "timeout"
+                logger.error("Gemini 이미지 생성 타임아웃 (%.0f초, 재시도 소진)", time.time() - t0)
+
+            # ★ 대체 모델 자동 시도 (server_error/timeout 시)
+            fallback = _IMAGE_MODEL_FALLBACKS.get(self.model)
+            if fallback and error_type in ("server_error", "timeout"):
+                logger.warning(
+                    "[Gemini] %s 모든 재시도 실패 (%.0f초) → 대체 모델 %s 시도",
+                    self.model, time.time() - t0, fallback,
+                )
+                try:
+                    def _sync_fallback():
+                        return self.client.models.generate_content(
+                            model=fallback,
+                            contents=contents,
+                            config=types.GenerateContentConfig(**_gen_config_kwargs)
+                        )
+                    fb_resp = await asyncio.wait_for(
+                        asyncio.to_thread(_sync_fallback),
+                        timeout=IMAGE_GENERATION_TIMEOUT,
+                    )
+                    if fb_resp.candidates:
+                        cand = fb_resp.candidates[0]
+                        if cand.content and cand.content.parts:
+                            for part in cand.content.parts:
+                                if part.inline_data:
+                                    self.model = fallback
+                                    logger.info(
+                                        "[Gemini] 대체 모델 %s 성공! 이후 씬도 이 모델 사용 (총 %.1f초)",
+                                        fallback, time.time() - t0,
+                                    )
+                                    return self._extract_image_bytes(part.inline_data.data)
+                except Exception as fb_err:
+                    logger.warning("[Gemini] 대체 모델 %s도 실패: %s", fallback, fb_err)
+
             # ★ 사용자 친화적 에러 메시지
+            if isinstance(e, (asyncio.TimeoutError, TimeoutError)):
+                raise TimeoutError(
+                    "이미지 생성이 시간 초과되었습니다. 잠시 후 다시 시도해주세요."
+                )
             err_str = str(e).lower()
             if "429" in err_str or "rate" in err_str or "quota" in err_str:
                 friendly = "Gemini API 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요."
@@ -327,11 +362,18 @@ class GeminiGenerator(ImageGeneratorBase):
             else:
                 friendly = str(e)
             logger.error("Gemini Image Generation Failed (%.1f초, type=%s): %s", time.time() - t0, error_type or "unknown", e)
-            raise type(e)(friendly) from e
+            raise RuntimeError(friendly) from e
 
     async def edit_with_reference(self, prompt, reference_image):
         return await self.generate(prompt, reference_images=[reference_image])
 
+
+# ────────────────────────────────────────────
+# 대체 모델 매핑 (primary 실패 시 fallback)
+# ────────────────────────────────────────────
+_IMAGE_MODEL_FALLBACKS = {
+    "gemini-3-pro-image-preview": "gemini-2.5-flash-image",
+}
 
 # ────────────────────────────────────────────
 # 팩토리

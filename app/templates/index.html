@@ -950,21 +950,34 @@
                 <!-- AI 분할 추천 -->
                 <div class="card"
                     style="background: linear-gradient(135deg, rgba(74, 144, 226, 0.05), rgba(74, 144, 226, 0.15)); border: 1px solid var(--primary);">
-                    <h3 style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">🪄 AI 시퀀스 추천
-                    </h3>
-                    <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1rem;">수집된 정보의 양을 분석했을 때,
-                        다음과 같은 구성을 추천합니다.</p>
+                    <h3 style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">🪄 AI 시퀀스 추천</h3>
+                    <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 0.75rem;">수집된 정보의 양을 분석했을 때, 다음과 같은 구성을 추천합니다.</p>
 
-                    <div>
-                        <label style="font-weight: 600;">총 제작 씬(Scene) 개수 <span style="font-size:0.75rem; color:var(--primary); font-weight:700; background:rgba(37,99,235,0.1); padding:2px 6px; border-radius:4px; margin-left:4px;">표지 포함</span></label>
-                        <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.5rem;">
+                    <!-- 입력 행: 씬 개수 + 체크박스 + AI 추천 (한 줄) -->
+                    <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <label style="font-weight:600; font-size:0.85rem; white-space:nowrap;">총 씬 수</label>
                             <input type="number" id="total-scene-count" value="8" min="3"
-                                style="width: 80px; text-align: center; font-size: 1.25rem;">
-                            <span style="font-size: 0.875rem; color: var(--text-muted);">추천: <b
-                                    id="ai-rec-scenes">8</b>개 <span style="font-size:0.7rem;">(표지 1 + 본문 <b id="ai-rec-body-scenes">7</b>)</span></span>
+                                onchange="updateSceneCountDisplay()"
+                                style="width:64px; text-align:center; font-size:1.1rem; padding:4px 6px;">
                         </div>
-                        <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">※ 시리즈 분할은 스토리 생성 후 Tab 3에서 설정합니다.</p>
+                        <label style="font-size:0.8rem; cursor:pointer; display:flex; align-items:center; gap:3px; white-space:nowrap; color:var(--text-muted);">
+                            <input type="checkbox" id="include-cover-check" checked
+                                onchange="updateSceneCountDisplay()"> 표지 포함
+                        </label>
+                        <label style="font-size:0.8rem; cursor:pointer; display:flex; align-items:center; gap:3px; white-space:nowrap; color:var(--text-muted);">
+                            <input type="checkbox" id="include-summary-check" checked
+                                onchange="updateSceneCountDisplay()"> 요약 포함
+                        </label>
+                        <span id="scene-count-detail" style="font-size:0.78rem; color:var(--text-muted); margin-left:auto; white-space:nowrap;">AI 추천: <b id="ai-rec-scenes">8</b>개</span>
                     </div>
+
+                    <!-- 실제 씬 구성 시각화 -->
+                    <div id="scene-breakdown" style="margin-top:0.75rem; padding:10px 12px; background:var(--bg); border:1px solid var(--border); border-radius:8px;">
+                        <div style="font-size:0.72rem; color:var(--text-muted); margin-bottom:6px; font-weight:600;">실제 씬 구성</div>
+                        <div id="scene-breakdown-badges" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;"></div>
+                    </div>
+                    <p style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.5rem;">※ 시리즈 분할은 스토리 생성 후 Tab 3에서 설정합니다.</p>
                 </div>
             </div>
 
@@ -2169,13 +2182,42 @@
         var characters = [];
         var selectedMode = 'auto'; // 'auto' or 'manual'
 
-        // 추천 씬 수 계산 및 UI 업데이트 (표지 포함)
+        // 추천 씬 수 계산 및 UI 업데이트
         function updateRecScenes() {
             const recScenes = Math.min(Math.max(Math.round(collectedData.length * 1.5), 6), 15);
             document.getElementById('total-scene-count').value = recScenes;
-            document.getElementById('ai-rec-scenes').innerText = recScenes;
-            const bodyEl = document.getElementById('ai-rec-body-scenes');
-            if (bodyEl) bodyEl.innerText = recScenes - 1;
+            updateSceneCountDisplay();
+        }
+
+        function updateSceneCountDisplay() {
+            const n = parseInt(document.getElementById('total-scene-count').value) || 8;
+            const hasCover = document.getElementById('include-cover-check')?.checked ?? true;
+            const hasSummary = document.getElementById('include-summary-check')?.checked ?? true;
+            const recEl = document.getElementById('ai-rec-scenes');
+            if (recEl) recEl.innerText = n;
+
+            // 실제 씬 구성 계산 (총 수 안에서 분배)
+            var coverCount = hasCover ? 1 : 0;
+            var summaryCount = hasSummary ? 1 : 0;
+            var bodyCount = Math.max(n - coverCount - summaryCount, 1);
+
+            // 뱃지 렌더링
+            var badgesEl = document.getElementById('scene-breakdown-badges');
+            if (badgesEl) {
+                var html = '';
+                var badgeBase = 'display:inline-flex;align-items:center;gap:3px;padding:3px 10px;border-radius:20px;font-size:0.78rem;font-weight:600;';
+                if (hasCover) {
+                    html += '<span style="' + badgeBase + 'background:#DBEAFE;color:#1D4ED8;">📷 표지 ' + coverCount + '</span>';
+                    html += '<span style="color:var(--text-muted);font-size:0.7rem;">+</span>';
+                }
+                html += '<span style="' + badgeBase + 'background:#D1FAE5;color:#065F46;">📝 본문 ' + bodyCount + '</span>';
+                if (hasSummary) {
+                    html += '<span style="color:var(--text-muted);font-size:0.7rem;">+</span>';
+                    html += '<span style="' + badgeBase + 'background:#FEF3C7;color:#92400E;">📊 요약 ' + summaryCount + '</span>';
+                }
+                html += '<span style="color:var(--text-muted);font-size:0.75rem;margin-left:4px;">= <b style="color:var(--text);font-size:0.85rem;">' + n + '</b>장</span>';
+                badgesEl.innerHTML = html;
+            }
         }
 
         function selectMode(mode) {
@@ -2967,8 +3009,9 @@
                 if (progressText) progressText.textContent = '렌더링 완료!';
 
                 if (!resp.ok) {
+                    const errText = await resp.text();
                     let errMsg = `서버 오류 (${resp.status})`;
-                    try { const errData = await resp.json(); errMsg = errData.detail || errMsg; } catch { errMsg = await resp.text() || errMsg; }
+                    try { const errData = JSON.parse(errText); errMsg = errData.detail || errMsg; } catch { errMsg = errText || errMsg; }
                     throw new Error(errMsg);
                 }
                 const data = await resp.json();
@@ -3608,7 +3651,10 @@
                         characters_input: charsInput,
                         collected_data: safeCollectedData,
                         monologue_mode: isMonologue,
-                        monologue_character: monologueChar
+                        monologue_character: monologueChar,
+                        include_cover: document.getElementById('include-cover-check')?.checked ?? true,
+                        include_summary: document.getElementById('include-summary-check')?.checked ?? true,
+                        summary_style: 'text_card'
                     })
                 });
 
@@ -3649,6 +3695,14 @@
                 renderCharacters();
                 renderScenes(storyData.scenes || []);
                 showSeriesPanel();
+
+                // 빈 요약 씬 안내
+                if (storyData.scenes) {
+                    const emptySummary = storyData.scenes.find(s => s.scene_type === 'summary' && !s.summary_text);
+                    if (emptySummary) {
+                        showToast('요약 텍스트 자동 생성에 실패했습니다. 탭3에서 "AI 재생성" 버튼으로 다시 시도하세요.', 'warning');
+                    }
+                }
 
                 loadingEl.style.display = 'none';
                 reviewArea.style.display = 'block';
@@ -3966,7 +4020,8 @@
             const container = document.getElementById('scenes-container');
             let prevSeriesIdx = -1;
             container.innerHTML = scenes.map((s, idx) => {
-                const densityWarnings = validateSceneRules(s);
+                const sceneType = s.scene_type || 'normal';
+                const densityWarnings = sceneType === 'normal' ? validateSceneRules(s) : [];
                 const isCover = s.scene_number === 0;
                 const curSeriesIdx = getSeriesForScene(idx);
                 let seriesHeader = '';
@@ -3985,6 +4040,10 @@
                         <div style="font-size:1.5rem; margin-bottom:4px;">🖼️</div>대기 중</div>`;
                 const imgStatus = existingImg ? '<span style="color:var(--success);">✅ 완료</span>' : '';
 
+                // 요약/업로드 씬은 전용 카드로 렌더링
+                if (sceneType === 'summary') return seriesHeader + renderSummaryCard(s, idx);
+                if (sceneType === 'uploaded') return seriesHeader + renderUploadedCard(s, idx);
+
                 const descLen = (s.scene_description || '').length;
                 const narLen = (s.narration || '').length;
 
@@ -4000,6 +4059,10 @@
                                     : '씬 ' + s.scene_number}
                             </span>
                             <div style="display:flex; gap:4px;">
+                                <button onclick="moveScene(${idx},-1)" ${idx === 0 ? 'disabled' : ''}
+                                    style="background:none; border:1px solid var(--border); color:var(--text-muted); cursor:pointer; padding:2px 6px; border-radius:6px; font-size:0.72rem;" title="위로 이동">↑</button>
+                                <button onclick="moveScene(${idx},1)" ${idx === scenes.length - 1 ? 'disabled' : ''}
+                                    style="background:none; border:1px solid var(--border); color:var(--text-muted); cursor:pointer; padding:2px 6px; border-radius:6px; font-size:0.72rem;" title="아래로 이동">↓</button>
                                 <button onclick="regenerateScene(${idx})" 
                                     style="background:none; border:1px solid var(--primary); color:var(--primary); cursor:pointer; padding:2px 8px; border-radius:6px; font-size:0.68rem; font-weight:600;" title="이 씬만 다시 생성">씬 재생성</button>
                                 <button onclick="deleteScene(${idx})" 
@@ -4108,14 +4171,26 @@
                 </div>
             `}).join('');
 
-            // 씬 추가 버튼
+            // 씬 추가 버튼 영역
             container.insertAdjacentHTML('beforeend', `
-                <div style="text-align:center; padding:1rem 0;">
+                <div style="display:flex; justify-content:center; gap:10px; padding:1rem 0; flex-wrap:wrap;">
                     <button onclick="addEmptyScene()"
                         style="background:var(--bg-card); border:2px dashed var(--primary); color:var(--primary); cursor:pointer; padding:10px 24px; border-radius:10px; font-size:0.85rem; font-weight:600; transition:all 0.2s;"
                         onmouseover="this.style.background='rgba(37,99,235,0.08)'"
                         onmouseout="this.style.background='var(--bg-card)'">
                         ＋ 씬 추가
+                    </button>
+                    <button onclick="addSummaryScene()"
+                        style="background:var(--bg-card); border:2px dashed #e94560; color:#e94560; cursor:pointer; padding:10px 24px; border-radius:10px; font-size:0.85rem; font-weight:600; transition:all 0.2s;"
+                        onmouseover="this.style.background='rgba(233,69,96,0.08)'"
+                        onmouseout="this.style.background='var(--bg-card)'">
+                        ＋ 요약 슬라이드
+                    </button>
+                    <button onclick="uploadSceneImage()"
+                        style="background:var(--bg-card); border:2px dashed #10b981; color:#10b981; cursor:pointer; padding:10px 24px; border-radius:10px; font-size:0.85rem; font-weight:600; transition:all 0.2s;"
+                        onmouseover="this.style.background='rgba(16,185,129,0.08)'"
+                        onmouseout="this.style.background='var(--bg-card)'">
+                        📷 이미지 업로드
                     </button>
                 </div>
             `);
@@ -4138,11 +4213,196 @@
             storyData.scenes.push(newScene);
             renderScenes(storyData.scenes);
             showToast(`씬 ${newScene.scene_number} 추가됨`, 'success');
-            // 추가된 씬으로 스크롤
+            syncScenesToBackend();
             setTimeout(() => {
                 const card = document.getElementById(`scene-card-${storyData.scenes.length - 1}`);
                 if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }, 100);
+        }
+
+        // 요약 슬라이드 카드 렌더링
+        function renderSummaryCard(s, idx) {
+            const existingImg = (window._sceneImages && window._sceneImages[idx]) || null;
+            const imgContent = existingImg
+                ? '<img src="' + existingImg + '" alt="요약 슬라이드" style="cursor:zoom-in;" onclick="openLightbox(this.src)">'
+                : '<div style="text-align:center;color:var(--text-muted);font-size:0.7rem;"><div style="font-size:1.5rem;margin-bottom:4px;">📋</div>렌더링 대기</div>';
+            const styles = [
+                {v:'table',l:'정리표'},{v:'text_card',l:'텍스트 카드'},{v:'checklist',l:'체크리스트'},
+                {v:'qa',l:'Q&A'},{v:'steps',l:'단계별'},{v:'highlight',l:'한줄 강조'}
+            ];
+            const styleOpts = styles.map(o => '<option value="' + o.v + '"' + ((s.summary_style||'text_card')===o.v?' selected':'') + '>' + o.l + '</option>').join('');
+            return '<div class="scene-card" id="scene-card-' + idx + '" style="border-left:3px solid #e94560;">' +
+                '<div class="scene-card-left">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+                        '<span style="font-weight:700;font-size:0.85rem;"><span style="background:#e94560;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.72rem;margin-right:4px;">📋 요약</span> 슬라이드</span>' +
+                        '<div style="display:flex;gap:4px;">' +
+                            '<button onclick="moveScene(' + idx + ',-1)"' + (idx === 0 ? ' disabled' : '') + ' style="background:none;border:1px solid var(--border);color:var(--text-muted);cursor:pointer;padding:2px 6px;border-radius:6px;font-size:0.72rem;" title="위로 이동">↑</button>' +
+                            '<button onclick="moveScene(' + idx + ',1)"' + (idx === storyData.scenes.length - 1 ? ' disabled' : '') + ' style="background:none;border:1px solid var(--border);color:var(--text-muted);cursor:pointer;padding:2px 6px;border-radius:6px;font-size:0.72rem;" title="아래로 이동">↓</button>' +
+                            '<button onclick="deleteScene(' + idx + ')" style="background:none;border:1px solid var(--danger);color:var(--danger);cursor:pointer;padding:2px 8px;border-radius:6px;font-size:0.68rem;">삭제</button>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div style="margin-top:8px;"><label style="font-size:0.75rem;color:var(--text-muted);">요약 스타일</label>' +
+                    '<select onchange="changeSummaryStyle(' + idx + ',this.value)" style="width:100%;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg-card);color:var(--text);font-size:0.8rem;margin-top:2px;">' + styleOpts + '</select></div>' +
+                    '<div style="margin-top:6px;"><label style="font-size:0.75rem;color:var(--text-muted);">요약 텍스트</label>' +
+                    '<textarea onchange="updateSummaryText(' + idx + ',this.value)" style="width:100%;min-height:80px;border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.78rem;background:var(--bg-card);color:var(--text);resize:vertical;box-sizing:border-box;margin-top:2px;">' + (s.summary_text||'') + '</textarea></div>' +
+                    '<div style="display:flex;gap:6px;margin-top:6px;">' +
+                        '<button onclick="regenerateSummaryText(' + idx + ')" style="flex:1;background:none;border:1px solid var(--primary);color:var(--primary);cursor:pointer;padding:4px 8px;border-radius:6px;font-size:0.72rem;">AI 재생성</button>' +
+                        '<button onclick="renderSummarySlide(' + idx + ')" style="flex:1;background:#e94560;border:none;color:#fff;cursor:pointer;padding:4px 8px;border-radius:6px;font-size:0.72rem;">렌더링</button>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="scene-card-right">' +
+                    '<div class="scene-img-area" id="scene-img-area-' + idx + '"><div id="scene-placeholder-' + idx + '">' + imgContent + '</div></div>' +
+                '</div>' +
+            '</div>';
+        }
+
+        // 업로드 이미지 카드 렌더링
+        function renderUploadedCard(s, idx) {
+            const existingImg = (window._sceneImages && window._sceneImages[idx]) || null;
+            const imgPath = s.rendered_image_path || '';
+            const imgSrc = existingImg || (imgPath ? getImageUrl(imgPath) : '');
+            const imgContent = imgSrc
+                ? '<img src="' + imgSrc + '" alt="업로드 이미지">'
+                : '<div style="text-align:center;color:var(--text-muted);font-size:0.7rem;"><div style="font-size:1.5rem;margin-bottom:4px;">📷</div>이미지 없음</div>';
+            return '<div class="scene-card" id="scene-card-' + idx + '" style="border-left:3px solid #10b981;">' +
+                '<div class="scene-card-left">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+                        '<span style="font-weight:700;font-size:0.85rem;"><span style="background:#10b981;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.72rem;margin-right:4px;">📷 업로드</span> 이미지</span>' +
+                        '<div style="display:flex;gap:4px;">' +
+                            '<button onclick="moveScene(' + idx + ',-1)"' + (idx === 0 ? ' disabled' : '') + ' style="background:none;border:1px solid var(--border);color:var(--text-muted);cursor:pointer;padding:2px 6px;border-radius:6px;font-size:0.72rem;" title="위로 이동">↑</button>' +
+                            '<button onclick="moveScene(' + idx + ',1)"' + (idx === storyData.scenes.length - 1 ? ' disabled' : '') + ' style="background:none;border:1px solid var(--border);color:var(--text-muted);cursor:pointer;padding:2px 6px;border-radius:6px;font-size:0.72rem;" title="아래로 이동">↓</button>' +
+                            '<button onclick="deleteScene(' + idx + ')" style="background:none;border:1px solid var(--danger);color:var(--danger);cursor:pointer;padding:2px 8px;border-radius:6px;font-size:0.68rem;">삭제</button>' +
+                        '</div>' +
+                    '</div>' +
+                    '<p style="font-size:0.78rem;color:var(--text-muted);margin-top:8px;">외부에서 업로드한 이미지입니다.</p>' +
+                '</div>' +
+                '<div class="scene-card-right">' +
+                    '<div class="scene-img-area" id="scene-img-area-' + idx + '"><div id="scene-placeholder-' + idx + '">' + imgContent + '</div></div>' +
+                '</div>' +
+            '</div>';
+        }
+
+        // 요약 슬라이드 추가
+        async function addSummaryScene() {
+            if (!sessionId) { showToast('세션이 없습니다.', 'error'); return; }
+            try {
+                const res = await fetch('/api/workflow/add-summary-scene', {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ session_id: sessionId, style: 'table' })
+                });
+                const data = await res.json();
+                if (data.success && data.scene) {
+                    storyData.scenes.push(data.scene);
+                    renderScenes(storyData.scenes);
+                    showToast('요약 슬라이드 추가됨', 'success');
+                    setTimeout(() => {
+                        const card = document.getElementById('scene-card-' + (storyData.scenes.length - 1));
+                        if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 100);
+                } else {
+                    showToast(data.detail || '추가 실패', 'error');
+                }
+            } catch (e) { showToast('요약 슬라이드 추가 오류: ' + e.message, 'error'); }
+        }
+
+        // 요약 텍스트 AI 재생성
+        async function regenerateSummaryText(idx) {
+            if (!sessionId || !storyData.scenes[idx]) return;
+            const scene = storyData.scenes[idx];
+            const btn = document.querySelector('#scene-card-' + idx + ' button');
+            try {
+                showToast('AI가 요약을 생성하고 있습니다...', 'info');
+                const res = await fetch('/api/workflow/generate-summary-text', {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        scene_number: scene.scene_number,
+                        style: scene.summary_style || 'text_card'
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    scene.summary_text = data.summary_text;
+                    renderScenes(storyData.scenes);
+                    showToast('요약 텍스트 생성 완료', 'success');
+                } else {
+                    showToast(data.detail || '생성 실패', 'error');
+                }
+            } catch (e) { showToast('요약 생성 오류: ' + e.message, 'error'); }
+        }
+
+        // 요약 슬라이드 Playwright 렌더링
+        async function renderSummarySlide(idx) {
+            if (!sessionId || !storyData.scenes[idx]) return;
+            const scene = storyData.scenes[idx];
+            if (!scene.summary_text) { showToast('요약 텍스트를 먼저 생성하세요.', 'warning'); return; }
+            try {
+                await syncScenesToBackend();
+                showToast('요약 슬라이드 렌더링 중...', 'info');
+                const res = await fetch('/api/workflow/render-summary-slide', {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ session_id: sessionId, scene_number: scene.scene_number })
+                });
+                const data = await res.json();
+                if (data.success && data.image_path) {
+                    const imgUrl = getImageUrl(data.image_path) + '?t=' + Date.now();
+                    const imgArea = document.getElementById('scene-img-area-' + idx);
+                    if (imgArea) {
+                        imgArea.innerHTML = '<img src="' + imgUrl + '" alt="요약 슬라이드" style="cursor:zoom-in;" onclick="openLightbox(this.src)">';
+                    }
+                    if (!window._sceneImages) window._sceneImages = {};
+                    window._sceneImages[idx] = imgUrl;
+                    showToast('렌더링 완료 (클릭하면 확대)', 'success');
+                } else {
+                    showToast(data.detail || '렌더링 실패', 'error');
+                }
+            } catch (e) { showToast('렌더링 오류: ' + e.message, 'error'); }
+        }
+
+        // 요약 스타일 변경
+        function changeSummaryStyle(idx, style) {
+            if (!storyData.scenes[idx]) return;
+            storyData.scenes[idx].summary_style = style;
+            scheduleSceneSync();
+        }
+
+        // 요약 텍스트 직접 편집
+        function updateSummaryText(idx, text) {
+            if (!storyData.scenes[idx]) return;
+            storyData.scenes[idx].summary_text = text;
+            scheduleSceneSync();
+        }
+
+        // 이미지 업로드하여 새 씬으로 추가
+        function uploadSceneImage() {
+            if (!sessionId) { showToast('세션이 없습니다.', 'error'); return; }
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.onchange = async function() {
+                const file = input.files[0];
+                if (!file) return;
+                try {
+                    showToast('이미지 업로드 중...', 'info');
+                    const formData = new FormData();
+                    formData.append('session_id', sessionId);
+                    formData.append('image', file);
+                    const res = await fetch('/api/workflow/upload-scene-image', { method: 'POST', body: formData });
+                    const data = await res.json();
+                    if (data.success && data.scene) {
+                        storyData.scenes.push(data.scene);
+                        if (data.image_path) {
+                            if (!window._sceneImages) window._sceneImages = {};
+                            window._sceneImages[storyData.scenes.length - 1] = getImageUrl(data.image_path);
+                        }
+                        renderScenes(storyData.scenes);
+                        showToast('이미지 업로드 완료', 'success');
+                    } else {
+                        showToast(data.detail || '업로드 실패', 'error');
+                    }
+                } catch (e) { showToast('업로드 오류: ' + e.message, 'error'); }
+            };
+            input.click();
         }
 
         // Step 3 대사/나레이션 수정 시 자동 서버 동기화 (2초 debounce)
@@ -4371,7 +4631,10 @@
                         text: d.text || '',
                         emotion: d.emotion || null
                     })),
-                    narration: s.narration || ''
+                    narration: s.narration || '',
+                    scene_type: s.scene_type || 'normal',
+                    summary_style: s.summary_style || null,
+                    summary_text: s.summary_text || null
                 }));
                 const res = await fetch('/api/workflow/update-scenes-bulk', {
                     method: 'POST',
@@ -4519,6 +4782,36 @@
                 const overlay = document.getElementById(`regen-overlay-${idx}`);
                 if (overlay) overlay.remove();
             }
+        }
+
+        // 씬 위치 이동
+        function moveScene(idx, direction) {
+            const targetIdx = idx + direction;
+            if (targetIdx < 0 || targetIdx >= storyData.scenes.length) return;
+
+            const scenes = storyData.scenes;
+            [scenes[idx], scenes[targetIdx]] = [scenes[targetIdx], scenes[idx]];
+
+            // 이미지 캐시도 함께 이동
+            if (window._sceneImages) {
+                const imgs = window._sceneImages;
+                [imgs[idx], imgs[targetIdx]] = [imgs[targetIdx], imgs[idx]];
+            }
+
+            // 씬 번호 재정렬
+            const hasCover = scenes.length > 0 && scenes[0].scene_type !== 'summary' && scenes[0].scene_type !== 'uploaded' && scenes[0].scene_number === 0;
+            scenes.forEach((scene, i) => {
+                if (i === 0 && hasCover) { scene.scene_number = 0; return; }
+                scene.scene_number = hasCover ? i : i + 1;
+            });
+
+            renderScenes(scenes);
+            syncScenesToBackend();
+
+            setTimeout(() => {
+                const card = document.getElementById('scene-card-' + targetIdx);
+                if (card) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 50);
         }
 
         // 씬 삭제 함수
@@ -5972,6 +6265,10 @@
 
             // Step 4: 말풍선 편집 — Step 3 대사/나레이션을 서버에 동기화 후 에디터 초기화
             if (step === 4) {
+                const sceneCount = storyData?.scenes?.length || 0;
+                if (sceneCount > 10 && (!window.seriesConfig || window.seriesConfig.total <= 1)) {
+                    showToast('총 ' + sceneCount + '장으로 인스타그램 10장 제한 초과. 시리즈 분할을 권장합니다.', 'warning');
+                }
                 syncScenesToBackend().then(() => {
                     initBubbleEditor();
                 });
@@ -7108,6 +7405,25 @@
                     // 이미지가 없으면 스킵
                     if (!imgEl.src || !imgEl.naturalWidth) continue;
 
+                    // 요약/업로드 씬은 버블 오버레이 없이 원본 이미지 내보내기
+                    var layerSceneNum = bubbleLayers[i] ? bubbleLayers[i].scene_number : -1;
+                    var matchScene = storyData && storyData.scenes ? storyData.scenes.find(function(sc) { return sc.scene_number === layerSceneNum; }) : null;
+                    if (matchScene && matchScene.scene_type && matchScene.scene_type !== 'normal') {
+                        // 원본 이미지를 그대로 blob으로 변환
+                        var tmpCanvas = document.createElement('canvas');
+                        tmpCanvas.width = imgEl.naturalWidth;
+                        tmpCanvas.height = imgEl.naturalHeight;
+                        tmpCanvas.getContext('2d').drawImage(imgEl, 0, 0);
+                        var tmpBlob = await new Promise(function(resolve) { tmpCanvas.toBlob(resolve, 'image/png'); });
+                        var tmpForm = new FormData();
+                        tmpForm.append('image', tmpBlob, 'scene_' + layerSceneNum + '.png');
+                        tmpForm.append('scene_number', String(layerSceneNum));
+                        var tmpRes = await fetch('/api/workflow/bubble-layers/' + sessionId + '/upload-export', { method: 'POST', body: tmpForm });
+                        var tmpData = await tmpRes.json();
+                        if (tmpData.export_path) exportedPaths.push(tmpData.export_path);
+                        continue;
+                    }
+
                     // 3. 편집 UI 요소 숨기기 (리사이즈 핸들)
                     var handles = container.querySelectorAll('.bubble-resize-handle');
                     handles.forEach(function(h) { h.style.display = 'none'; });
@@ -8106,6 +8422,12 @@
                 };
             }
 
+            // 키워드 복원
+            if (data.keyword) {
+                var kwEl = document.getElementById('keyword');
+                if (kwEl) kwEl.value = data.keyword;
+            }
+
             // 수집 데이터 복원
             if (data.collected_data && Array.isArray(data.collected_data)) {
                 collectedData = data.collected_data;
@@ -8147,6 +8469,17 @@
 
             document.getElementById('project-list-panel').style.display = 'none';
 
+            // Tab 1 수집 데이터 화면 복원
+            if (collectedData && collectedData.length > 0) {
+                var dataReview = document.getElementById('data-review-area');
+                var dataActions = document.getElementById('data-actions');
+                var loadingData = document.getElementById('loading-data');
+                if (dataReview) dataReview.style.display = 'block';
+                if (dataActions) dataActions.style.display = 'flex';
+                if (loadingData) loadingData.style.display = 'none';
+                if (typeof renderDataItems === 'function') renderDataItems();
+            }
+
             // 스토리가 있으면 Tab 3으로 이동
             if (storyData && storyData.scenes && storyData.scenes.length > 0) {
                 goToStep(3);
@@ -8174,6 +8507,9 @@
         const name = prompt('프로젝트 이름을 입력하세요:', storyData ? (storyData.title || '') : '');
         if (!name) return;
         try {
+            // 0) 씬 편집 내용을 백엔드 세션에 먼저 동기화
+            await syncScenesToBackend();
+
             // 1) 현재 편집 중인 말풍선 레이어 전부 서버 동기화
             if (typeof bubbleLayers !== 'undefined' && bubbleLayers && bubbleLayers.length > 0) {
                 for (var i = 0; i < bubbleLayers.length; i++) {
@@ -8233,6 +8569,31 @@
     }
 
     </script>
+
+<!-- ── Lightbox (이미지 확대 보기) ── -->
+<div id="lightbox-modal" onclick="closeLightbox(event)" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.88);backdrop-filter:blur(6px);cursor:zoom-out;justify-content:center;align-items:center;">
+    <img id="lightbox-img" src="" alt="확대 이미지" style="max-width:92vw;max-height:92vh;object-fit:contain;border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,0.5);">
+    <div style="position:absolute;top:20px;right:28px;color:#fff;font-size:36px;cursor:pointer;opacity:0.7;line-height:1;" onclick="closeLightbox(event)">&times;</div>
+    <div style="position:absolute;bottom:20px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.5);font-size:13px;">클릭 또는 ESC로 닫기</div>
+</div>
+<script>
+function openLightbox(src) {
+    const modal = document.getElementById('lightbox-modal');
+    const img = document.getElementById('lightbox-img');
+    img.src = src;
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+}
+function closeLightbox(e) {
+    if (e && e.target && e.target.id === 'lightbox-img') return;
+    const modal = document.getElementById('lightbox-modal');
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+}
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeLightbox();
+});
+</script>
 </body>
 
 </html>

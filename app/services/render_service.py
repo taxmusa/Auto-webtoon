@@ -4,81 +4,166 @@ Playwright 렌더링 서비스
 - 한글 웹폰트 지원 (Google Fonts 11종)
 - 고품질 스크린샷 (2x 해상도)
 - document.fonts.ready 대기로 폰트 로딩 보장 (R1)
-- asyncio.Lock 으로 브라우저 초기화 경합 방지 (R2 준비)
+- sync API + 전용 단일 스레드 Executor로 greenlet 호환 (R3)
 """
 import asyncio
 import os
 import logging
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# Playwright 브라우저 인스턴스 (싱글톤)
-_browser = None
-_playwright = None
-_browser_lock = asyncio.Lock()  # R2: 브라우저 초기화 경합 방지
-_render_semaphore = asyncio.Semaphore(3)  # R2: 동시 렌더링 3개 제한
+# Cursor 샌드박스가 설정하는 임시 경로 제거 (기본 경로 사용)
+_pw_path = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "")
+if "cursor-sandbox" in _pw_path or "Temp" in _pw_path:
+    os.environ.pop("PLAYWRIGHT_BROWSERS_PATH", None)
+    logger.info(f"[Playwright] 샌드박스 브라우저 경로 제거: {_pw_path}")
+
+# Playwright는 greenlet 기반이므로 반드시 동일 스레드에서 실행해야 함
+# max_workers=1 → 모든 Playwright 호출이 단일 전용 스레드에서 순차 실행
+_playwright_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="playwright")
+
+# Playwright sync 브라우저 인스턴스 (싱글톤, 스레드 안전)
+_sync_browser = None
+_sync_playwright = None
+_browser_thread_id = None  # 브라우저를 생성한 스레드 ID
+_browser_lock = threading.Lock()
+_render_semaphore = asyncio.Semaphore(3)
 
 
-async def _get_browser():
-    """Playwright 브라우저 싱글톤 반환 (재시도 포함, Lock으로 경합 방지)"""
-    global _browser, _playwright
+def _get_sync_browser():
+    """Playwright sync 브라우저 싱글톤 (스레드에서 호출)
 
-    if _browser and _browser.is_connected():
-        return _browser
+    greenlet 호환을 위해 현재 스레드가 브라우저 생성 스레드와 다르면
+    자동으로 기존 인스턴스를 폐기하고 재생성한다.
+    """
+    global _sync_browser, _sync_playwright, _browser_thread_id
 
-    async with _browser_lock:
-        # 더블체크 (Lock 대기 중 다른 코루틴이 이미 생성했을 수 있음)
-        if _browser and _browser.is_connected():
-            return _browser
+    current_thread = threading.current_thread().ident
 
-        # 기존 인스턴스 정리
-        if _browser:
+    # 브라우저가 다른 스레드에서 생성되었거나, 생성 스레드를 알 수 없는 경우 → 강제 재생성
+    need_recreate = (
+        _sync_browser is not None
+        and (_browser_thread_id is None or _browser_thread_id != current_thread)
+    )
+
+    if not need_recreate and _sync_browser and _sync_browser.is_connected():
+        return _sync_browser
+
+    with _browser_lock:
+        # 더블 체크: 락 획득 사이에 다른 호출이 이미 재생성했을 수 있음
+        if _sync_browser and _sync_browser.is_connected() and _browser_thread_id == current_thread:
+            return _sync_browser
+
+        if _sync_browser is not None:
+            logger.warning(
+                "[Playwright] 스레드 불일치 감지 (생성=%s, 현재=%s) → 브라우저 재생성",
+                _browser_thread_id, current_thread
+            )
+
+        if _sync_browser:
             try:
-                await _browser.close()
+                _sync_browser.close()
             except Exception:
                 pass
-            _browser = None
-        if _playwright:
+            _sync_browser = None
+        if _sync_playwright:
             try:
-                await _playwright.stop()
+                _sync_playwright.stop()
             except Exception:
                 pass
-            _playwright = None
+            _sync_playwright = None
+        _browser_thread_id = None
 
-        from playwright.async_api import async_playwright
+        from playwright.sync_api import sync_playwright
 
         for attempt in range(3):
             try:
-                _playwright = await async_playwright().start()
-                _browser = await _playwright.chromium.launch(
+                _sync_playwright = sync_playwright().start()
+                _sync_browser = _sync_playwright.chromium.launch(
                     headless=True,
                     args=['--no-sandbox', '--disable-setuid-sandbox']
                 )
-                logger.info("[Playwright] 브라우저 시작됨")
-                return _browser
+                _browser_thread_id = current_thread
+                logger.info("[Playwright] 브라우저 시작됨 (sync mode, thread=%s)", current_thread)
+                return _sync_browser
             except Exception as e:
                 logger.warning(f"[Playwright] 브라우저 시작 실패 (시도 {attempt+1}/3): {e}")
                 if attempt < 2:
-                    await asyncio.sleep(1)
+                    import time
+                    time.sleep(1)
                 else:
                     raise RuntimeError(f"Playwright 브라우저를 시작할 수 없습니다: {e}")
 
 
 async def shutdown_browser():
     """앱 종료 시 브라우저 정리"""
-    global _browser, _playwright
-    if _browser:
-        await _browser.close()
-        _browser = None
-    if _playwright:
-        await _playwright.stop()
-        _playwright = None
+    global _sync_browser, _sync_playwright
+    def _shutdown():
+        global _sync_browser, _sync_playwright
+        if _sync_browser:
+            try:
+                _sync_browser.close()
+            except Exception:
+                pass
+            _sync_browser = None
+        if _sync_playwright:
+            try:
+                _sync_playwright.stop()
+            except Exception:
+                pass
+            _sync_playwright = None
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(_playwright_executor, _shutdown)
 
 
 # ────────────────────────────────────────────
 # 핵심 렌더링 함수
 # ────────────────────────────────────────────
+
+def _render_sync(
+    html_content: str,
+    width: int,
+    height: int,
+    output_path: Optional[str],
+    device_scale_factor: float,
+    omit_background: bool = False,
+) -> bytes:
+    """스레드에서 실행되는 sync 렌더링 (Playwright sync API)"""
+    browser = _get_sync_browser()
+    page = browser.new_page(
+        viewport={"width": width, "height": height},
+        device_scale_factor=device_scale_factor,
+    )
+    try:
+        page.set_content(html_content, wait_until="networkidle")
+        try:
+            page.wait_for_function(
+                "() => document.fonts.ready.then(() => true)",
+                timeout=5000,
+            )
+        except Exception:
+            page.wait_for_timeout(500)
+        page.wait_for_timeout(100)
+
+        screenshot_bytes = page.screenshot(
+            type="png",
+            full_page=False,
+            omit_background=omit_background,
+        )
+
+        if output_path:
+            os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+            with open(output_path, "wb") as f:
+                f.write(screenshot_bytes)
+            logger.info(f"[Playwright] 이미지 저장: {output_path}")
+
+        return screenshot_bytes
+    finally:
+        page.close()
+
 
 async def render_html_to_image(
     html_content: str,
@@ -99,40 +184,13 @@ async def render_html_to_image(
     Returns:
         PNG 이미지 bytes
     """
-    async with _render_semaphore:  # R2: 동시 렌더링 3개 제한
-        browser = await _get_browser()
-        page = await browser.new_page(
-            viewport={"width": width, "height": height},
-            device_scale_factor=device_scale_factor,
+    async with _render_semaphore:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            _playwright_executor,
+            _render_sync, html_content, width, height,
+            output_path, device_scale_factor, False,
         )
-
-        try:
-            await page.set_content(html_content, wait_until="networkidle")
-            # R1: document.fonts.ready로 폰트 로딩 완료 대기 (최대 5초)
-            try:
-                await page.wait_for_function(
-                    "() => document.fonts.ready.then(() => true)",
-                    timeout=5000,
-                )
-            except Exception:
-                # 폴백: 고정 대기
-                await page.wait_for_timeout(500)
-
-            screenshot_bytes = await page.screenshot(
-                type="png",
-                full_page=False,
-            )
-
-            if output_path:
-                os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-                with open(output_path, "wb") as f:
-                    f.write(screenshot_bytes)
-                logger.info(f"[Playwright] 이미지 저장: {output_path}")
-
-            return screenshot_bytes
-
-        finally:
-            await page.close()
 
 
 async def render_html_to_transparent_image(
@@ -148,37 +206,12 @@ async def render_html_to_transparent_image(
     기존 AI 이미지 위에 말풍선을 합성할 때 사용.
     """
     async with _render_semaphore:
-        browser = await _get_browser()
-        page = await browser.new_page(
-            viewport={"width": width, "height": height},
-            device_scale_factor=device_scale_factor,
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            _playwright_executor,
+            _render_sync, html_content, width, height,
+            output_path, device_scale_factor, True,
         )
-
-        try:
-            await page.set_content(html_content, wait_until="networkidle")
-            try:
-                await page.wait_for_function(
-                    "() => document.fonts.ready.then(() => true)",
-                    timeout=5000,
-                )
-            except Exception:
-                await page.wait_for_timeout(500)
-
-            screenshot_bytes = await page.screenshot(
-                type="png",
-                full_page=False,
-                omit_background=True,
-            )
-
-            if output_path:
-                os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-                with open(output_path, "wb") as f:
-                    f.write(screenshot_bytes)
-
-            return screenshot_bytes
-
-        finally:
-            await page.close()
 
 
 # ────────────────────────────────────────────
@@ -572,3 +605,286 @@ async def composite_bubble_on_image(
         logger.info(f"[Playwright] 합성 이미지 저장: {output_path}")
 
     return result_bytes
+
+
+def build_summary_slide_html(
+    summary_text: str,
+    style: str = "text_card",
+    story_title: str = "",
+    width: int = 1080,
+    height: int = 1350,
+    bg_color: str = "#1a1a2e",
+    text_color: str = "#FFFFFF",
+    accent_color: str = "#e94560",
+    font_family: str = "Nanum Gothic",
+) -> str:
+    """요약 슬라이드용 HTML 생성 — 전문 디자인 v3 (밝고 깔끔한 톤)"""
+    import html as html_mod
+    import re as _re
+
+    safe_title = html_mod.escape(story_title) if story_title else ""
+    safe_text = summary_text or ""
+
+    # ── 스타일별 색상 팔레트 (밝고 세련된 톤) ──
+    palettes = {
+        "table":     {"bg": "#f8fafc", "card": "#ffffff", "accent": "#2563eb", "text": "#1e293b", "muted": "#64748b", "accent_light": "#dbeafe", "border": "#e2e8f0"},
+        "checklist": {"bg": "#f9fafb", "card": "#ffffff", "accent": "#059669", "text": "#1c1917", "muted": "#6b7280", "accent_light": "#d1fae5", "border": "#e5e7eb"},
+        "qa":        {"bg": "#faf5ff", "card": "#ffffff", "accent": "#7c3aed", "text": "#1e1b4b", "muted": "#6b7280", "accent_light": "#ede9fe", "border": "#e9e5f5"},
+        "steps":     {"bg": "#fff7ed", "card": "#ffffff", "accent": "#ea580c", "text": "#1c1917", "muted": "#78716c", "accent_light": "#ffedd5", "border": "#fed7aa"},
+        "highlight": {"bg": "#fffbeb", "card": "#ffffff", "accent": "#d97706", "text": "#1c1917", "muted": "#78716c", "accent_light": "#fef3c7", "border": "#fde68a"},
+        "text_card": {"bg": "#f0fdf4", "card": "#ffffff", "accent": "#059669", "text": "#1c1917", "muted": "#6b7280", "accent_light": "#d1fae5", "border": "#a7f3d0"},
+    }
+    p = palettes.get(style, palettes["text_card"])
+
+    # ── 공통 헤더/배지 ──
+    badge_html = f"""<div class="badge">\u2728 \uc694\uc57d \uc815\ub9ac</div>"""
+    title_html = f"""<div class="title">{safe_title}</div>""" if safe_title else ""
+
+    # ── 스타일별 본문 HTML ──
+    body_html = ""
+    extra_css = ""
+
+    if style == "table":
+        rows = []
+        for line in safe_text.strip().split("\n"):
+            line = line.strip()
+            if not line or line.startswith("---"):
+                continue
+            cells = [c.strip() for c in line.split("|") if c.strip()]
+            if cells:
+                rows.append(cells)
+        if rows:
+            header = rows[0]
+            data_rows = rows[1:] if len(rows) > 1 else []
+            th_html = "".join(f"<th>{html_mod.escape(c)}</th>" for c in header)
+            tr_html = ""
+            for ri, row in enumerate(data_rows):
+                cls = ' class="alt"' if ri % 2 == 1 else ""
+                td_html = "".join(f"<td>{html_mod.escape(c)}</td>" for c in row)
+                tr_html += f"<tr{cls}>{td_html}</tr>"
+            body_html = f"""<div class="table-wrap"><table><thead><tr>{th_html}</tr></thead><tbody>{tr_html}</tbody></table></div>"""
+        extra_css = f"""
+.table-wrap {{ flex:1; display:flex; align-items:flex-start; overflow:hidden; margin-top:28px; }}
+table {{ width:100%; border-collapse:separate; border-spacing:0; border-radius:16px; overflow:hidden; border:1px solid {p['border']}; }}
+thead th {{ background:{p['accent']}; color:#fff; padding:22px 28px; font-size:26px; font-weight:800; text-align:left; letter-spacing:0.01em; }}
+thead th:not(:last-child) {{ border-right:1px solid rgba(255,255,255,0.2); }}
+tbody td {{ padding:20px 28px; font-size:24px; color:{p['text']}; border-bottom:1px solid {p['border']}; line-height:1.6; background:{p['card']}; }}
+tbody td:not(:last-child) {{ border-right:1px solid {p['border']}; }}
+tbody tr.alt td {{ background:{p['accent_light']}40; }}
+tbody tr:last-child td {{ border-bottom:none; }}
+"""
+
+    elif style == "checklist":
+        items = []
+        for line in safe_text.strip().split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            line = _re.sub(r'^[-\u2022]\s*', '', line)
+            line = _re.sub(r'^\[[ x]?\]\s*', '', line)
+            items.append(f"""<div class="check-item">
+<div class="check-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="11" fill="{p['accent_light']}"/><path d="M8 12l3 3 5-5" stroke="{p['accent']}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+<div class="check-text">{html_mod.escape(line)}</div>
+</div>""")
+        body_html = f"""<div class="check-list">{"".join(items)}</div>"""
+        extra_css = f"""
+.check-list {{ flex:1; display:flex; flex-direction:column; gap:14px; margin-top:28px; }}
+.check-item {{ display:flex; align-items:flex-start; gap:18px; background:{p['card']}; border-radius:14px; padding:22px 28px; border:1px solid {p['border']}; border-left:4px solid {p['accent']}; }}
+.check-icon {{ flex-shrink:0; margin-top:2px; }}
+.check-text {{ font-size:25px; line-height:1.6; color:{p['text']}; font-weight:500; }}
+"""
+
+    elif style == "qa":
+        blocks = []
+        lines = safe_text.strip().split("\n")
+
+        # 테이블 형식(| col |) 감지 → 자동 변환
+        has_pipe = any("|" in l for l in lines)
+        if has_pipe:
+            clean_lines = []
+            header_row = None
+            for line in lines:
+                line = line.strip()
+                if not line or line.startswith("---") or _re.match(r'^[\s\-|]+$', line):
+                    continue
+                cells = [c.strip() for c in line.split("|") if c.strip()]
+                if not cells:
+                    continue
+                if header_row is None:
+                    header_row = cells
+                else:
+                    if len(cells) >= 2:
+                        clean_lines.append((cells[0], " / ".join(cells[1:])))
+                    else:
+                        clean_lines.append((cells[0], ""))
+            for qi, (q_val, a_val) in enumerate(clean_lines, 1):
+                blocks.append(f"""<div class="qa-block">
+<div class="qa-q"><span class="qa-badge">Q{qi}</span><span class="qa-q-text">{html_mod.escape(q_val)}</span></div>
+<div class="qa-a"><span class="qa-badge qa-badge-a">A</span><span class="qa-a-text">{html_mod.escape(a_val)}</span></div>
+</div>""")
+        else:
+            i = 0
+            qa_num = 0
+            while i < len(lines):
+                line = lines[i].strip()
+                if not line:
+                    i += 1
+                    continue
+                is_q = (
+                    line.upper().startswith("Q:") or line.upper().startswith("Q.")
+                    or line.upper().startswith("Q ") or _re.match(r'^Q\d', line.upper())
+                )
+                if is_q:
+                    qa_num += 1
+                    q_text = _re.sub(r'^[Qq][\.:)]\s*', '', line).strip()
+                    q_text = _re.sub(r'^[Qq]\d+[\.:)]\s*', '', q_text).strip()
+                    q = html_mod.escape(q_text) if q_text else html_mod.escape(line)
+                    a = ""
+                    if i + 1 < len(lines):
+                        next_line = lines[i + 1].strip()
+                        is_a = (
+                            next_line.upper().startswith("A:") or next_line.upper().startswith("A.")
+                            or next_line.upper().startswith("A ") or _re.match(r'^A\d', next_line.upper())
+                        )
+                        if is_a:
+                            a_text = _re.sub(r'^[Aa][\.:)]\s*', '', next_line).strip()
+                            a_text = _re.sub(r'^[Aa]\d+[\.:)]\s*', '', a_text).strip()
+                            a = html_mod.escape(a_text) if a_text else html_mod.escape(next_line)
+                            i += 1
+                        elif not next_line.upper().startswith("Q"):
+                            a = html_mod.escape(next_line)
+                            i += 1
+                    blocks.append(f"""<div class="qa-block">
+<div class="qa-q"><span class="qa-badge">Q{qa_num}</span><span class="qa-q-text">{q}</span></div>
+<div class="qa-a"><span class="qa-badge qa-badge-a">A</span><span class="qa-a-text">{a}</span></div>
+</div>""")
+                else:
+                    qa_num += 1
+                    blocks.append(f"""<div class="qa-block">
+<div class="qa-q"><span class="qa-badge">Q{qa_num}</span><span class="qa-q-text">{html_mod.escape(line)}</span></div>
+<div class="qa-a"><span class="qa-badge qa-badge-a">A</span><span class="qa-a-text"></span></div>
+</div>""")
+                i += 1
+        body_html = f"""<div class="qa-list">{"".join(blocks)}</div>"""
+        extra_css = f"""
+.qa-list {{ flex:1; display:flex; flex-direction:column; gap:18px; margin-top:28px; }}
+.qa-block {{ background:{p['card']}; border-radius:16px; padding:28px 32px; border:1px solid {p['border']}; }}
+.qa-q {{ display:flex; align-items:flex-start; gap:16px; margin-bottom:18px; }}
+.qa-a {{ display:flex; align-items:flex-start; gap:16px; padding-top:18px; border-top:1px dashed {p['border']}; }}
+.qa-badge {{ display:inline-flex; align-items:center; justify-content:center; min-width:42px; height:42px; border-radius:12px; background:{p['accent']}; color:#fff; font-weight:900; font-size:20px; flex-shrink:0; }}
+.qa-badge-a {{ background:{p['accent_light']}; color:{p['accent']}; }}
+.qa-q-text {{ font-size:26px; font-weight:700; color:{p['text']}; line-height:1.5; padding-top:6px; }}
+.qa-a-text {{ font-size:24px; color:{p['muted']}; line-height:1.7; padding-top:8px; }}
+"""
+
+    elif style == "steps":
+        steps = []
+        for idx_s, line in enumerate(safe_text.strip().split("\n"), 1):
+            line = line.strip()
+            if not line:
+                continue
+            line = _re.sub(r'^\d+[\.\)\-\ub2e8\uacc4:]+\s*', '', line)
+            steps.append(f"""<div class="step-item">
+<div class="step-left">
+    <div class="step-num">{idx_s}</div>
+    <div class="step-line"></div>
+</div>
+<div class="step-card">{html_mod.escape(line)}</div>
+</div>""")
+        body_html = f"""<div class="step-list">{"".join(steps)}</div>"""
+        extra_css = f"""
+.step-list {{ flex:1; display:flex; flex-direction:column; margin-top:28px; }}
+.step-item {{ display:flex; gap:20px; }}
+.step-left {{ display:flex; flex-direction:column; align-items:center; }}
+.step-num {{ width:52px; height:52px; border-radius:50%; background:{p['accent']}; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:24px; flex-shrink:0; }}
+.step-line {{ width:2px; flex:1; background:{p['border']}; min-height:14px; }}
+.step-item:last-child .step-line {{ display:none; }}
+.step-card {{ flex:1; background:{p['card']}; border-radius:14px; padding:22px 28px; margin-bottom:14px; border:1px solid {p['border']}; border-left:3px solid {p['accent']}; font-size:25px; line-height:1.6; color:{p['text']}; font-weight:500; }}
+"""
+
+    elif style == "highlight":
+        lines_hl = [l.strip() for l in safe_text.strip().split("\n") if l.strip()]
+        main_text = lines_hl[0] if lines_hl else ""
+        sub_text = " ".join(lines_hl[1:]) if len(lines_hl) > 1 else ""
+        body_html = f"""<div class="hl-wrap">
+<div class="hl-deco-line"></div>
+<div class="hl-main">{html_mod.escape(main_text)}</div>
+{f'<div class="hl-sub">{html_mod.escape(sub_text)}</div>' if sub_text else ''}
+<div class="hl-deco-line"></div>
+</div>"""
+        extra_css = f"""
+.hl-wrap {{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:48px; gap:28px; }}
+.hl-deco-line {{ width:80px; height:4px; background:{p['accent']}; border-radius:2px; }}
+.hl-main {{ font-size:52px; font-weight:900; color:{p['accent']}; line-height:1.35; letter-spacing:-0.02em; max-width:90%; }}
+.hl-sub {{ font-size:26px; color:{p['muted']}; line-height:1.7; max-width:85%; font-weight:400; }}
+"""
+
+    else:  # text_card
+        paragraphs = []
+        for line in safe_text.strip().split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            paragraphs.append(f"<p>{html_mod.escape(line)}</p>")
+        body_html = f"""<div class="tc-wrap">{"".join(paragraphs)}</div>"""
+        extra_css = f"""
+.tc-wrap {{ flex:1; background:{p['card']}; border-radius:20px; padding:44px 48px; margin-top:24px; border:1px solid {p['border']}; overflow:hidden; }}
+.tc-wrap p {{ font-size:26px; line-height:1.8; color:{p['text']}; margin:0 0 18px 0; }}
+.tc-wrap p:last-child {{ margin-bottom:0; }}
+.tc-wrap p:first-child {{ font-size:28px; font-weight:700; color:{p['accent']}; margin-bottom:24px; padding-bottom:18px; border-bottom:2px solid {p['border']}; }}
+"""
+
+    return f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+* {{ margin:0; padding:0; box-sizing:border-box; }}
+body {{
+    width:{width}px; height:{height}px;
+    background:{p['bg']};
+    color:{p['text']};
+    font-family:'Noto Sans KR', '{font_family}', sans-serif;
+    padding:0; margin:0;
+    overflow:visible;
+}}
+#wrap {{
+    display:flex; flex-direction:column;
+    padding:64px 56px 56px;
+}}
+.badge {{
+    display:inline-flex; align-items:center; gap:8px;
+    background:{p['accent']};
+    color:#fff; padding:10px 24px; border-radius:40px;
+    font-size:20px; font-weight:700; letter-spacing:0.03em;
+    align-self:flex-start; margin-bottom:20px;
+}}
+.title {{
+    font-size:36px; font-weight:900; color:{p['text']};
+    line-height:1.3; margin-bottom:4px; letter-spacing:-0.02em;
+    padding-bottom:20px;
+    border-bottom:2px solid {p['border']};
+}}
+{extra_css}
+</style></head>
+<body>
+<div id="wrap">
+{badge_html}
+{title_html}
+{body_html}
+</div>
+<script>
+(function(){{
+    var w=document.getElementById('wrap');
+    var body=document.body;
+    var maxH=body.clientHeight;
+    var realH=w.scrollHeight;
+    if(realH>maxH){{
+        var s=maxH/realH;
+        if(s<0.55) s=0.55;
+        w.style.transform='scale('+s+')';
+        w.style.transformOrigin='top left';
+        w.style.width=(100/s)+'%';
+    }}
+}})();
+</script>
+</body></html>"""

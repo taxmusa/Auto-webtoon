@@ -27,4 +27,5 @@ python-dotenv>=1.2.1
 pydantic>=2.12.5
 pydantic-settings>=2.13.0
 
-# Cloudinary (이미지 호스팅 — httpx로 직접 호출, SDK 불필요)
+# Cloudinary (이미지 호스팅)
+cloudinary>=1.44.1
