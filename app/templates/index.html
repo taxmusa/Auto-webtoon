@@ -2810,6 +2810,78 @@
             cardnews: { sessionId: null, items: [], currentSwipe: 0, selectedRatio: '4:5', selectedTemplate: 'centered', logoPath: null },
         };
 
+        function saveContentStateToStorage() {
+            const toSave = {};
+            ['carousel', 'cardnews'].forEach(type => {
+                toSave[type] = {
+                    sessionId: contentState[type].sessionId,
+                    selectedRatio: contentState[type].selectedRatio,
+                    selectedTemplate: contentState[type].selectedTemplate,
+                    logoPath: contentState[type].logoPath,
+                };
+            });
+            localStorage.setItem('contentState', JSON.stringify(toSave));
+        }
+
+        function saveCaptionsToStorage() {
+            const captions = {};
+            ['carousel', 'cardnews'].forEach(type => {
+                const hook = document.getElementById(`${type}-hook`);
+                const caption = document.getElementById(`${type}-caption`);
+                const hashtags = document.getElementById(`${type}-hashtags`);
+                captions[type] = {
+                    hook: hook ? hook.value : '',
+                    caption: caption ? caption.value : '',
+                    hashtags: hashtags ? hashtags.value : '',
+                };
+            });
+            localStorage.setItem('contentCaptions', JSON.stringify(captions));
+        }
+
+        function restoreCaptionsFromStorage() {
+            const saved = localStorage.getItem('contentCaptions');
+            if (!saved) return;
+            try {
+                const captions = JSON.parse(saved);
+                ['carousel', 'cardnews'].forEach(type => {
+                    if (!captions[type]) return;
+                    const hook = document.getElementById(`${type}-hook`);
+                    const caption = document.getElementById(`${type}-caption`);
+                    const hashtags = document.getElementById(`${type}-hashtags`);
+                    if (hook && captions[type].hook) hook.value = captions[type].hook;
+                    if (caption && captions[type].caption) caption.value = captions[type].caption;
+                    if (hashtags && captions[type].hashtags) hashtags.value = captions[type].hashtags;
+                });
+            } catch(e) { console.warn('캡션 복원 실패:', e); }
+        }
+
+        async function restoreContentStateFromStorage() {
+            const saved = localStorage.getItem('contentState');
+            if (!saved) return;
+            try {
+                const parsed = JSON.parse(saved);
+                for (const type of ['carousel', 'cardnews']) {
+                    if (!parsed[type] || !parsed[type].sessionId) continue;
+                    const sid = parsed[type].sessionId;
+                    const res = await fetch(`/api/content/sessions/${sid}`);
+                    if (!res.ok) continue;
+                    const data = await res.json();
+                    if (data.session_id) {
+                        contentState[type].sessionId = data.session_id;
+                        contentState[type].items = data.items || data.carousel_items || data.cardnews_items || [];
+                        contentState[type].selectedRatio = parsed[type].selectedRatio || contentState[type].selectedRatio;
+                        contentState[type].selectedTemplate = parsed[type].selectedTemplate || contentState[type].selectedTemplate;
+                        contentState[type].logoPath = parsed[type].logoPath || null;
+                        const cfg = contentConfig[type];
+                        if (cfg && contentState[type].items.length > 0) {
+                            renderContentEditor(type, contentState[type].items);
+                            showContentStep(type, 'editor');
+                        }
+                    }
+                }
+            } catch(e) { console.warn('contentState 복원 실패:', e); }
+        }
+
         // 색상 테마 프리셋 (p3-1)
         const colorThemes = [
             { name: '라이트', bg: '#FFFFFF', text: '#111111', accent: '#6366f1' },
@@ -2917,6 +2989,7 @@
                 if (data.session_id) {
                     contentState[type].sessionId = data.session_id;
                     contentState[type].items = data[cfg.itemsKey];
+                    saveContentStateToStorage();
                     renderContentEditor(type, data[cfg.itemsKey]);
                     showContentStep(type, 'editor');
                     if (statusEl) statusEl.innerHTML = `✅ ${data.total}개 ${cfg.label} 텍스트 생성 완료!`;
@@ -3102,6 +3175,7 @@
                 if (data.hook && hookEl) hookEl.value = data.hook;
                 if (data.body && capEl) capEl.value = data.body;
                 if (data.hashtags && tagEl) tagEl.value = data.hashtags;
+                saveCaptionsToStorage();
                 showToast('캡션 생성 완료!', 'success');
             } catch (err) {
                 showToast('캡션 생성 오류: ' + err.message, 'error');
@@ -4359,11 +4433,15 @@
             } catch (e) { showToast('렌더링 오류: ' + e.message, 'error'); }
         }
 
-        // 요약 스타일 변경
-        function changeSummaryStyle(idx, style) {
+        // 요약 스타일 변경 → 자동 텍스트 재생성
+        async function changeSummaryStyle(idx, style) {
             if (!storyData.scenes[idx]) return;
+            const oldStyle = storyData.scenes[idx].summary_style;
             storyData.scenes[idx].summary_style = style;
             scheduleSceneSync();
+            if (oldStyle !== style && storyData.scenes[idx].summary_text) {
+                await regenerateSummaryText(idx);
+            }
         }
 
         // 요약 텍스트 직접 편집
@@ -4927,6 +5005,18 @@
                     console.error('Auto-restore failed:', e);
                 }
             }
+
+            // 3. contentState 복원 (carousel/cardnews 세션)
+            await restoreContentStateFromStorage();
+            restoreCaptionsFromStorage();
+
+            // 4. 캡션 입력 시 자동 저장
+            ['carousel', 'cardnews'].forEach(type => {
+                ['hook', 'caption', 'hashtags'].forEach(field => {
+                    const el = document.getElementById(`${type}-${field}`);
+                    if (el) el.addEventListener('input', saveCaptionsToStorage);
+                });
+            });
         });
 
         function validateSceneRules(scene) {

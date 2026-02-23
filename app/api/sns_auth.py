@@ -25,7 +25,7 @@ GRAPH_API = "https://graph.facebook.com/v21.0"
 # =============================================
 
 def _read_env() -> dict:
-    """현재 .env 파일을 dict로 읽기"""
+    """현재 .env 파일을 dict로 읽기 (값 앞뒤 따옴표 제거)"""
     result = {}
     if not os.path.exists(ENV_PATH):
         return result
@@ -36,8 +36,11 @@ def _read_env() -> dict:
                 continue
             if "=" in line:
                 key, _, val = line.partition("=")
-                result[key.strip()] = val.strip()
+                val = val.strip().strip('"').strip("'")
+                result[key.strip()] = val
     return result
+
+
 
 
 def _update_env(updates: dict):
@@ -121,36 +124,43 @@ async def get_status():
 
 @router.get("/instagram/verify")
 async def verify_instagram():
-    """Instagram 토큰 유효성 + 계정 정보 확인"""
-    env = _read_env()
-    token = env.get("INSTAGRAM_ACCESS_TOKEN", "")
-    user_id = env.get("INSTAGRAM_USER_ID", "")
+    """Instagram 토큰 유효성 + 계정 정보 확인. 토큰으로 실제 API 호출이 되면 연결됨으로 판단."""
+    from app.core.config import get_instagram_credentials
+    token, user_id = get_instagram_credentials()
 
     if not token:
         return {"ok": False, "error": "토큰 미설정"}
 
     try:
         async with httpx.AsyncClient(timeout=15) as client:
-            # 토큰 디버그
-            r1 = await client.get(f"{GRAPH_API}/debug_token",
-                                  params={"input_token": token, "access_token": token})
-            d1 = r1.json().get("data", {})
-            is_valid = d1.get("is_valid", False)
-            token_type = d1.get("type", "?")
-            expires_at = d1.get("expires_at", -1)
-            scopes = d1.get("scopes", [])
+            # 연결 여부: 토큰으로 실제 API 호출이 되는지로 판단 (debug_token은 access_token에 앱 토큰 필요)
+            url = f"{GRAPH_API}/{user_id}" if user_id else f"{GRAPH_API}/me"
+            r = await client.get(url, params={
+                "fields": "id,username,name,profile_picture_url",
+                "access_token": token,
+            })
+            data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
 
-            if not is_valid:
-                return {"ok": False, "error": "토큰 만료 또는 무효", "token_type": token_type}
+            if r.status_code != 200:
+                err = data.get("error", {})
+                msg = err.get("message", r.text or f"HTTP {r.status_code}")
+                return {"ok": False, "error": msg}
 
-            # Instagram 계정 정보
-            ig_info = {}
-            if user_id:
-                r2 = await client.get(f"{GRAPH_API}/{user_id}",
-                                      params={"fields": "id,username,name,profile_picture_url",
-                                              "access_token": token})
-                if r2.status_code == 200:
-                    ig_info = r2.json()
+            ig_info = data
+            # 선택: App 토큰 있으면 debug_token으로 만료일 등 추가 조회
+            token_type, expires_at, scopes = "?", -1, []
+            env = _read_env()
+            app_id = env.get("FACEBOOK_APP_ID", "").strip()
+            app_secret = env.get("FACEBOOK_APP_SECRET", "").strip()
+            if app_id and app_secret:
+                app_token = f"{app_id}|{app_secret}"
+                r1 = await client.get(f"{GRAPH_API}/debug_token",
+                                      params={"input_token": token, "access_token": app_token})
+                d1 = r1.json().get("data", {})
+                if d1:
+                    token_type = d1.get("type", "?")
+                    expires_at = d1.get("expires_at", -1)
+                    scopes = d1.get("scopes", [])
 
             return {
                 "ok": True,

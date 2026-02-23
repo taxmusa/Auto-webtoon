@@ -1,10 +1,14 @@
 """
 설정 관리 - 환경변수 및 기본 설정
 """
+import os
+from pathlib import Path
 from pydantic_settings import BaseSettings
 from pydantic import Field, field_validator
-from typing import Optional
+from typing import Optional, Tuple
 from functools import lru_cache
+
+_ENV_PATH = Path(__file__).resolve().parent.parent.parent / ".env"
 
 
 class Settings(BaseSettings):
@@ -50,6 +54,24 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """설정 싱글톤 반환"""
     return Settings()
+
+
+def get_instagram_credentials() -> Tuple[str, str]:
+    """.env에서 인스타 토큰/유저ID 직접 읽기 (캐시 없음). 설정 화면·발행 동일 소스로 env만 수정하면 반영."""
+    token, user_id = "", ""
+    if _ENV_PATH.exists():
+        with open(_ENV_PATH, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, val = line.partition("=")
+                val = val.strip().strip('"').strip("'")
+                if key.strip() == "INSTAGRAM_ACCESS_TOKEN":
+                    token = val
+                elif key.strip() == "INSTAGRAM_USER_ID":
+                    user_id = val
+    return (token, user_id)
 
 
 # 분야별 키워드 매핑

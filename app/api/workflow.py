@@ -1451,12 +1451,10 @@ async def instagram_test(req: InstagramTestRequest = InstagramTestRequest()):
 
 @router.get("/instagram-check")
 async def instagram_check():
-    """인스타 토큰·USER_ID 설정 여부 및 토큰 유효성 확인."""
+    """인스타 토큰·USER_ID 설정 여부 및 토큰 유효성 확인 (.env 직접 읽기, 설정 화면과 동일 소스)."""
     import httpx
-    from app.core.config import get_settings
-    settings = get_settings()
-    token = (settings.instagram_access_token or "").strip()
-    user_id = (settings.instagram_user_id or "").strip()
+    from app.core.config import get_instagram_credentials
+    token, user_id = get_instagram_credentials()
     if not token or not user_id:
         return {
             "ok": False,
@@ -1466,7 +1464,7 @@ async def instagram_check():
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             r = await client.get(
-                "https://graph.facebook.com/v18.0/me",
+                "https://graph.facebook.com/v21.0/me",
                 params={"fields": "id", "access_token": token}
             )
         data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}

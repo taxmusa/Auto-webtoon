@@ -651,8 +651,12 @@ def build_summary_slide_html(
             if not line or line.startswith("---"):
                 continue
             cells = [c.strip() for c in line.split("|") if c.strip()]
-            if cells:
-                rows.append(cells)
+            if not cells:
+                continue
+            # 마크다운 표 구분선(|---|---|)은 데이터 행으로 넣지 않음
+            if all(_re.match(r'^[\s\-]+$', cell) for cell in cells):
+                continue
+            rows.append(cells)
         if rows:
             header = rows[0]
             data_rows = rows[1:] if len(rows) > 1 else []
@@ -718,9 +722,10 @@ tbody tr:last-child td {{ border-bottom:none; }}
                     else:
                         clean_lines.append((cells[0], ""))
             for qi, (q_val, a_val) in enumerate(clean_lines, 1):
+                a_section = f'<div class="qa-a"><span class="qa-badge qa-badge-a">A</span><span class="qa-a-text">{html_mod.escape(a_val)}</span></div>' if a_val else ''
                 blocks.append(f"""<div class="qa-block">
 <div class="qa-q"><span class="qa-badge">Q{qi}</span><span class="qa-q-text">{html_mod.escape(q_val)}</span></div>
-<div class="qa-a"><span class="qa-badge qa-badge-a">A</span><span class="qa-a-text">{html_mod.escape(a_val)}</span></div>
+{a_section}
 </div>""")
         else:
             i = 0
@@ -754,15 +759,15 @@ tbody tr:last-child td {{ border-bottom:none; }}
                         elif not next_line.upper().startswith("Q"):
                             a = html_mod.escape(next_line)
                             i += 1
+                    a_section = f'<div class="qa-a"><span class="qa-badge qa-badge-a">A</span><span class="qa-a-text">{a}</span></div>' if a else ''
                     blocks.append(f"""<div class="qa-block">
 <div class="qa-q"><span class="qa-badge">Q{qa_num}</span><span class="qa-q-text">{q}</span></div>
-<div class="qa-a"><span class="qa-badge qa-badge-a">A</span><span class="qa-a-text">{a}</span></div>
+{a_section}
 </div>""")
                 else:
                     qa_num += 1
                     blocks.append(f"""<div class="qa-block">
 <div class="qa-q"><span class="qa-badge">Q{qa_num}</span><span class="qa-q-text">{html_mod.escape(line)}</span></div>
-<div class="qa-a"><span class="qa-badge qa-badge-a">A</span><span class="qa-a-text"></span></div>
 </div>""")
                 i += 1
         body_html = f"""<div class="qa-list">{"".join(blocks)}</div>"""

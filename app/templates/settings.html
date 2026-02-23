@@ -150,7 +150,10 @@
                         </div>
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.4rem; margin-bottom:0.4rem;">
                             <input type="text" id="fb-app-id" placeholder="App ID" style="font-size:0.78rem; padding:0.45rem;">
-                            <input type="password" id="fb-app-secret" placeholder="App Secret" style="font-size:0.78rem; padding:0.45rem;">
+                            <div style="display:flex; gap:0.25rem; align-items:center;">
+                                <input type="password" id="fb-app-secret" placeholder="App Secret" style="flex:1; font-size:0.78rem; padding:0.45rem;">
+                                <button type="button" onclick="toggleSecretVisibility('fb-app-secret', this)" title="보기/숨기기" style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:0.45rem 0.5rem; cursor:pointer; font-size:0.9rem;" aria-label="시크릿 보기">👁</button>
+                            </div>
                         </div>
                         <button class="btn btn-secondary btn-sm" onclick="saveFacebookApp()" style="width:100%;">💾 저장</button>
                     </div>
@@ -380,6 +383,20 @@
                 document.getElementById('ig-name').innerText = '확인 실패';
                 document.getElementById('ig-detail').innerText = e.message;
                 setBadge('ig-badge', 'err', '오류');
+            }
+        }
+
+        function toggleSecretVisibility(inputId, btn) {
+            const el = document.getElementById(inputId);
+            if (!el) return;
+            if (el.type === 'password') {
+                el.type = 'text';
+                btn.textContent = '🙈';
+                btn.title = '숨기기';
+            } else {
+                el.type = 'password';
+                btn.textContent = '👁';
+                btn.title = '보기/숨기기';
             }
         }
 
