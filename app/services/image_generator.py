@@ -338,9 +338,8 @@ class GeminiGenerator(ImageGeneratorBase):
                         if cand.content and cand.content.parts:
                             for part in cand.content.parts:
                                 if part.inline_data:
-                                    self.model = fallback
                                     logger.info(
-                                        "[Gemini] 대체 모델 %s 성공! 이후 씬도 이 모델 사용 (총 %.1f초)",
+                                        "[Gemini] 대체 모델 %s 성공 (총 %.1f초)",
                                         fallback, time.time() - t0,
                                     )
                                     return self._extract_image_bytes(part.inline_data.data)
