@@ -3,15 +3,20 @@ Pillow 서비스 - 텍스트 오버레이
 - 한글 폰트 렌더링
 - 말풍선 그리기
 - 페이지 번호/배지
+- Gemini 워터마크 자동 제거
 """
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from typing import Optional, Tuple
 import os
+import io
+import logging
 import httpx
 from io import BytesIO
 
 from app.core.config import get_settings
 from app.models.models import Scene, Dialogue, TextSettings, LayoutSettings
+
+logger = logging.getLogger(__name__)
 
 
 class PillowService:
@@ -535,6 +540,183 @@ class PillowService:
         canvas.paste(content, (paste_x, paste_y))
 
         return canvas
+
+    # ==========================================
+    # 레퍼런스 이미지 최적화 (API 전송 전 자동 리사이즈+압축)
+    # ==========================================
+
+    @staticmethod
+    def optimize_reference_image(
+        image_bytes: bytes,
+        max_size: int = 1024,
+        quality: int = 85,
+    ) -> bytes:
+        """레퍼런스 이미지를 Gemini API 전송에 최적화.
+
+        고해상도 원본(7-8MB)을 리사이즈 + JPEG 압축하여 300-500KB로 줄임.
+        이미지 일관성(캐릭터 외형, 화풍, 구도)에는 영향 없음.
+
+        Args:
+            image_bytes: 원본 이미지 bytes
+            max_size: 최대 변 길이 (px, 기본 1024)
+            quality: JPEG 압축 품질 (1-100, 기본 85)
+
+        Returns:
+            최적화된 이미지 bytes
+        """
+        try:
+            img = Image.open(io.BytesIO(image_bytes))
+            original_size = len(image_bytes)
+
+            # RGBA → RGB 변환 (JPEG는 알파 채널 미지원)
+            if img.mode == "RGBA":
+                bg = Image.new("RGB", img.size, (255, 255, 255))
+                bg.paste(img, mask=img.split()[3])
+                img = bg
+            elif img.mode != "RGB":
+                img = img.convert("RGB")
+
+            # 리사이즈 (가로/세로 중 긴 쪽 기준)
+            w, h = img.size
+            if max(w, h) > max_size:
+                ratio = max_size / max(w, h)
+                new_w, new_h = int(w * ratio), int(h * ratio)
+                img = img.resize((new_w, new_h), Image.LANCZOS)
+                logger.info(
+                    "[레퍼런스 최적화] 리사이즈: %dx%d → %dx%d",
+                    w, h, new_w, new_h,
+                )
+
+            # JPEG 압축
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=quality, optimize=True)
+            optimized = buf.getvalue()
+
+            reduction = (1 - len(optimized) / original_size) * 100
+            logger.info(
+                "[레퍼런스 최적화] 압축: %.1fKB → %.1fKB (%.1f%% 감소)",
+                original_size / 1024,
+                len(optimized) / 1024,
+                reduction,
+            )
+            return optimized
+
+        except Exception as e:
+            logger.warning("[레퍼런스 최적화] 실패, 원본 반환: %s", e)
+            return image_bytes
+
+    # ==========================================
+    # Gemini 워터마크 자동 제거
+    # ==========================================
+
+    @staticmethod
+    def remove_gemini_watermark(image_bytes: bytes) -> bytes:
+        """Gemini sparkle 워터마크를 감지하고 제거.
+
+        Gemini API가 생성한 이미지의 우하단에 나타나는 반짝이(sparkle) 로고를
+        주변 픽셀로 자연스럽게 덮어씌움.
+
+        Args:
+            image_bytes: 원본 이미지 바이트
+
+        Returns:
+            워터마크가 제거된 이미지 바이트
+        """
+        import numpy as np
+
+        try:
+            img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        except Exception:
+            return image_bytes
+
+        w, h = img.size
+
+        # 워터마크 영역 크기 (이미지 크기 비례, 최소 50px ~ 최대 100px)
+        wm_size = max(50, min(100, int(min(w, h) * 0.07)))
+
+        # 우하단 워터마크 영역
+        wm_x1 = w - wm_size
+        wm_y1 = h - wm_size
+        wm_x2 = w
+        wm_y2 = h
+
+        arr = np.array(img)
+
+        # 워터마크 감지: 우하단 영역의 분산과 바로 위/왼쪽 영역의 분산을 비교
+        wm_region = arr[wm_y1:wm_y2, wm_x1:wm_x2]
+
+        # 주변 참조 영역 (워터마크 바로 위 + 바로 왼쪽)
+        margin = wm_size
+        ref_top = arr[max(0, wm_y1 - margin):wm_y1, wm_x1:wm_x2]  # 바로 위
+        ref_left = arr[wm_y1:wm_y2, max(0, wm_x1 - margin):wm_x1]  # 바로 왼쪽
+
+        # 분산 비교 — 워터마크가 있으면 해당 영역의 색상 분산이 주변보다 높음
+        wm_var = np.var(wm_region.astype(float))
+        ref_vars = []
+        if ref_top.size > 0:
+            ref_vars.append(np.var(ref_top.astype(float)))
+        if ref_left.size > 0:
+            ref_vars.append(np.var(ref_left.astype(float)))
+
+        if not ref_vars:
+            return image_bytes
+
+        ref_var = np.mean(ref_vars)
+
+        # 워터마크 감지 기준: 우하단 영역의 분산이 주변보다 현저히 높으면 워터마크 있음
+        # (Gemini sparkle은 주변과 다른 밝은 색상 패턴)
+        has_watermark = wm_var > ref_var * 1.3 and wm_var > 500
+
+        if not has_watermark:
+            # 워터마크 없음 — 원본 반환
+            return image_bytes
+
+        logger.info("[워터마크 제거] Gemini sparkle 감지됨 (var=%.0f vs ref=%.0f), 제거 진행", wm_var, ref_var)
+
+        # 워터마크 제거: 주변 픽셀로 자연스럽게 채움
+        # 1. 약간 넓은 영역을 잘라서 가장자리 샘플링
+        patch_x1 = max(0, wm_x1 - 10)
+        patch_y1 = max(0, wm_y1 - 10)
+
+        # 2. 왼쪽과 위쪽 경계 픽셀의 평균색으로 그라데이션 채움
+        top_strip = arr[max(0, wm_y1 - 5):wm_y1, wm_x1:wm_x2]  # 위쪽 5px
+        left_strip = arr[wm_y1:wm_y2, max(0, wm_x1 - 5):wm_x1]  # 왼쪽 5px
+
+        # 채움 색상 결정
+        fill_samples = []
+        if top_strip.size > 0:
+            fill_samples.append(top_strip.mean(axis=(0, 1)))
+        if left_strip.size > 0:
+            fill_samples.append(left_strip.mean(axis=(0, 1)))
+
+        if fill_samples:
+            fill_color = np.mean(fill_samples, axis=0).astype(np.uint8)
+        else:
+            fill_color = arr[wm_y1 - 1, wm_x1 - 1] if wm_y1 > 0 and wm_x1 > 0 else np.array([255, 255, 255], dtype=np.uint8)
+
+        # 3. 워터마크 영역을 채움 색상으로 덮기 (약간의 노이즈 추가로 자연스럽게)
+        for y in range(wm_y1, wm_y2):
+            for x in range(wm_x1, wm_x2):
+                # 가장자리에서 중심으로 갈수록 채움 색상 비율 증가
+                dx = (x - wm_x1) / max(1, wm_size - 1)
+                dy = (y - wm_y1) / max(1, wm_size - 1)
+                blend = max(dx, dy)  # 모서리에 가까울수록 blend 높음
+
+                # 위/왼쪽 경계 색상과 채움 색상 혼합
+                original = arr[y, x].astype(float)
+                target = fill_color.astype(float)
+                arr[y, x] = (original * (1 - blend) + target * blend).astype(np.uint8)
+
+        # 결과를 부드럽게 처리 (경계 티 완화)
+        result_img = Image.fromarray(arr)
+        # 워터마크 영역만 약간 블러 적용
+        wm_crop = result_img.crop((patch_x1, patch_y1, wm_x2, wm_y2))
+        wm_crop = wm_crop.filter(ImageFilter.GaussianBlur(radius=2))
+        result_img.paste(wm_crop, (patch_x1, patch_y1))
+
+        buf = io.BytesIO()
+        result_img.save(buf, format="PNG")
+        return buf.getvalue()
 
     def save_image(self, image: Image.Image, path: str, format: str = "PNG", quality: int = 90):
         """이미지 저장"""

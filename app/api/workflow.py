@@ -20,6 +20,7 @@ from app.services.gemini_service import get_gemini_service
 from app.services.image_generator import get_generator
 from app.services.prompt_builder import build_styled_prompt
 from app.api.styles import get_character_style, get_background_style
+from app.core.config import DEFAULT_TEXT_MODEL
 import asyncio
 import os
 import json
@@ -53,7 +54,7 @@ def _resolve_api_key(model_name: str) -> str:
 class StartWorkflowRequest(BaseModel):
     mode: str = "auto"  # auto | manual
     keyword: Optional[str] = None
-    model: str = "gemini-3-flash-preview"
+    model: str = ""
 
 
 class StartWorkflowResponse(BaseModel):
@@ -68,7 +69,7 @@ class GenerateStoryRequest(BaseModel):
     questioner_type: str = "curious_beginner"
     expert_type: str = "friendly_expert"
     scene_count: int = 8
-    model: str = "gemini-3-flash-preview"
+    model: str = ""
     character_names: str = ""  # 쉼표 구분 등장인물 이름 (빈 문자열이면 AI 자동 생성)
     characters_input: Optional[List[dict]] = None  # 구조적 캐릭터 입력 [{"name":"소미","role":"expert"}, ...]
     collected_data: Optional[List[dict]] = None  # 프론트엔드에서 수정된 수집 데이터
@@ -93,8 +94,8 @@ class GenerateImagesRequest(BaseModel):
     style: str = "webtoon"
     sub_style: str = "normal"
     aspect_ratio: str = "4:5"
-    model: str = "nano-banana-pro"  # Gemini 3.0 Preview 고정
-    
+    model: str = ""
+
     # Style System 2.0
     character_style_id: Optional[str] = None
     background_style_id: Optional[str] = None
@@ -114,7 +115,7 @@ class GeneratePreviewRequest(BaseModel):
     background_style_id: Optional[str] = None
     sub_style: Optional[str] = None # Added for compatibility
     manual_overrides: Optional[dict] = None # ManualPromptOverrides
-    model: str = "nano-banana-pro"  # Gemini 3.0 Preview 고정
+    model: str = ""
 
 
 class GenerateCaptionRequest(BaseModel):
@@ -378,7 +379,7 @@ async def update_scenes_bulk(request: BulkUpdateScenesRequest):
 class RegenerateImagePromptRequest(BaseModel):
     session_id: str
     scene_number: int
-    model: str = "gemini-3-flash-preview"
+    model: str = ""
 
 
 @router.post("/regenerate-image-prompt")
@@ -918,7 +919,7 @@ async def generate_common_caption(request: CommonCaptionRequest):
     try:
         response = await asyncio.to_thread(
             client.models.generate_content,
-            model="gemini-3-flash-preview",
+            model=DEFAULT_TEXT_MODEL,
             contents=prompt
         )
         text = response.text.strip()
@@ -949,7 +950,7 @@ async def generate_common_caption(request: CommonCaptionRequest):
 # ============================================
 
 class TestModelRequest(BaseModel):
-    model: str = "gemini-3-flash-preview"
+    model: str = ""
 
 
 @router.post("/test-model")
@@ -990,7 +991,7 @@ async def test_model(request: TestModelRequest):
 class CollectDataRequest(BaseModel):
     session_id: Optional[str] = None
     keyword: str
-    model: str = "gemini-3-flash-preview"
+    model: str = ""
     expert_mode: bool = False
 
 
@@ -1146,7 +1147,7 @@ async def parse_manual_content(request: ParseManualContentRequest):
 class RegenerateSceneRequest(BaseModel):
     session_id: str
     scene_index: int
-    model: str = "gemini-3-flash-preview"
+    model: str = ""
 
 
 @router.post("/regenerate-scene")
@@ -1213,7 +1214,7 @@ JSON 형식으로 응답:
 class RegenerateImageRequest(BaseModel):
     session_id: str
     scene_index: int
-    model: str = "nano-banana-pro"
+    model: str = ""
     aspect_ratio: Optional[str] = "4:5"
 
 
@@ -1267,7 +1268,7 @@ async def regenerate_image(request: RegenerateImageRequest):
     )
     
     # API 키 결정 — 모델별 자동 선택
-    model_name = request.model or "nano-banana-pro"
+    model_name = request.model or ""
     api_key = _resolve_api_key(model_name)
     generator = get_generator(model_name, api_key)
     

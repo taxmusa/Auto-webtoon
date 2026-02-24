@@ -1,6 +1,7 @@
 """
 이미지 생성 서비스
 — Gemini (Google GenAI) 단일 모델 사용
+— 워터마크 자동 제거 포함
 """
 from abc import ABC, abstractmethod
 import asyncio
@@ -8,8 +9,14 @@ import time
 from typing import Optional, List, Union
 import logging
 
-# 이미지 생성 API 최대 대기 시간 (초)
-IMAGE_GENERATION_TIMEOUT = 90
+from app.services.pillow_service import PillowService
+
+# 이미지 생성 API 최대 대기 시간 (초) — config.py에서 중앙 관리
+from app.core.config import (
+    IMAGE_GENERATION_TIMEOUT,
+    MODEL_ALIAS_MAP,
+    DEFAULT_IMAGE_MODEL,
+)
 
 try:
     from google import genai
@@ -112,28 +119,27 @@ class GeminiGenerator(ImageGeneratorBase):
             aspect_ratio: str — 이미지 비율 ("4:5", "9:16", "1:1" 등, Gemini 공식 지원)
         """
         t0 = time.time()
-        try:
-            from PIL import Image
-            import io
+        from PIL import Image
+        import io
 
-            # 프롬프트에 레퍼런스/체이닝 지시문 추가
-            full_prompt = prompt
+        # 프롬프트에 레퍼런스/체이닝 지시문 추가
+        full_prompt = prompt
 
-            # 3종 레퍼런스 안내 — 프롬프트 내에서 레퍼런스 역할을 명확히 지시
-            ref_count = sum(1 for x in [reference_images, method_image, style_image] if x)
-            if ref_count > 0:
-                ref_note_parts = []
-                if reference_images and len(reference_images) > 0:
-                    ref_note_parts.append("Character Reference: 캐릭터 외형 유지")
-                if method_image:
-                    ref_note_parts.append("Method Reference: 구도/앵글 참고")
-                if style_image:
-                    ref_note_parts.append("Style Reference: 화풍/색감 반드시 적용 (최우선)")
-                full_prompt += f"\n\n[첨부 레퍼런스 {ref_count}장: {' | '.join(ref_note_parts)}]"
+        # 3종 레퍼런스 안내 — 프롬프트 내에서 레퍼런스 역할을 명확히 지시
+        ref_count = sum(1 for x in [reference_images, method_image, style_image] if x)
+        if ref_count > 0:
+            ref_note_parts = []
+            if reference_images and len(reference_images) > 0:
+                ref_note_parts.append("Character Reference: 캐릭터 외형 유지")
+            if method_image:
+                ref_note_parts.append("Method Reference: 구도/앵글 참고")
+            if style_image:
+                ref_note_parts.append("Style Reference: 화풍/색감 반드시 적용 (최우선)")
+            full_prompt += f"\n\n[첨부 레퍼런스 {ref_count}장: {' | '.join(ref_note_parts)}]"
 
-            # 이전 씬 체이닝 지시문
-            if prev_scene_summaries and len(prev_scene_summaries) > 0:
-                full_prompt += f"""
+        # 이전 씬 체이닝 지시문
+        if prev_scene_summaries and len(prev_scene_summaries) > 0:
+            full_prompt += f"""
 
 ---
 위 프롬프트가 절대적 1순위입니다. 프롬프트에 명시된 장소·배경·구도·상황을 그대로 생성하세요.
@@ -142,253 +148,182 @@ class GeminiGenerator(ImageGeneratorBase):
 이전 장면 흐름(텍스트 참고만):
 {chr(10).join(prev_scene_summaries)}"""
 
-            # ★ 콘텐츠 구성: 레퍼런스 이미지(라벨 포함) → 프롬프트 → 이전 씬
-            contents = []
+        # ★ 콘텐츠 구성 (toonstoons 참조):
+        #   프롬프트 텍스트 → 레퍼런스 이미지 → 이전 씬 이미지
+        #   텍스트를 먼저 배치하면 모델이 의도를 먼저 파악 → 이미지 생성 성공률 향상
+        contents = []
 
-            def _to_pil(data):
-                """bytes → PIL Image 변환. 이미 PIL Image면 그대로 반환."""
-                if isinstance(data, Image.Image):
-                    return data
-                return Image.open(io.BytesIO(data))
+        def _to_pil(data):
+            """bytes → PIL Image 변환. 이미 PIL Image면 그대로 반환."""
+            if isinstance(data, Image.Image):
+                return data
+            return Image.open(io.BytesIO(data))
 
-            # 1. Character 레퍼런스 — 캐릭터 외형 고정용
-            if reference_images:
-                for ref in reference_images:
-                    contents.append("[Character Reference] 아래 이미지는 캐릭터 레퍼런스입니다. 이 캐릭터의 얼굴, 헤어스타일, 의상, 체형을 정확히 유지하세요.")
-                    contents.append(_to_pil(ref))
+        # 1. 프롬프트 텍스트 (가장 먼저 — 모델이 의도를 먼저 이해)
+        contents.append(full_prompt)
 
-            # 2. Method 레퍼런스 — 구도/연출 참조용
-            if method_image:
-                contents.append("[Method Reference] 아래 이미지는 연출/구도 레퍼런스입니다. 이 이미지의 카메라 앵글, 인물 배치, 구도를 참고하세요.")
-                contents.append(_to_pil(method_image))
+        # 2. 레퍼런스 이미지들 (라벨 간소화 — 불필요한 장문 제거)
+        if reference_images:
+            for ref in reference_images:
+                contents.append(_to_pil(ref))
 
-            # 3. Style 레퍼런스 — 화풍/색감 결정용 (가장 중요)
-            if style_image:
-                contents.append("[Style Reference — MOST IMPORTANT] 아래 이미지는 화풍 레퍼런스입니다. 반드시 이 이미지의 그림체, 색감, 선화 스타일, 질감을 그대로 적용하세요. 이 화풍을 절대 무시하지 마세요.")
-                contents.append(_to_pil(style_image))
+        if method_image:
+            contents.append(_to_pil(method_image))
 
-            # 4. 프롬프트 텍스트 (레퍼런스 뒤에 배치)
-            contents.append(full_prompt)
+        if style_image:
+            contents.append(_to_pil(style_image))
 
-            # 5. 직전 씬 이미지 (체이닝) — 장면 번호 포함 라벨
-            if prev_scene_image:
-                sn_label = f"(장면 {prev_scene_number})" if prev_scene_number else ""
-                contents.append(f"[Previous Scene{sn_label}] 직전 장면 이미지 — 캐릭터 외형 참고용. 장소/배경은 위 프롬프트를 따를 것.")
-                contents.append(_to_pil(prev_scene_image))
+        # 3. 직전 씬 이미지 (체이닝) — 캐릭터 외형 참고용
+        if prev_scene_image:
+            sn_label = f"(장면 {prev_scene_number})" if prev_scene_number else ""
+            contents.append(f"[보조 참고] 직전 장면{sn_label} 이미지 - 캐릭터 외형 참고용. 장소/배경은 현재 프롬프트를 따를 것")
+            contents.append(_to_pil(prev_scene_image))
 
-            # aspect_ratio: SDK 버전에 따라 ImageConfig 사용 (없으면 프롬프트 힌트에만 의존)
-            _gen_config_kwargs = {"response_modalities": ["IMAGE"]}
-            if aspect_ratio and hasattr(types, 'ImageConfig'):
-                try:
-                    _gen_config_kwargs["image_config"] = types.ImageConfig(
-                        aspect_ratio=aspect_ratio
-                    )
-                    logger.info(f"[Gemini] ImageConfig aspect_ratio={aspect_ratio} 적용")
-                except Exception:
-                    logger.warning(f"[Gemini] ImageConfig 미지원 — 프롬프트 힌트로 대체")
-            elif aspect_ratio:
-                logger.info(f"[Gemini] ImageConfig 미지원 SDK — 프롬프트 힌트로 비율 {aspect_ratio} 전달")
-
-            def _sync_generate():
-                return self.client.models.generate_content(
-                    model=self.model,
-                    contents=contents,
-                    config=types.GenerateContentConfig(**_gen_config_kwargs)
+        # aspect_ratio: SDK 버전에 따라 ImageConfig 사용
+        # ★ TEXT+IMAGE: 모델이 더 자유롭게 응답 → 이미지 생성 성공률 향상
+        _gen_config_kwargs = {"response_modalities": ["TEXT", "IMAGE"]}
+        if aspect_ratio and hasattr(types, 'ImageConfig'):
+            try:
+                _gen_config_kwargs["image_config"] = types.ImageConfig(
+                    aspect_ratio=aspect_ratio
                 )
+                logger.info(f"[Gemini] ImageConfig aspect_ratio={aspect_ratio} 적용")
+            except Exception:
+                logger.warning(f"[Gemini] ImageConfig 미지원 — 프롬프트 힌트로 대체")
+        elif aspect_ratio:
+            logger.info(f"[Gemini] ImageConfig 미지원 SDK — 프롬프트 힌트로 비율 {aspect_ratio} 전달")
 
-            ref_detail = []
-            if reference_images: ref_detail.append("Character")
-            if method_image: ref_detail.append("Method")
-            if style_image: ref_detail.append("Style")
-            if prev_scene_image: ref_detail.append("PrevScene")
+        def _sync_generate():
+            return self.client.models.generate_content(
+                model=self.model,
+                contents=contents,
+                config=types.GenerateContentConfig(**_gen_config_kwargs)
+            )
 
-            # ★ 에러 타입별 재시도 설정
-            RETRY_DELAYS = {
-                "rate_limit": [5, 15, 30],      # 429: 최대 3회, 지수 백오프
-                "timeout": [10, 20],             # 타임아웃: 최대 2회
-                "server_error": [2, 5],            # 504 등 서버 에러: 최대 2회
-                "content_empty": [1],             # 이미지 미포함: 1회
-                "safety_filter": [],              # 안전 필터: 재시도 불가
-            }
-            
-            def _classify_error(exc):
-                """에러 타입 분류"""
-                err_str = str(exc).lower()
-                if "429" in err_str or "rate" in err_str or "quota" in err_str or "resource_exhausted" in err_str:
-                    return "rate_limit"
-                if "504" in err_str or "503" in err_str or "unavailable" in err_str or "cancelled" in err_str:
-                    return "server_error"
-                if "safety" in err_str or "block" in err_str or "refused" in err_str:
-                    return "safety_filter"
+        ref_detail = []
+        if reference_images: ref_detail.append("Character")
+        if method_image: ref_detail.append("Method")
+        if style_image: ref_detail.append("Style")
+        if prev_scene_image: ref_detail.append("PrevScene")
+
+        # ★ 단일 루프 재시도 — 최대 3회 (첫 시도 + 재시도 2회)
+        import random
+        MAX_RETRIES = 3
+        RETRY_DELAYS = [3, 8, 15]
+
+        def _classify_error(exc):
+            """에러 타입 분류"""
+            err_str = str(exc).lower()
+            if "429" in err_str or "rate" in err_str or "quota" in err_str or "resource_exhausted" in err_str:
+                return "rate_limit"
+            if "504" in err_str or "503" in err_str or "unavailable" in err_str or "cancelled" in err_str:
                 return "server_error"
-            
-            max_attempts = 4  # 최대 시도 횟수 (첫 시도 + 재시도 3회)
-            last_error = None
-            error_type = None
-            retry_count = 0
-            
-            for attempt in range(1, max_attempts + 1):
-                try:
-                    response = await asyncio.wait_for(
-                        asyncio.to_thread(_sync_generate),
-                        timeout=IMAGE_GENERATION_TIMEOUT
-                    )
-                    logger.info("Gemini API 응답 %.1f초 (attempt=%d, model=%s, refs=[%s], contents_len=%d)", 
-                                time.time() - t0, attempt, self.model,
-                                ",".join(ref_detail) if ref_detail else "없음",
-                                len(contents))
+            if "safety" in err_str or "block" in err_str or "refused" in err_str:
+                return "safety_filter"
+            return "server_error"
 
-                    # 응답 분석 및 이미지 추출
-                    if not response.candidates:
-                        block_reason = getattr(response, 'prompt_feedback', None)
-                        logger.warning("Gemini 응답에 candidates 없음 (attempt=%d). prompt_feedback=%s", attempt, block_reason)
-                        last_error = f"Gemini가 이미지 생성을 거부했습니다 (안전 필터). feedback={block_reason}"
-                        error_type = "safety_filter"
-                        delays = RETRY_DELAYS.get(error_type, [])
-                        if retry_count < len(delays):
-                            await asyncio.sleep(delays[retry_count])
-                            retry_count += 1
-                            continue
-                        raise ValueError(last_error)
+        last_error = None
+        error_type = None
 
-                    candidate = response.candidates[0]
-                    finish_reason = getattr(candidate, 'finish_reason', None)
-                    
-                    if candidate.content and candidate.content.parts:
-                        for part in candidate.content.parts:
-                            if part.inline_data:
-                                return self._extract_image_bytes(part.inline_data.data)
-                        
-                        # 이미지가 없고 텍스트만 있는 경우
-                        text_parts = [p.text for p in candidate.content.parts if hasattr(p, 'text') and p.text]
-                        if text_parts:
-                            logger.warning("Gemini가 이미지 대신 텍스트 반환 (attempt=%d): %s", attempt, text_parts[0][:200])
-                            last_error = f"Gemini가 이미지 대신 텍스트를 반환했습니다. finish_reason={finish_reason}"
-                            error_type = "content_empty"
-                            delays = RETRY_DELAYS.get(error_type, [])
-                            if retry_count < len(delays):
-                                await asyncio.sleep(delays[retry_count])
-                                retry_count += 1
-                                continue
-                            raise ValueError(last_error)
-                    
-                    logger.warning("Gemini 응답에 이미지 없음 (attempt=%d). finish_reason=%s", attempt, finish_reason)
-                    last_error = f"Gemini 응답에 이미지가 없습니다 (finish_reason={finish_reason})"
-                    error_type = "content_empty"
-                    delays = RETRY_DELAYS.get(error_type, [])
-                    if retry_count < len(delays):
-                        await asyncio.sleep(delays[retry_count])
-                        retry_count += 1
-                        continue
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                response = await asyncio.wait_for(
+                    asyncio.to_thread(_sync_generate),
+                    timeout=IMAGE_GENERATION_TIMEOUT
+                )
+                logger.info("Gemini API 응답 %.1f초 (attempt=%d/%d, model=%s, refs=[%s])",
+                            time.time() - t0, attempt, MAX_RETRIES, self.model,
+                            ",".join(ref_detail) if ref_detail else "없음")
+
+                # 응답 분석 및 이미지 추출
+                if not response.candidates:
+                    block_reason = getattr(response, 'prompt_feedback', None)
+                    logger.warning("Gemini candidates 없음 (attempt=%d). feedback=%s", attempt, block_reason)
+                    last_error = f"Gemini가 이미지 생성을 거부했습니다 (안전 필터). feedback={block_reason}"
+                    error_type = "safety_filter"
                     raise ValueError(last_error)
 
-                except asyncio.TimeoutError:
-                    # ★ 타임아웃도 재시도 (기존: 즉시 실패)
-                    error_type = "timeout"
-                    delays = RETRY_DELAYS.get(error_type, [])
-                    logger.warning(f"Gemini 타임아웃 (attempt={attempt}, {time.time()-t0:.0f}초)")
-                    if retry_count < len(delays):
-                        logger.info(f"[재시도] 타임아웃 → {delays[retry_count]}초 후 재시도 ({retry_count+1}/{len(delays)})")
-                        await asyncio.sleep(delays[retry_count])
-                        retry_count += 1
-                        continue
-                    raise
-                except ValueError:
-                    if attempt >= max_attempts:
-                        raise
-                    continue
-                except Exception as e:
-                    # ★ 429/504 등 API 에러 분류 후 재시도
-                    error_type = _classify_error(e)
-                    delays = RETRY_DELAYS.get(error_type, [])
-                    logger.warning(f"Gemini 에러 분류={error_type} (attempt={attempt}): {e}")
-                    if retry_count < len(delays):
-                        wait = delays[retry_count]
-                        logger.info(f"[재시도] {error_type} → {wait}초 후 재시도 ({retry_count+1}/{len(delays)})")
-                        await asyncio.sleep(wait)
-                        retry_count += 1
-                        continue
-                    raise
+                candidate = response.candidates[0]
+                finish_reason = getattr(candidate, 'finish_reason', None)
 
-        except Exception as e:
-            if isinstance(e, (asyncio.TimeoutError, TimeoutError)):
-                error_type = error_type or "timeout"
-                logger.error("Gemini 이미지 생성 타임아웃 (%.0f초, 재시도 소진)", time.time() - t0)
+                if candidate.content and candidate.content.parts:
+                    for part in candidate.content.parts:
+                        if part.inline_data:
+                            raw_bytes = self._extract_image_bytes(part.inline_data.data)
+                            # Gemini sparkle 워터마크 자동 제거
+                            return PillowService.remove_gemini_watermark(raw_bytes)
 
-            # ★ 대체 모델 자동 시도 (server_error/timeout 시)
-            fallback = _IMAGE_MODEL_FALLBACKS.get(self.model)
-            if fallback and error_type in ("server_error", "timeout"):
-                logger.warning(
-                    "[Gemini] %s 모든 재시도 실패 (%.0f초) → 대체 모델 %s 시도",
-                    self.model, time.time() - t0, fallback,
-                )
-                try:
-                    def _sync_fallback():
-                        return self.client.models.generate_content(
-                            model=fallback,
-                            contents=contents,
-                            config=types.GenerateContentConfig(**_gen_config_kwargs)
-                        )
-                    fb_resp = await asyncio.wait_for(
-                        asyncio.to_thread(_sync_fallback),
-                        timeout=IMAGE_GENERATION_TIMEOUT,
-                    )
-                    if fb_resp.candidates:
-                        cand = fb_resp.candidates[0]
-                        if cand.content and cand.content.parts:
-                            for part in cand.content.parts:
-                                if part.inline_data:
-                                    logger.info(
-                                        "[Gemini] 대체 모델 %s 성공 (총 %.1f초)",
-                                        fallback, time.time() - t0,
-                                    )
-                                    return self._extract_image_bytes(part.inline_data.data)
-                except Exception as fb_err:
-                    logger.warning("[Gemini] 대체 모델 %s도 실패: %s", fallback, fb_err)
+                    # TEXT+IMAGE 모드에서 텍스트만 온 경우
+                    text_parts = [p.text for p in candidate.content.parts if hasattr(p, 'text') and p.text]
+                    if text_parts:
+                        logger.warning("Gemini가 텍스트만 반환 (attempt=%d): %s", attempt, text_parts[0][:200])
 
-            # ★ 사용자 친화적 에러 메시지
-            if isinstance(e, (asyncio.TimeoutError, TimeoutError)):
-                raise TimeoutError(
-                    "이미지 생성이 시간 초과되었습니다. 잠시 후 다시 시도해주세요."
-                )
-            err_str = str(e).lower()
-            if "429" in err_str or "rate" in err_str or "quota" in err_str:
-                friendly = "Gemini API 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요."
-            elif "504" in err_str or "503" in err_str or "unavailable" in err_str:
-                friendly = "Gemini 서버가 일시적으로 바쁩니다. 잠시 후 다시 시도해주세요."
-            elif "safety" in err_str or "block" in err_str:
-                friendly = "안전 필터에 의해 이미지 생성이 거부되었습니다. 프롬프트를 수정해주세요."
-            else:
-                friendly = str(e)
-            logger.error("Gemini Image Generation Failed (%.1f초, type=%s): %s", time.time() - t0, error_type or "unknown", e)
-            raise RuntimeError(friendly) from e
+                last_error = f"Gemini 응답에 이미지 없음 (finish_reason={finish_reason})"
+                error_type = "content_empty"
+                raise ValueError(last_error)
+
+            except (asyncio.TimeoutError, TimeoutError) as e:
+                error_type = "timeout"
+                last_error = str(e)
+                logger.warning("Gemini 타임아웃 (attempt=%d/%d, %.0f초)", attempt, MAX_RETRIES, time.time() - t0)
+            except ValueError:
+                pass  # last_error와 error_type은 위에서 설정됨
+            except Exception as e:
+                error_type = _classify_error(e)
+                last_error = str(e)
+                logger.warning("Gemini 에러 [%s] (attempt=%d/%d): %s", error_type, attempt, MAX_RETRIES, e)
+
+            # 안전 필터는 재시도 불가
+            if error_type == "safety_filter":
+                break
+
+            # 재시도 가능한 경우: 대기 후 재시도
+            if attempt < MAX_RETRIES:
+                delay = RETRY_DELAYS[attempt - 1] * random.uniform(0.7, 1.3)
+                logger.info("[재시도] %s → %.1f초 후 재시도 (%d/%d)", error_type, delay, attempt + 1, MAX_RETRIES)
+                await asyncio.sleep(delay)
+
+        # 모든 시도 실패
+        logger.warning("[Gemini] %s 모든 시도 실패 (%.0f초, type=%s)", self.model, time.time() - t0, error_type or "unknown")
+
+        # ★ 사용자 친화적 에러 메시지
+        if error_type == "timeout":
+            raise TimeoutError("이미지 생성이 시간 초과되었습니다. 잠시 후 다시 시도해주세요.")
+
+        err_str = (last_error or "").lower()
+        if "429" in err_str or "rate" in err_str or "quota" in err_str:
+            friendly = "Gemini API 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요."
+        elif "504" in err_str or "503" in err_str or "unavailable" in err_str:
+            friendly = "Gemini 서버가 일시적으로 바쁩니다. 잠시 후 다시 시도해주세요."
+        elif "safety" in err_str or "block" in err_str:
+            friendly = "안전 필터에 의해 이미지 생성이 거부되었습니다. 프롬프트를 수정해주세요."
+        else:
+            friendly = last_error or "이미지 생성에 실패했습니다."
+        logger.error("Gemini Image Generation Failed (%.1f초, type=%s): %s", time.time() - t0, error_type or "unknown", last_error)
+        raise RuntimeError(friendly)
 
     async def edit_with_reference(self, prompt, reference_image):
         return await self.generate(prompt, reference_images=[reference_image])
 
 
 # ────────────────────────────────────────────
-# 대체 모델 매핑 (primary 실패 시 fallback)
+# 대체 모델 매핑 — 비활성화됨
+# (gemini-2.5-flash-image fallback이 워터마크를 추가하는 문제)
 # ────────────────────────────────────────────
-_IMAGE_MODEL_FALLBACKS = {
-    "gemini-3-pro-image-preview": "gemini-2.5-flash-image",
-}
+_IMAGE_MODEL_FALLBACKS = {}  # 워터마크 방지를 위해 비활성화
 
 # ────────────────────────────────────────────
 # 팩토리
 # ────────────────────────────────────────────
-# UI 에서 선택하는 모델 이름 → 실제 API 모델 이름 매핑
-_GEMINI_MODEL_MAP = {
-    "nano-banana": "gemini-2.5-flash-image",          # 빠름
-    "nano-banana-pro": "gemini-3-pro-image-preview",  # 고품질 (기본)
-}
-
-
 _generator_cache: dict[str, GeminiGenerator] = {}
 
 def get_generator(model_name: str, api_key: str) -> ImageGeneratorBase:
-    """model_name 을 기반으로 Gemini Generator 인스턴스를 반환 (동일 키+모델은 캐싱)"""
-    real_model = _GEMINI_MODEL_MAP.get(model_name, model_name)
+    """model_name 을 기반으로 Gemini Generator 인스턴스를 반환 (동일 키+모델은 캐싱).
+    빈 model_name이면 기본 이미지 모델(config.DEFAULT_IMAGE_MODEL) 사용."""
+    if not model_name:
+        real_model = DEFAULT_IMAGE_MODEL
+    else:
+        real_model = MODEL_ALIAS_MAP.get(model_name, model_name)
     cache_key = f"{api_key}:{real_model}"
     if cache_key not in _generator_cache:
         _generator_cache[cache_key] = GeminiGenerator(api_key, real_model)

@@ -278,7 +278,7 @@ async def regenerate_scene(session_id: str, scene_num: int, req: SceneRegenerate
         from app.api.styles import get_character_style, get_background_style
 
         # 세션에 저장된 이미지 모델 사용 (탭4에서 선택한 모델)
-        model_name = session.settings.image.model if hasattr(session.settings, 'image') and session.settings.image else "nano-banana-pro"
+        model_name = session.settings.image.model if hasattr(session.settings, 'image') and session.settings.image else ""
 
         # API 키 결정
         from app.core.config import get_settings

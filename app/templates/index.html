@@ -856,19 +856,10 @@
                                 onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault(); startWorkflow();}"></textarea>
                         </div>
 
-                        <!-- AI Model Selection -->
-                        <div
-                            style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: var(--text-muted); flex-wrap: wrap;">
-                            <span>자료수집/글 AI 모델:</span>
-                            <select id="ai-model-select"
-                                style="padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text);">
-                                <option value="gemini-3-flash-preview" selected>Gemini 3.0 Flash (빠름)</option>
-                                <option value="gemini-3-pro-preview">Gemini 3.0 Pro (고성능)</option>
-                            </select>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: var(--text-muted); margin-top: 4px; padding: 4px 8px; background: rgba(37,99,235,0.06); border-radius: 6px; border: 1px solid rgba(37,99,235,0.15);">
-                            <span style="font-weight: 600; color: var(--primary);">이미지 생성 AI:</span>
-                            <span>Gemini 3.0 Pro Image (고정) — 최고 품질의 이미지를 위해 항상 Pro 모델을 사용합니다.</span>
+                        <!-- AI 모델 안내 (내부 자동 선택) -->
+                        <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: var(--text-muted); padding: 4px 8px; background: rgba(37,99,235,0.06); border-radius: 6px; border: 1px solid rgba(37,99,235,0.15);">
+                            <span style="font-weight: 600; color: var(--primary);">AI 모델:</span>
+                            <span>Gemini 3.1 Pro (텍스트) / Gemini 3 Pro Image (이미지) — 자동 선택</span>
                         </div>
                         <!-- 전문가 모드 토글 -->
                         <div style="display:flex; align-items:center; gap:8px; margin-top:8px; padding:6px 10px; background:rgba(245,158,11,0.06); border-radius:8px; border:1px solid rgba(245,158,11,0.2);">
@@ -2240,7 +2231,7 @@
         // --- Step 1: 분야 감지 (Intelligent Start) ---
         async function detectField() {
             const keyword = document.getElementById('keyword').value.trim();
-            const model = document.getElementById('ai-model-select').value;
+            const model = '';
 
             if (!keyword) {
                 showToast('키워드를 입력해주세요.', 'warning');
@@ -2354,7 +2345,7 @@
 
             // [변경] 감지 단계 없이 바로 시작
             // 먼저 세션을 생성하고
-            const model = document.getElementById('ai-model-select').value;
+            const model = '';
             try {
                 const btn = document.getElementById('btn-start-next');
                 btn.innerText = 'AI가 분석 및 시작 중...';
@@ -2479,7 +2470,7 @@
                         const msgP = elEl.parentElement;
                         if (msgP) {
                             const subP = msgP.nextElementSibling;
-                            if (subP) subP.textContent = '대체 모델(gemini-2.0-flash)로 전환 시도 중...';
+                            if (subP) subP.textContent = '대체 모델로 자동 전환 시도 중...';
                         }
                     }
                 }
@@ -2487,7 +2478,7 @@
 
             try {
                 const keyword = document.getElementById('keyword').value;
-                const model = document.getElementById('ai-model-select').value;
+                const model = '';
 
                 const res = await fetch('/api/workflow/collect-data', {
                     method: 'POST',
@@ -3684,7 +3675,7 @@
             const sceneCount = parseInt(document.getElementById('total-scene-count').value);
 
             try {
-                const storyModel = document.getElementById('ai-model-select') ? document.getElementById('ai-model-select').value : 'gemini-3-flash-preview';
+                const storyModel = '';
                 // 구조적 캐릭터 입력 수집
                 const charsInput = getCharactersInput();
                 const charNames = charsInput.map(c => c.name).join(', ');
@@ -4940,18 +4931,7 @@
             // 5분마다 자동 갱신
             setInterval(refreshApiStatusBar, 5 * 60 * 1000);
 
-            // 1. 기본 모델 설정
-            const modelSelect = document.getElementById('ai-model-select');
-            if (modelSelect) {
-                const selectedOption = modelSelect.querySelector('option[selected]');
-                if (selectedOption) {
-                    modelSelect.value = selectedOption.value;
-                } else {
-                    modelSelect.value = "gemini-3-flash-preview";
-                }
-            }
-
-            // 2. 자동 세션 복원 (개발 효율성)
+            // 자동 세션 복원 (개발 효율성)
             const savedSessionId = localStorage.getItem('lastSessionId');
             if (savedSessionId) {
                 console.log('Found saved session:', savedSessionId);
@@ -5126,14 +5106,18 @@
                     storyData = data.story;
                     if (data.collected_data) collectedData = data.collected_data;
                     
-                    // 이미지 데이터 복원 (scene_number로 씬 배열 인덱스 매핑)
+                    // 이미지 데이터 복원 (일반 씬만 매핑, 요약/업로드 씬에는 생성 이미지 넣지 않음)
                     if (data.images && data.images.length > 0 && storyData.scenes) {
                         window._sceneImages = {};
                         data.images.forEach((img) => {
                             if (!img.local_path || img.status === 'missing') return;
                             const sceneIdx = storyData.scenes.findIndex(s => s.scene_number === img.scene_number);
                             if (sceneIdx !== -1) {
-                                window._sceneImages[sceneIdx] = getImageUrl(img.local_path);
+                                const scene = storyData.scenes[sceneIdx];
+                                const sceneType = scene.scene_type || 'normal';
+                                if (sceneType === 'normal') {
+                                    window._sceneImages[sceneIdx] = getImageUrl(img.local_path);
+                                }
                             }
                         });
                     }
@@ -5418,7 +5402,7 @@
                 if (statusEl) statusEl.innerText = '';
             }
 
-            const model = 'nano-banana-pro';
+            const model = '';
             const ratio = document.getElementById('gen-aspect-ratio').value;
 
             // 첫 번째 씬 "생성 중" 표시
@@ -5696,7 +5680,7 @@
                 // ★ 프리셋 레퍼런스를 세션에 적용 (전체 생성과 동일하게)
                 await applyPresetReferencesToSession();
                 
-                const model = 'nano-banana-pro';
+                const model = '';
                 const ratio = document.getElementById('gen-aspect-ratio') ? document.getElementById('gen-aspect-ratio').value : '4:5';
                 const res = await fetch('/api/workflow/regenerate-image', {
                     method: 'POST',
@@ -7719,7 +7703,7 @@
                         trained_character_id: null,
                         sub_style: "",
                         manual_overrides: overrides,
-                        model: 'nano-banana-pro' // Gemini 3.0 Preview 고정
+                        model: '' // 백엔드 기본 이미지 모델 사용
                     }),
                     signal: previewAbortController.signal
                 });
@@ -7804,7 +7788,7 @@
 
         // [정리됨] 학습 관련 코드 제거 — 3종 레퍼런스 프리셋으로 대체
 
-        const _origGetImageModel = () => 'nano-banana-pro'; // Gemini 3.0 Preview 고정
+        const _origGetImageModel = () => ''; // 백엔드 기본 이미지 모델 사용
 
 
 
@@ -8118,7 +8102,7 @@
         loadingText.innerText = `${label} 레퍼런스를 AI가 생성하고 있습니다...`;
 
         try {
-            const bodyData = { prompt, session_id: _presetSessionId, model_name: 'nano-banana-pro' };
+            const bodyData = { prompt, session_id: _presetSessionId, model_name: '' };
 
             // 캐릭터 생성 시 이름 텍스트 오버레이 + 스타일 참조
             if (refType === 'character') {
@@ -8297,7 +8281,7 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    model_name: 'nano-banana-pro',
+                    model_name: '',
                     prompt: '두 캐릭터가 카페에서 대화하는 따뜻한 장면',
                     session_id: _presetSessionId
                 })
@@ -8523,14 +8507,18 @@
                 collectedData = data.collected_data;
             }
 
-            // 이미지 데이터 복원
+            // 이미지 데이터 복원 (일반 씬만 매핑, 요약/업로드 씬에는 생성 이미지 넣지 않음)
             if (data.images && data.images.length > 0 && storyData && storyData.scenes) {
                 window._sceneImages = {};
                 data.images.forEach(function(img) {
                     if (!img.local_path || img.status === 'missing') return;
                     var sceneIdx = storyData.scenes.findIndex(function(s) { return s.scene_number === img.scene_number; });
                     if (sceneIdx !== -1) {
-                        window._sceneImages[sceneIdx] = getImageUrl(img.local_path);
+                        var scene = storyData.scenes[sceneIdx];
+                        var sceneType = scene.scene_type || 'normal';
+                        if (sceneType === 'normal') {
+                            window._sceneImages[sceneIdx] = getImageUrl(img.local_path);
+                        }
                     }
                 });
             }

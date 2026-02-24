@@ -50,17 +50,15 @@ class ReferenceService:
         os.makedirs(self.ref_dir, exist_ok=True)
 
     # ============================================
-    # 모델명 매핑
+    # 모델명 매핑 (config.py 중앙 관리)
     # ============================================
 
-    _MODEL_NAME_MAP = {
-        "nano-banana": "gemini-2.5-flash-image",
-        "nano-banana-pro": "gemini-3-pro-image-preview",
-    }
-
     def _resolve_model_name(self, model_name: str) -> str:
-        """UI 모델명을 실제 Gemini API 모델명으로 변환"""
-        return self._MODEL_NAME_MAP.get(model_name, model_name)
+        """UI 모델명을 실제 Gemini API 모델명으로 변환. 빈 값이면 기본 이미지 모델 사용."""
+        from app.core.config import MODEL_ALIAS_MAP, DEFAULT_IMAGE_MODEL
+        if not model_name:
+            return DEFAULT_IMAGE_MODEL
+        return MODEL_ALIAS_MAP.get(model_name, model_name)
 
     @staticmethod
     def _extract_image_bytes(raw_data) -> bytes:
@@ -324,7 +322,7 @@ class ReferenceService:
             return await self._generate_text_to_image(full_prompt, gemini_api_key, model_name)
 
     async def generate_method(self, prompt: str, gemini_api_key: str,
-                               model_name: str = "nano-banana-pro") -> bytes:
+                               model_name: str = "") -> bytes:
         """Method.jpg(구도/연출 레퍼런스) AI 생성 — Character.jpg 있으면 참조"""
         character_bytes = self.load_reference("character")
 
@@ -347,7 +345,7 @@ class ReferenceService:
             return await self._generate_text_to_image(full_prompt, gemini_api_key, model_name)
 
     async def generate_style(self, prompt: str, gemini_api_key: str,
-                              model_name: str = "nano-banana-pro") -> bytes:
+                              model_name: str = "") -> bytes:
         """Style.jpg(화풍 레퍼런스) AI 생성 — Character + Method 있으면 모두 참조"""
         character_bytes = self.load_reference("character")
         method_bytes = self.load_reference("method")
@@ -389,7 +387,7 @@ class ReferenceService:
         self,
         characters: List[Dict[str, Any]],
         gemini_api_key: str,
-        model_name: str = "nano-banana-pro"
+        model_name: str = ""
     ) -> bytes:
         """다중 캐릭터 이미지를 합성하여 캐릭터 레퍼런스 시트 생성
         
@@ -756,19 +754,37 @@ Please generate this character reference sheet image."""
         }
 
     async def load_for_model(self, model_name: str = "") -> Dict[str, Optional[bytes]]:
-        """레퍼런스 이미지 3종을 비동기 로드 (I/O를 스레드 풀에서 실행해 이벤트 루프 블로킹 방지)
-        
-        Gemini 3.0 Preview로 모델 고정이므로 항상 3장 전부 반환.
-        3종 레퍼런스 체이닝: Character + Method + Style 항상 첨부
+        """레퍼런스 이미지 3종을 비동기 로드 + 자동 최적화.
+
+        고해상도 레퍼런스(7-8MB)를 API 전송 전에 자동으로 리사이즈/압축하여
+        타임아웃 방지 및 응답 속도 개선. 이미지 일관성에는 영향 없음.
         """
-        return await asyncio.to_thread(self._load_for_model_sync)
+        from app.core.config import REFERENCE_IMAGE_MAX_SIZE, REFERENCE_IMAGE_QUALITY
+        from app.services.pillow_service import PillowService
+
+        raw_refs = await asyncio.to_thread(self._load_for_model_sync)
+
+        # 각 레퍼런스 이미지 최적화
+        optimized: Dict[str, Optional[bytes]] = {}
+        for ref_type, raw_bytes in raw_refs.items():
+            if raw_bytes:
+                optimized[ref_type] = await asyncio.to_thread(
+                    PillowService.optimize_reference_image,
+                    raw_bytes,
+                    REFERENCE_IMAGE_MAX_SIZE,
+                    REFERENCE_IMAGE_QUALITY,
+                )
+            else:
+                optimized[ref_type] = None
+
+        return optimized
 
     @staticmethod
     def get_model_reference_info(model_name: str = "") -> Dict[str, str]:
         """레퍼런스 사용 방식 안내 텍스트 반환 (Gemini 고정)"""
         return {
             "level": "full",
-            "message": "Gemini 3.0 Preview는 3종 레퍼런스(캐릭터/연출/화풍)를 모두 활용합니다.",
+            "message": "Gemini Pro Image는 3종 레퍼런스(캐릭터/연출/화풍)를 모두 활용합니다.",
             "supports": ["character", "method", "style"],
         }
 
@@ -793,7 +809,7 @@ Please generate this character reference sheet image."""
         # 그 외: Character만 참조 가능하면 Gemini로 대체 생성
         if refs.get("character"):
             return await self._test_preview_gemini(refs, prompt, gemini_api_key,
-                                                    "nano-banana-pro")
+                                                    "")
 
         raise ValueError("테스트 미리보기를 위한 레퍼런스 이미지가 없습니다.")
 

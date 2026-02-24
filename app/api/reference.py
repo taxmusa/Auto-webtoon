@@ -38,7 +38,7 @@ class GenerateRefRequest(BaseModel):
     """Character/Method/Style AI 생성 요청"""
     prompt: str
     session_id: Optional[str] = None
-    model_name: str = "nano-banana-pro"
+    model_name: str = ""
     character_name: Optional[str] = None   # 캐릭터 이름 (후처리 합성용)
     character_role: Optional[str] = None   # 캐릭터 역할 (후처리 합성용)
     style_image_base64: Optional[str] = None  # 스타일 참조 이미지 (같은 화풍으로 캐릭터 생성)
@@ -54,7 +54,7 @@ class GenerateCharacterSheetRequest(BaseModel):
     """캐릭터 레퍼런스 시트 생성 요청"""
     characters: List[CharacterSheetCharacter]
     session_id: Optional[str] = None
-    model_name: str = "nano-banana-pro"
+    model_name: str = ""
 
 
 class SavePresetRequest(BaseModel):
@@ -79,14 +79,14 @@ class SetImageFromBase64Request(BaseModel):
 
 class TestPreviewRequest(BaseModel):
     """테스트 미리보기 요청"""
-    model_name: str = "nano-banana-pro"
+    model_name: str = ""
     prompt: str = "두 캐릭터가 카페에서 대화하는 따뜻한 장면"
     session_id: Optional[str] = None
 
 
 class StatusRequest(BaseModel):
     """상태 조회용"""
-    model_name: str = "nano-banana-pro"
+    model_name: str = ""
 
 
 # ============================================
@@ -450,7 +450,7 @@ async def test_preview(req: TestPreviewRequest):
 # ============================================
 
 @router.get("/status/info")
-async def get_reference_status(session_id: Optional[str] = None, model_name: str = "nano-banana-pro"):
+async def get_reference_status(session_id: Optional[str] = None, model_name: str = ""):
     """3종 레퍼런스 존재 여부 + 모델별 사용 안내 반환"""
     service = ReferenceService(session_id)
     status = service.get_status()

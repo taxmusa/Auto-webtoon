@@ -465,7 +465,7 @@ class ImageSettings(BaseModel):
     style: ImageStyle = ImageStyle.WEBTOON
     sub_style: SubStyle = SubStyle.NORMAL
     use_mascot: bool = True
-    model: str = "nano-banana-pro"
+    model: str = ""  # 빈 값 → config.DEFAULT_IMAGE_MODEL 사용
     add_next_episode_tag: bool = True   # "다음 화에 계속" 태그 추가
     
     # Style System 2.0
@@ -488,9 +488,9 @@ class OutputSettings(BaseModel):
 
 class AISettings(BaseModel):
     """AI 엔진 설정"""
-    data_model: str = "gemini-3-flash-preview"
-    story_model: str = "gemini-3-flash-preview"
-    image_model: str = "nano-banana-pro"
+    data_model: str = ""   # 빈 값 → config.DEFAULT_TEXT_MODEL 사용
+    story_model: str = ""  # 빈 값 → config.DEFAULT_TEXT_MODEL 사용
+    image_model: str = ""  # 빈 값 → config.DEFAULT_IMAGE_MODEL 사용
     auto_detect_field: bool = True
 
 

@@ -11,7 +11,11 @@ from typing import Optional
 import json
 import re
 
-from app.core.config import get_settings, SPECIALIZED_FIELDS, FIELD_HASHTAGS
+from app.core.config import (
+    get_settings, SPECIALIZED_FIELDS, FIELD_HASHTAGS,
+    DEFAULT_TEXT_MODEL, DEFAULT_TEXT_FALLBACKS,
+    DEFAULT_SUMMARY_MODEL, DEFAULT_SUMMARY_LITE,
+)
 from app.models.models import (
     FieldInfo, SpecializedField, Story, Scene, Dialogue,
     InstagramCaption, CharacterSettings, CharacterProfile, RuleSettings
@@ -28,24 +32,19 @@ class GeminiService:
             api_key=self._api_key,
             http_options=types.HttpOptions(timeout=180_000)  # 180초 (밀리초 단위)
         ) if self._api_key else None
-        self._default_model = "gemini-3-flash-preview"
+        self._default_model = DEFAULT_TEXT_MODEL
         self.last_used_model: Optional[str] = None
 
-    async def detect_field(self, keyword: str, model: str = "gemini-3-flash-preview") -> FieldInfo:
+    async def detect_field(self, keyword: str, model: str = "") -> FieldInfo:
         """AI를 사용하여 키워드에서 분야, 기준 년도, 법정 검증 필요성 자동 감지 - 모델 fallback 지원"""
         import logging
         import datetime
         logger = logging.getLogger(__name__)
         current_year_str = str(datetime.datetime.now().year)
-        
-        # Fallback 모델 순서 정의
-        FALLBACK_MODELS = {
-            "gemini-3-pro-preview": ["gemini-3-flash-preview", "gemini-2.0-flash"],
-            "gemini-3-flash-preview": ["gemini-2.0-flash"],
-            "gemini-2.0-flash": []
-        }
-        
-        models_to_try = [model] + FALLBACK_MODELS.get(model, ["gemini-2.0-flash"])
+
+        if not model:
+            model = DEFAULT_TEXT_MODEL
+        models_to_try = [model] + [m for m in DEFAULT_TEXT_FALLBACKS if m != model]
         
         prompt = f"""키워드 "{keyword}"를 분석하여 다음 정보를 JSON 형식으로 반환하세요.
         현재 시각은 {current_year_str}년입니다. 특별한 언급이 없으면 기준 년도는 {current_year_str}년으로 설정하세요.
@@ -127,7 +126,7 @@ class GeminiService:
         synopsis_keywords = ("스토리", "씬", "장면", "인스타툰", "만들", "그리")
         return any(w in k for w in synopsis_keywords)
 
-    async def collect_data(self, keyword: str, field_info: Optional[FieldInfo] = None, model: str = "gemini-3-flash-preview", expert_mode: bool = False) -> list:
+    async def collect_data(self, keyword: str, field_info: Optional[FieldInfo] = None, model: str = "", expert_mode: bool = False) -> list:
         """주제와 관련된 상세 자료 수집 (1회 API 호출로 분야 판단 + 자료 수집 동시 수행)"""
         import logging
         logger = logging.getLogger(__name__)
@@ -137,12 +136,9 @@ class GeminiService:
             logger.info("[collect_data] 스토리 시놉시스로 판단하여 API 호출 없이 통과")
             return [{"title": "스토리 시놉시스", "content": keyword}]
 
-        FALLBACK_MODELS = {
-            "gemini-3-pro-preview": ["gemini-3-flash-preview", "gemini-2.0-flash"],
-            "gemini-3-flash-preview": ["gemini-2.0-flash"],
-            "gemini-2.0-flash": []
-        }
-        models_to_try = [model] + FALLBACK_MODELS.get(model, ["gemini-2.0-flash"])
+        if not model:
+            model = DEFAULT_TEXT_MODEL
+        models_to_try = [model] + [m for m in DEFAULT_TEXT_FALLBACKS if m != model]
 
         import datetime
         current_year_str = str(datetime.datetime.now().year)
@@ -345,7 +341,7 @@ class GeminiService:
         scene_count: int = 8,
         character_settings: Optional[CharacterSettings] = None,
         rule_settings: Optional[RuleSettings] = None,
-        model: str = "gemini-3-flash-preview",
+        model: str = "",
         character_names: str = "",
         characters_input: list = None,
         monologue_mode: bool = False,
@@ -355,7 +351,7 @@ class GeminiService:
         """규칙 기반 스토리 생성 - 모델 fallback 지원"""
         import logging
         logger = logging.getLogger(__name__)
-        
+
         if not character_settings:
             character_settings = CharacterSettings()
         if not rule_settings:
@@ -364,14 +360,10 @@ class GeminiService:
         # 독백 모드: 사용자가 명시적으로 켠 경우만 (캐릭터 1명이어도 자동 독백 안 함)
         char_names_list = [n.strip() for n in character_names.split(",") if n.strip()] if character_names else []
         is_monologue = monologue_mode
-        
-        # Fallback 모델 순서 정의
-        FALLBACK_MODELS = {
-            "gemini-3-pro-preview": ["gemini-3-flash-preview", "gemini-2.0-flash"],
-            "gemini-3-flash-preview": ["gemini-2.0-flash"],
-            "gemini-2.0-flash": []
-        }
-        models_to_try = [model] + FALLBACK_MODELS.get(model, ["gemini-2.0-flash"])
+
+        if not model:
+            model = DEFAULT_TEXT_MODEL
+        models_to_try = [model] + [m for m in DEFAULT_TEXT_FALLBACKS if m != model]
             
         data_str = "\n".join([f"- {d['title']}: {d['content']}" for d in collected_data])
         
@@ -631,20 +623,16 @@ image_prompt 나쁜 예시:
         keyword: str,
         field: SpecializedField,
         story_summary: str,
-        model: str = "gemini-3-flash-preview",
+        model: str = "",
         character_names: list[str] | None = None
     ) -> InstagramCaption:
         """인스타그램 캡션 생성 - 모델 fallback + 재시도 + 캐릭터명 후처리 제거"""
         import logging
         logger = logging.getLogger(__name__)
 
-        # Fallback 모델 순서 (빠른 모델 우선)
-        FALLBACK_MODELS = {
-            "gemini-3-pro-preview": ["gemini-3-flash-preview", "gemini-2.0-flash"],
-            "gemini-3-flash-preview": ["gemini-2.0-flash"],
-            "gemini-2.0-flash": []
-        }
-        models_to_try = [model] + FALLBACK_MODELS.get(model, ["gemini-2.0-flash"])
+        if not model:
+            model = DEFAULT_TEXT_MODEL
+        models_to_try = [model] + [m for m in DEFAULT_TEXT_FALLBACKS if m != model]
         
         # 캐릭터명 금지 목록 프롬프트 구성
         char_ban_text = ""
@@ -831,8 +819,8 @@ image_prompt 나쁜 예시:
         # 신형 SDK: Part.from_bytes로 이미지 전달
         image_part = types.Part.from_bytes(data=image_data, mime_type=mime_type)
 
-        # Fallback 모델 순서 (사용자 요청: 3.0 Pro 등 고성능 모델 전용)
-        models_to_try = ["gemini-3-pro-preview", "gemini-3-flash-preview"]
+        # Fallback 모델 순서 (고성능 모델 우선)
+        models_to_try = [DEFAULT_TEXT_MODEL] + DEFAULT_TEXT_FALLBACKS[:1]
 
         for try_model in models_to_try:
             try:
@@ -943,7 +931,7 @@ A: 두번째 답변 내용
 
 중요: 요약 텍스트만 출력하세요. 마크다운 코드블록(```)이나 부가 설명 없이 순수 텍스트만 출력하세요."""
 
-        models_to_try = ["gemini-2.0-flash", "gemini-2.0-flash-lite"]
+        models_to_try = [DEFAULT_SUMMARY_MODEL, DEFAULT_SUMMARY_LITE]
         for try_model in models_to_try:
             try:
                 response = await asyncio.wait_for(

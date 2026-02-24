@@ -18,6 +18,8 @@ import base64
 import zipfile
 from io import BytesIO
 
+from app.core.config import DEFAULT_TEXT_MODEL
+
 logger = logging.getLogger(__name__)
 
 # /api/content/* 공유 엔드포인트 (프리셋, 세션, 로고, ZIP 등)
@@ -569,7 +571,7 @@ async def _generate_texts(
 
         response = await asyncio.to_thread(
             client.models.generate_content,
-            model="gemini-3-flash-preview",
+            model=DEFAULT_TEXT_MODEL,
             contents=prompt
         )
         text = response.text.strip()

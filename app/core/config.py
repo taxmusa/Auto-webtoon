@@ -1,12 +1,43 @@
 """
 설정 관리 - 환경변수 및 기본 설정
+모든 AI 모델 상수를 이 파일에서 중앙 관리합니다.
 """
 import os
 from pathlib import Path
 from pydantic_settings import BaseSettings
 from pydantic import Field, field_validator
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List, Dict
 from functools import lru_cache
+
+
+# ============================================
+# AI 모델 설정 (중앙 집중 — 모델 변경 시 여기만 수정)
+# ============================================
+
+# 텍스트 생성 (스토리, 자료수집, 분야감지, 캡션)
+DEFAULT_TEXT_MODEL = "gemini-3.1-pro-preview"
+DEFAULT_TEXT_FALLBACKS: List[str] = ["gemini-3-flash-preview", "gemini-2.5-flash"]
+
+# 이미지 생성 (씬 이미지)
+DEFAULT_IMAGE_MODEL = "gemini-3-pro-image-preview"
+DEFAULT_IMAGE_ALIAS = "nano-banana-pro"  # 내부 하위 호환용 (기존 세션 데이터)
+
+# 요약/경량 작업 (요약 슬라이드 등)
+DEFAULT_SUMMARY_MODEL = "gemini-2.5-flash"
+DEFAULT_SUMMARY_LITE = "gemini-2.5-flash-lite"
+
+# UI 별명 → 실제 API 모델명 매핑 (하위 호환)
+MODEL_ALIAS_MAP: Dict[str, str] = {
+    "nano-banana": "gemini-2.5-flash-image",
+    "nano-banana-pro": "gemini-3-pro-image-preview",
+}
+
+# 이미지 생성 타임아웃 (초) — 정상 생성 40~60초 + 여유
+IMAGE_GENERATION_TIMEOUT = 90
+
+# 레퍼런스 이미지 최적화 설정
+REFERENCE_IMAGE_MAX_SIZE = 1024   # 최대 변 길이 (px)
+REFERENCE_IMAGE_QUALITY = 85      # JPEG 압축 품질 (1-100)
 
 _ENV_PATH = Path(__file__).resolve().parent.parent.parent / ".env"
 
@@ -36,9 +67,9 @@ class Settings(BaseSettings):
     def strip_instagram(cls, v):
         return v.strip() if v and isinstance(v, str) else v
     
-    # 기본 설정
-    default_ai_model: str = "gemini-3-flash-preview"
-    default_image_model: str = "nano-banana-pro"
+    # 기본 설정 (위 모듈 상수 DEFAULT_TEXT_MODEL / DEFAULT_IMAGE_ALIAS 와 동기)
+    default_ai_model: str = DEFAULT_TEXT_MODEL
+    default_image_model: str = DEFAULT_IMAGE_ALIAS
     max_scenes_per_series: int = 10
     
     # 폰트 경로
@@ -117,7 +148,3 @@ SUB_STYLE_PROMPTS = {
     "romance": "soft pastel colors, warm lighting, emotional, gentle atmosphere",
     "business": "professional, corporate style, clean, modern office setting"
 }
-
-
-
-# (LoRA 학습 설정은 제거됨 — 레퍼런스 이미지 기반 일관성으로 전환)

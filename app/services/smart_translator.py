@@ -297,8 +297,9 @@ class SmartTranslator:
             max_retries = 2
             for attempt in range(max_retries + 1):
                 try:
+                    from app.core.config import DEFAULT_TEXT_FALLBACKS
                     response = client.models.generate_content(
-                        model="gemini-3-flash-preview",
+                        model=DEFAULT_TEXT_FALLBACKS[0],
                         contents=self._build_translation_prompt(text)
                     )
                     translated = response.text.strip()
@@ -338,8 +339,9 @@ class SmartTranslator:
             max_retries = 2
             for attempt in range(max_retries + 1):
                 try:
+                    from app.core.config import DEFAULT_TEXT_FALLBACKS
                     response = client.models.generate_content(
-                        model="gemini-3-flash-preview",
+                        model=DEFAULT_TEXT_FALLBACKS[0],
                         contents=(
                         "You are a strict Korean-to-English LITERAL translator for AI image generation prompts.\n\n"
                         "CRITICAL RULES:\n"

@@ -636,8 +636,7 @@ def build_summary_slide_html(
     }
     p = palettes.get(style, palettes["text_card"])
 
-    # ── 공통 헤더/배지 ──
-    badge_html = f"""<div class="badge">\u2728 \uc694\uc57d \uc815\ub9ac</div>"""
+    # ── 공통 헤더 (배지 없음) ──
     title_html = f"""<div class="title">{safe_title}</div>""" if safe_title else ""
 
     # ── 스타일별 본문 HTML ──
@@ -856,13 +855,6 @@ body {{
     display:flex; flex-direction:column;
     padding:64px 56px 56px;
 }}
-.badge {{
-    display:inline-flex; align-items:center; gap:8px;
-    background:{p['accent']};
-    color:#fff; padding:10px 24px; border-radius:40px;
-    font-size:20px; font-weight:700; letter-spacing:0.03em;
-    align-self:flex-start; margin-bottom:20px;
-}}
 .title {{
     font-size:36px; font-weight:900; color:{p['text']};
     line-height:1.3; margin-bottom:4px; letter-spacing:-0.02em;
@@ -873,7 +865,6 @@ body {{
 </style></head>
 <body>
 <div id="wrap">
-{badge_html}
 {title_html}
 {body_html}
 </div>
