@@ -585,23 +585,14 @@ async def _run_image_generation(request: GenerateImagesRequest):
                     f"Method: {len(method_ref_bytes) if method_ref_bytes else 'None'}bytes, "
                     f"Style: {len(style_ref_bytes) if style_ref_bytes else 'None'}bytes")
 
-        model_lower = request.model.lower() if request.model else ""
-        is_gemini = any(k in model_lower for k in ["gemini", "nano-banana"])
         ref_status = []
         if character_ref_bytes: ref_status.append("Character")
         if method_ref_bytes: ref_status.append("Method")
         if style_ref_bytes: ref_status.append("Style")
         logger.info(f"[레퍼런스] 사용 가능: {', '.join(ref_status) if ref_status else '없음'} (모델: {request.model})")
 
-        if is_gemini:
-            from PIL import Image as PILImg
-            from io import BytesIO as BIO
-            if character_ref_bytes:
-                character_ref_bytes = PILImg.open(BIO(character_ref_bytes))
-            if method_ref_bytes:
-                method_ref_bytes = PILImg.open(BIO(method_ref_bytes))
-            if style_ref_bytes:
-                style_ref_bytes = PILImg.open(BIO(style_ref_bytes))
+        # bytes 그대로 전달 — image_generator._to_part()가 Part.from_bytes로 직접 변환
+        # (이전: PIL Image로 변환 → SDK가 PNG 재인코딩 → 전송량 5배 증가 문제)
 
         os.makedirs("output", exist_ok=True)
 
@@ -742,6 +733,17 @@ async def _run_image_generation(request: GenerateImagesRequest):
             )
             if res.get("status") == "error":
                 logger.error(f"씬 {scene.scene_number} 생성 실패: {res.get('error', '')}")
+                # 씬 실패 시 이후 씬 생성 중단 (체이닝 불가)
+                img = GeneratedImage(
+                    scene_number=res["scene_number"],
+                    prompt_used=res.get("prompt_used", "Error"),
+                    local_path="",
+                    status="error"
+                )
+                session.images.append(img)
+                logger.warning(f"[중단] 씬 {scene.scene_number} 실패로 이후 씬 생성 중단 "
+                               f"({len(session.images)}/{len(scenes_to_generate)})")
+                break
 
             if res.get("image_bytes"):
                 generated_scene_images.clear()

@@ -167,18 +167,27 @@ class GeminiGenerator(ImageGeneratorBase):
             # 예외: 그 외 타입은 그대로 전달 (텍스트 등)
             return data
 
+        # ★ toonstoons 방식: responseModalities만 설정, ImageConfig 사용 안 함
+        _gen_config_kwargs = {"response_modalities": ["TEXT", "IMAGE"]}
+        if aspect_ratio:
+            full_prompt += f"\n\n[Image aspect ratio: {aspect_ratio}]"
+            logger.info(f"[Gemini] aspect_ratio={aspect_ratio} 프롬프트 힌트로 전달")
+
         # 1. 프롬프트 텍스트 (가장 먼저 — 모델이 의도를 먼저 이해)
         contents.append(full_prompt)
 
-        # 2. 레퍼런스 이미지들 (라벨 간소화 — 불필요한 장문 제거)
+        # 2. 레퍼런스 이미지들 (각 이미지 앞에 역할 라벨 — 모델이 용도 구분)
         if reference_images:
+            contents.append("[Character Reference] 캐릭터 외형(얼굴, 체형, 의상)을 이 이미지와 동일하게 유지하세요.")
             for ref in reference_images:
                 contents.append(_to_part(ref))
 
         if method_image:
+            contents.append("[Method Reference] 구도와 앵글을 참고하세요.")
             contents.append(_to_part(method_image))
 
         if style_image:
+            contents.append("[Style Reference] 이 화풍과 색감을 적용하세요.")
             contents.append(_to_part(style_image))
 
         # 3. 직전 씬 이미지 (체이닝) — 캐릭터 외형 참고용
@@ -186,20 +195,6 @@ class GeminiGenerator(ImageGeneratorBase):
             sn_label = f"(장면 {prev_scene_number})" if prev_scene_number else ""
             contents.append(f"[보조 참고] 직전 장면{sn_label} 이미지 - 캐릭터 외형 참고용. 장소/배경은 현재 프롬프트를 따를 것")
             contents.append(_to_part(prev_scene_image))
-
-        # aspect_ratio: SDK 버전에 따라 ImageConfig 사용
-        # ★ TEXT+IMAGE: 모델이 더 자유롭게 응답 → 이미지 생성 성공률 향상
-        _gen_config_kwargs = {"response_modalities": ["TEXT", "IMAGE"]}
-        if aspect_ratio and hasattr(types, 'ImageConfig'):
-            try:
-                _gen_config_kwargs["image_config"] = types.ImageConfig(
-                    aspect_ratio=aspect_ratio
-                )
-                logger.info(f"[Gemini] ImageConfig aspect_ratio={aspect_ratio} 적용")
-            except Exception:
-                logger.warning(f"[Gemini] ImageConfig 미지원 — 프롬프트 힌트로 대체")
-        elif aspect_ratio:
-            logger.info(f"[Gemini] ImageConfig 미지원 SDK — 프롬프트 힌트로 비율 {aspect_ratio} 전달")
 
         def _sync_generate():
             return self.client.models.generate_content(
