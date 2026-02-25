@@ -32,8 +32,8 @@ MODEL_ALIAS_MAP: Dict[str, str] = {
     "nano-banana-pro": "gemini-3-pro-image-preview",
 }
 
-# 이미지 생성 타임아웃 (초) — 정상 생성 40~60초 + 여유
-IMAGE_GENERATION_TIMEOUT = 90
+# 이미지 생성 타임아웃 (초) — Part.from_bytes로 전송량 80% 감소 후 정상 30~40초 + 여유
+IMAGE_GENERATION_TIMEOUT = 60
 
 # 레퍼런스 이미지 최적화 설정
 REFERENCE_IMAGE_MAX_SIZE = 1024   # 최대 변 길이 (px)

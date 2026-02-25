@@ -119,7 +119,6 @@ class GeminiGenerator(ImageGeneratorBase):
             aspect_ratio: str — 이미지 비율 ("4:5", "9:16", "1:1" 등, Gemini 공식 지원)
         """
         t0 = time.time()
-        from PIL import Image
         import io
 
         # 프롬프트에 레퍼런스/체이닝 지시문 추가
@@ -153,11 +152,20 @@ class GeminiGenerator(ImageGeneratorBase):
         #   텍스트를 먼저 배치하면 모델이 의도를 먼저 파악 → 이미지 생성 성공률 향상
         contents = []
 
-        def _to_pil(data):
-            """bytes → PIL Image 변환. 이미 PIL Image면 그대로 반환."""
-            if isinstance(data, Image.Image):
-                return data
-            return Image.open(io.BytesIO(data))
+        def _to_part(data):
+            """이미지 데이터 → types.Part (JPEG bytes 직접 전달).
+            SDK의 PIL→PNG 재인코딩을 우회하여 전송량 80% 감소."""
+            if isinstance(data, bytes):
+                return types.Part.from_bytes(data=data, mime_type="image/jpeg")
+            # PIL Image가 들어온 경우 JPEG bytes로 변환
+            from PIL import Image as PILImage
+            if isinstance(data, PILImage.Image):
+                buf = io.BytesIO()
+                rgb = data.convert("RGB") if data.mode != "RGB" else data
+                rgb.save(buf, format="JPEG", quality=85)
+                return types.Part.from_bytes(data=buf.getvalue(), mime_type="image/jpeg")
+            # 예외: 그 외 타입은 그대로 전달 (텍스트 등)
+            return data
 
         # 1. 프롬프트 텍스트 (가장 먼저 — 모델이 의도를 먼저 이해)
         contents.append(full_prompt)
@@ -165,19 +173,19 @@ class GeminiGenerator(ImageGeneratorBase):
         # 2. 레퍼런스 이미지들 (라벨 간소화 — 불필요한 장문 제거)
         if reference_images:
             for ref in reference_images:
-                contents.append(_to_pil(ref))
+                contents.append(_to_part(ref))
 
         if method_image:
-            contents.append(_to_pil(method_image))
+            contents.append(_to_part(method_image))
 
         if style_image:
-            contents.append(_to_pil(style_image))
+            contents.append(_to_part(style_image))
 
         # 3. 직전 씬 이미지 (체이닝) — 캐릭터 외형 참고용
         if prev_scene_image:
             sn_label = f"(장면 {prev_scene_number})" if prev_scene_number else ""
             contents.append(f"[보조 참고] 직전 장면{sn_label} 이미지 - 캐릭터 외형 참고용. 장소/배경은 현재 프롬프트를 따를 것")
-            contents.append(_to_pil(prev_scene_image))
+            contents.append(_to_part(prev_scene_image))
 
         # aspect_ratio: SDK 버전에 따라 ImageConfig 사용
         # ★ TEXT+IMAGE: 모델이 더 자유롭게 응답 → 이미지 생성 성공률 향상
@@ -206,10 +214,10 @@ class GeminiGenerator(ImageGeneratorBase):
         if style_image: ref_detail.append("Style")
         if prev_scene_image: ref_detail.append("PrevScene")
 
-        # ★ 단일 루프 재시도 — 최대 3회 (첫 시도 + 재시도 2회)
+        # ★ 단일 루프 재시도 — 최대 2회 (첫 시도 + 재시도 1회)
         import random
-        MAX_RETRIES = 3
-        RETRY_DELAYS = [3, 8, 15]
+        MAX_RETRIES = 2
+        RETRY_DELAYS = [3]  # 503/429일 때만 3초 후 1회 재시도
 
         def _classify_error(exc):
             """에러 타입 분류"""
@@ -266,6 +274,7 @@ class GeminiGenerator(ImageGeneratorBase):
                 error_type = "timeout"
                 last_error = str(e)
                 logger.warning("Gemini 타임아웃 (attempt=%d/%d, %.0f초)", attempt, MAX_RETRIES, time.time() - t0)
+                break  # 타임아웃은 재시도 불가 (서버 상태 동일)
             except ValueError:
                 pass  # last_error와 error_type은 위에서 설정됨
             except Exception as e:
@@ -273,8 +282,8 @@ class GeminiGenerator(ImageGeneratorBase):
                 last_error = str(e)
                 logger.warning("Gemini 에러 [%s] (attempt=%d/%d): %s", error_type, attempt, MAX_RETRIES, e)
 
-            # 안전 필터는 재시도 불가
-            if error_type == "safety_filter":
+            # 안전 필터/타임아웃은 재시도 불가
+            if error_type in ("safety_filter", "timeout"):
                 break
 
             # 재시도 가능한 경우: 대기 후 재시도

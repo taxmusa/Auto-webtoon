@@ -231,11 +231,17 @@ class ReferenceService:
         return os.path.join(self.ref_dir, TYPE_TO_FILENAME[ref_type])
 
     def save_reference(self, ref_type: str, image_bytes: bytes) -> str:
-        """레퍼런스 이미지 저장"""
+        """레퍼런스 이미지 저장 (저장 시점에 자동 최적화: 1024px JPEG 85%)"""
+        from app.services.pillow_service import PillowService
+        from app.core.config import REFERENCE_IMAGE_MAX_SIZE, REFERENCE_IMAGE_QUALITY
+        optimized = PillowService.optimize_reference_image(
+            image_bytes, REFERENCE_IMAGE_MAX_SIZE, REFERENCE_IMAGE_QUALITY
+        )
         file_path = self._get_path(ref_type)
         with open(file_path, "wb") as f:
-            f.write(image_bytes)
-        logger.info(f"[레퍼런스] {ref_type} 이미지 저장 완료: {file_path}")
+            f.write(optimized)
+        logger.info(f"[레퍼런스] {ref_type} 이미지 저장+최적화 완료: {file_path} "
+                     f"({len(image_bytes)/1024:.0f}KB → {len(optimized)/1024:.0f}KB)")
         return file_path
 
     def load_reference(self, ref_type: str) -> Optional[bytes]:
@@ -726,6 +732,46 @@ Please generate this character reference sheet image."""
         return preset_id
 
     @staticmethod
+    def migrate_existing_presets():
+        """기존 프리셋/레퍼런스 이미지를 최적화 형식으로 변환 (1회성).
+        이미 최적화된 파일(JPEG, 500KB 이하)은 건너뜀."""
+        from app.services.pillow_service import PillowService
+        from app.core.config import REFERENCE_IMAGE_MAX_SIZE, REFERENCE_IMAGE_QUALITY
+
+        migrated = 0
+        for base_dir in [BUILTIN_PRESET_DIR, USER_PRESET_DIR, REFERENCE_BASE_DIR]:
+            if not os.path.isdir(base_dir):
+                continue
+            for root, _dirs, files in os.walk(base_dir):
+                for fname in files:
+                    if not fname.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
+                        continue
+                    fpath = os.path.join(root, fname)
+                    fsize = os.path.getsize(fpath)
+                    # 이미 최적화된 파일 건너뜀 (500KB 이하 JPEG)
+                    if fsize < 512 * 1024 and fname.lower().endswith(('.jpg', '.jpeg')):
+                        continue
+                    try:
+                        with open(fpath, "rb") as f:
+                            raw = f.read()
+                        optimized = PillowService.optimize_reference_image(
+                            raw, REFERENCE_IMAGE_MAX_SIZE, REFERENCE_IMAGE_QUALITY
+                        )
+                        # .jpg 확장자로 통일
+                        new_path = os.path.splitext(fpath)[0] + ".jpg"
+                        with open(new_path, "wb") as f:
+                            f.write(optimized)
+                        # 원본이 다른 확장자였으면 삭제
+                        if new_path != fpath and os.path.exists(fpath):
+                            os.remove(fpath)
+                        migrated += 1
+                        logger.info(f"[마이그레이션] {fpath} → {len(optimized)/1024:.0f}KB")
+                    except Exception as e:
+                        logger.warning(f"[마이그레이션] {fpath} 실패: {e}")
+        logger.info(f"[마이그레이션] 완료: {migrated}개 파일 최적화")
+        return migrated
+
+    @staticmethod
     def delete_preset(preset_id: str) -> bool:
         """사용자 프리셋 삭제 (빌트인은 삭제 불가)"""
         # 빌트인 프리셋인지 확인
@@ -754,30 +800,12 @@ Please generate this character reference sheet image."""
         }
 
     async def load_for_model(self, model_name: str = "") -> Dict[str, Optional[bytes]]:
-        """레퍼런스 이미지 3종을 비동기 로드 + 자동 최적화.
+        """레퍼런스 이미지 3종을 비동기 로드.
 
-        고해상도 레퍼런스(7-8MB)를 API 전송 전에 자동으로 리사이즈/압축하여
-        타임아웃 방지 및 응답 속도 개선. 이미지 일관성에는 영향 없음.
+        저장 시점에 이미 최적화(1024px JPEG 85%)되어 있으므로
+        로드 시 추가 리사이징 없이 바로 반환.
         """
-        from app.core.config import REFERENCE_IMAGE_MAX_SIZE, REFERENCE_IMAGE_QUALITY
-        from app.services.pillow_service import PillowService
-
-        raw_refs = await asyncio.to_thread(self._load_for_model_sync)
-
-        # 각 레퍼런스 이미지 최적화
-        optimized: Dict[str, Optional[bytes]] = {}
-        for ref_type, raw_bytes in raw_refs.items():
-            if raw_bytes:
-                optimized[ref_type] = await asyncio.to_thread(
-                    PillowService.optimize_reference_image,
-                    raw_bytes,
-                    REFERENCE_IMAGE_MAX_SIZE,
-                    REFERENCE_IMAGE_QUALITY,
-                )
-            else:
-                optimized[ref_type] = None
-
-        return optimized
+        return await asyncio.to_thread(self._load_for_model_sync)
 
     @staticmethod
     def get_model_reference_info(model_name: str = "") -> Dict[str, str]:
