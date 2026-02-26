@@ -26,3 +26,20 @@
 - 공식 문서 + 웹 검색 결과 + 기존 코드베이스 패턴을 교차 비교
 - 3개 소스가 일치하는 방법을 채택
 - 불일치 시 공식 문서를 최우선으로 따르되, 사용자에게 차이점 안내
+
+## 템플릿 프리뷰 이미지 규칙
+
+새 템플릿이나 템플릿 세트를 추가/수정할 때 반드시 아래 규칙을 따를 것:
+
+### 프리뷰 이미지 생성 방식
+1. 각 템플릿 세트의 **커버 슬라이드**를 샘플 데이터로 Playwright 렌더링하여 PNG 생성
+2. 생성된 이미지를 `app/static/previews/{set_id}.png` 에 저장 (270x338px 썸네일)
+3. 서버 재시작 시 API 호출 없이 **저장된 파일을 재사용** (매번 재생성 안 함)
+4. 프론트엔드에서 `<img>` 태그로 해당 이미지를 갤러리에 표시
+
+### 템플릿 추가 시 체크리스트
+- [ ] `app/services/template_builders.py`에 빌더 함수 추가
+- [ ] `app/services/theme_palettes.py`의 TEMPLATE_SETS에 세트 정보 추가
+- [ ] `app/api/content_generator.py`의 `get_template_catalog()` individual_templates에 추가
+- [ ] 프리뷰 이미지 생성 스크립트 실행하여 `app/static/previews/`에 새 PNG 저장
+- [ ] 프론트엔드 갤러리가 자동으로 새 세트를 표시하는지 확인

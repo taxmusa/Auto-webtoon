@@ -1,9 +1,8 @@
 """
 카드뉴스 API 라우터 (thin wrapper → content_generator)
 
-기존 URL `/api/cardnews/*`을 100% 유지하면서
-content_generator 공통 엔진에 위임한다. (R4 대응)
-프론트엔드 파라미터명(card_count, cards 등)도 그대로 유지.
+[DEPRECATED] 통합 엔드포인트 `/api/content/*`으로 이전 완료.
+이 파일은 기존 URL 하위호환만 제공. 신규 코드는 content_generator.py 통합 엔드포인트 사용.
 """
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field

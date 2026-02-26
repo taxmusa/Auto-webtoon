@@ -172,6 +172,16 @@ TEMPLATE_SETS = {
         "theme": "dark",
         "label": "다크 BEST 리스트",
         "description": "강렬한 다크 배경 + 넘버링 리스트 + 요약 CTA",
+        "preview_colors": ["#1A1A1A", "#FF6B6B", "#FFFFFF"],
+    },
+    "dark_category": {
+        "cover": "COVER-B",
+        "body": "BODY-C",
+        "closing": "CLOSING-A",
+        "theme": "dark",
+        "label": "다크 카테고리",
+        "description": "전문적 카테고리 배지 + 금액 하이라이트 + CTA",
+        "preview_colors": ["#1A1A1A", "#FFD700", "#FFFFFF"],
     },
     "blue_report": {
         "cover": "COVER-C",
@@ -180,6 +190,7 @@ TEMPLATE_SETS = {
         "theme": "blue",
         "label": "블루 리포트",
         "description": "공신력 있는 블루 배경 + 넘버링 리스트 + 요약 CTA",
+        "preview_colors": ["#E8EEF4", "#4A7FB5", "#1A1A1A"],
     },
     "minimal_card": {
         "cover": "COVER-D",
@@ -188,6 +199,7 @@ TEMPLATE_SETS = {
         "theme": "light",
         "label": "미니멀 카드",
         "description": "깔끔한 흰색 카드 + 넘버링 리스트 + 브랜드 카드",
+        "preview_colors": ["#FFFFFF", "#4A7FB5", "#1A1A1A"],
     },
     "warm_friendly": {
         "cover": "COVER-E",
@@ -196,6 +208,7 @@ TEMPLATE_SETS = {
         "theme": "warm",
         "label": "웜톤 친근형",
         "description": "따뜻한 웜톤 + 비교형 본문 + 요약 CTA",
+        "preview_colors": ["#F5F0EB", "#8B6914", "#1A1A1A"],
     },
     "teal_modern": {
         "cover": "COVER-F",
@@ -204,6 +217,25 @@ TEMPLATE_SETS = {
         "theme": "teal",
         "label": "틸 모던",
         "description": "세련된 틸 배경 + 넘버링 리스트 + 요약 CTA",
+        "preview_colors": ["#1A3A3A", "#A8D5D5", "#FFFFFF"],
+    },
+    "dark_process": {
+        "cover": "COVER-B",
+        "body": "BODY-D",
+        "closing": "CLOSING-B",
+        "theme": "dark",
+        "label": "다크 프로세스",
+        "description": "카테고리 배지 + 단계별 프로세스 + 브랜드 카드",
+        "preview_colors": ["#1A1A1A", "#FFD700", "#FFFFFF"],
+    },
+    "warm_highlight": {
+        "cover": "COVER-E",
+        "body": "BODY-C",
+        "closing": "CLOSING-B",
+        "theme": "warm",
+        "label": "웜톤 하이라이트",
+        "description": "질문형 커버 + 금액/숫자 강조 + 브랜드 카드",
+        "preview_colors": ["#F5F0EB", "#8B6914", "#1A1A1A"],
     },
 }
 

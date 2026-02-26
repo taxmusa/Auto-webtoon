@@ -90,10 +90,12 @@ class ContentItem(BaseModel):
     title: str = ""
     body: str = ""
     page_number: str = ""
+    template_type: Optional[str] = None  # 슬라이드별 개별 템플릿 (COVER-A, BODY-B 등)
 
 
 class ContentCreateRequest(BaseModel):
     """콘텐츠 생성 요청 (모든 Phase 파라미터 포함, 기본값으로 하위 호환)"""
+    content_type: str = "cardnews"     # "carousel" | "cardnews" (통합 엔드포인트용)
     topic: str
     collected_data: str = ""
     item_count: int = Field(default=5, ge=1, le=10)
@@ -154,6 +156,7 @@ class ItemEditRequest(BaseModel):
     item_index: int
     title: Optional[str] = None
     body: Optional[str] = None
+    template_type: Optional[str] = None  # 슬라이드별 개별 템플릿 변경
 
 
 class ContentRenderRequest(BaseModel):
@@ -208,6 +211,19 @@ def _ensure_dirs():
 
 
 _ensure_dirs()
+
+
+# ============================================
+# Config 조회 헬퍼
+# ============================================
+
+def _get_config(content_type: str) -> ContentConfig:
+    """content_type 문자열로 Config 객체 반환"""
+    configs = {
+        "carousel": CAROUSEL_CONFIG,
+        "cardnews": CARDNEWS_CONFIG,
+    }
+    return configs.get(content_type, CARDNEWS_CONFIG)
 
 
 # ============================================
@@ -270,6 +286,19 @@ async def generate_content(config: ContentConfig, req: ContentCreateRequest) -> 
             status_code=500,
             detail=f"텍스트 생성 실패: {diag.message} — {diag.action}",
         )
+
+    # template_set이 있으면 각 아이템에 template_type 자동 배정
+    if template_set_name:
+        from app.services.theme_palettes import get_template_set
+        ts = get_template_set(template_set_name)
+        if ts:
+            for i, item in enumerate(items):
+                if i == 0:
+                    item.template_type = ts.get("cover", "COVER-A")
+                elif i == len(items) - 1 and len(items) > 1:
+                    item.template_type = ts.get("closing", "CLOSING-A")
+                else:
+                    item.template_type = ts.get("body", "BODY-A")
 
     session = ContentSession(
         id=session_id,
@@ -335,6 +364,8 @@ async def edit_item(session_id: str, req: ItemEditRequest) -> dict:
         item.title = req.title
     if req.body is not None:
         item.body = req.body
+    if req.template_type is not None:
+        item.template_type = req.template_type
 
     return {"success": True, "item": item.dict()}
 
@@ -422,6 +453,7 @@ async def render_content(
                         body=item.body,
                         width=session.width,
                         height=session.height,
+                        template_type_override=item.template_type,
                     )
                 except Exception as e:
                     logger.warning(f"[{config.label}] 새 템플릿 빌더 실패, 기존 빌더 사용: {e}")
@@ -529,6 +561,7 @@ async def render_single_item(
                 body=item.body,
                 width=session.width,
                 height=session.height,
+                template_type_override=item.template_type,
             )
         except Exception as e:
             logger.warning(f"[{config.label}] 새 템플릿 빌더 실패, 기존 빌더 사용: {e}")
@@ -949,3 +982,101 @@ async def list_template_sets():
     """사용 가능한 템플릿 세트 목록"""
     from app.services.theme_palettes import get_available_template_sets
     return {"template_sets": get_available_template_sets()}
+
+
+# ============================================
+# 통합 엔드포인트 (캐러셀/카드뉴스 공용)
+# ============================================
+
+@router.post("/generate")
+async def unified_generate(req: ContentCreateRequest):
+    """통합 콘텐츠 생성 — content_type으로 캐러셀/카드뉴스 구분"""
+    config = _get_config(req.content_type)
+    result = await generate_content(config, req)
+    return result
+
+
+@router.get("/{session_id}/detail")
+async def unified_get_session(session_id: str):
+    """통합 세션 조회"""
+    session = await get_session(session_id)
+    return session.dict()
+
+
+@router.post("/{session_id}/edit")
+async def unified_edit_item(session_id: str, req: ItemEditRequest):
+    """통합 아이템 수정"""
+    result = await edit_item(session_id, req)
+    return result
+
+
+@router.post("/{session_id}/render")
+async def unified_render(session_id: str, req: Optional[ContentRenderRequest] = None):
+    """통합 렌더링 — 세션의 content_type에서 config 자동 결정"""
+    session = await get_session(session_id)
+    config = _get_config(session.content_type)
+    return await render_content(config, session_id, req)
+
+
+@router.post("/{session_id}/render-single")
+async def unified_render_single(session_id: str, req: SingleRenderRequest):
+    """통합 개별 재렌더링"""
+    session = await get_session(session_id)
+    config = _get_config(session.content_type)
+    return await render_single_item(config, session_id, req)
+
+
+# --- 템플릿 카탈로그 ---
+
+@router.get("/templates")
+async def get_template_catalog():
+    """전체 템플릿 카탈로그 (세트 + 개별 템플릿 목록)"""
+    from app.services.theme_palettes import TEMPLATE_SETS, THEME_PALETTES
+
+    # 템플릿 세트 목록
+    template_sets = []
+    for set_id, ts in TEMPLATE_SETS.items():
+        theme = THEME_PALETTES.get(ts["theme"], {})
+        # 프리뷰 이미지 파일 존재 여부 확인
+        import os
+        preview_path = os.path.join("app", "static", "previews", f"{set_id}.png")
+        preview_image = f"/static/previews/{set_id}.png" if os.path.exists(preview_path) else None
+        template_sets.append({
+            "id": set_id,
+            "name": ts.get("label", set_id),
+            "description": ts.get("description", ""),
+            "theme": ts["theme"],
+            "cover": ts["cover"],
+            "body": ts["body"],
+            "closing": ts.get("closing", "CLOSING-A"),
+            "preview_image": preview_image,
+            "preview_colors": [
+                theme.get("bg", "#FFFFFF"),
+                theme.get("accent", "#4A7FB5"),
+                theme.get("text_primary", "#1A1A1A"),
+            ],
+        })
+
+    # 개별 템플릿 목록
+    individual_templates = [
+        # 커버
+        {"id": "COVER-A", "type": "cover", "name": "다크 BEST 리스트형", "theme": "dark", "description": "강렬한 SNS 바이럴"},
+        {"id": "COVER-B", "type": "cover", "name": "다크 카테고리형", "theme": "dark", "description": "전문적, 긴급성 강조"},
+        {"id": "COVER-C", "type": "cover", "name": "블루 리포트형", "theme": "blue", "description": "공신력, 전문가"},
+        {"id": "COVER-D", "type": "cover", "name": "미니멀 카드형", "theme": "light", "description": "깔끔, 모던"},
+        {"id": "COVER-E", "type": "cover", "name": "웜톤 질문형", "theme": "warm", "description": "친근, 질문형 제목"},
+        {"id": "COVER-F", "type": "cover", "name": "틸 리포트형", "theme": "teal", "description": "세련, 트렌디"},
+        # 본문
+        {"id": "BODY-A", "type": "body", "name": "넘버링 리스트형", "description": "포인트별 정보 전달"},
+        {"id": "BODY-B", "type": "body", "name": "비교형 (Good/Bad)", "description": "O/X, Before/After 비교"},
+        {"id": "BODY-C", "type": "body", "name": "하이라이트 박스형", "description": "큰 숫자/금액 강조"},
+        {"id": "BODY-D", "type": "body", "name": "스텝/프로세스형", "description": "단계별 진행 흐름"},
+        # 마무리
+        {"id": "CLOSING-A", "type": "closing", "name": "요약 + CTA형", "description": "핵심 요약 + 행동 유도"},
+        {"id": "CLOSING-B", "type": "closing", "name": "브랜드 카드형", "description": "회사명, 슬로건, 연락처"},
+    ]
+
+    return {
+        "template_sets": template_sets,
+        "individual_templates": individual_templates,
+    }

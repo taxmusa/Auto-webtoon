@@ -4,6 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>{{ title }}</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🎨</text></svg>" type="image/svg+xml">
     <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap"
@@ -856,10 +859,10 @@
                                 onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault(); startWorkflow();}"></textarea>
                         </div>
 
-                        <!-- AI 모델 안내 (내부 자동 선택) -->
+                        <!-- AI 안내 -->
                         <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: var(--text-muted); padding: 4px 8px; background: rgba(37,99,235,0.06); border-radius: 6px; border: 1px solid rgba(37,99,235,0.15);">
-                            <span style="font-weight: 600; color: var(--primary);">AI 모델:</span>
-                            <span>Gemini 3.1 Pro (텍스트) / Gemini 3 Pro Image (이미지) — 자동 선택</span>
+                            <span style="font-size:0.85rem;">🤖</span>
+                            <span>AI가 자동으로 최적의 모델을 선택하여 제작합니다</span>
                         </div>
                         <!-- 전문가 모드 토글 -->
                         <div style="display:flex; align-items:center; gap:8px; margin-top:8px; padding:6px 10px; background:rgba(245,158,11,0.06); border-radius:8px; border:1px solid rgba(245,158,11,0.2);">
@@ -913,7 +916,7 @@
                 <!-- Initial Start Button Hidden when Analysis Shown -->
                 <button class="btn btn-primary" id="btn-start-next" onclick="startWorkflow()"
                     style="display: block; width: 100%;">
-                    웹툰 제작 시작하기 🚀
+                    AI 제작 시작 🚀
                 </button>
             </div>
         </div>
@@ -978,11 +981,8 @@
                     <button class="btn btn-primary" onclick="selectContentType('webtoon')" style="display: flex; align-items: center; gap: 6px;">
                         <span style="font-size: 1.2rem;">📖</span> 웹툰용 스토리 만들기
                     </button>
-                    <button class="btn btn-secondary" onclick="selectContentType('carousel')" style="display: flex; align-items: center; gap: 6px; border-color: #f59e0b; color: #f59e0b;">
-                        <span style="font-size: 1.2rem;">🎠</span> 캐러셀 바로가기
-                    </button>
-                    <button class="btn btn-secondary" onclick="selectContentType('cardnews')" style="display: flex; align-items: center; gap: 6px; border-color: #10b981; color: #10b981;">
-                        <span style="font-size: 1.2rem;">📰</span> 카드뉴스 바로가기
+                    <button class="btn btn-secondary" onclick="selectContentType('content')" style="display: flex; align-items: center; gap: 6px; border-color: #10b981; color: #10b981;">
+                        <span style="font-size: 1.2rem;">🎨</span> 콘텐츠 만들기
                     </button>
                 </div>
             </div>
@@ -1651,86 +1651,86 @@
             </div>
 
             <div class="actions" style="margin-top: 2rem;">
-                <button class="btn btn-secondary" onclick="goToStep(4)">← 이전 (편집)</button>
+                <button class="btn btn-secondary" onclick="goToPreviousFromPublish()">← 이전 (편집)</button>
             </div>
         </div>
 
         <!-- ============================================ -->
         <!-- 캐러셀 전용 패널 (간소화 워크플로우) -->
         <!-- ============================================ -->
-        <!-- 캐러셀 전용 패널 -->
+        <!-- 콘텐츠 만들기 통합 패널 (캐러셀 + 카드뉴스) -->
         <!-- ============================================ -->
-        <div class="step-content" id="step-carousel" style="display:none;">
+        <div class="step-content" id="step-content" style="display:none;">
             <div class="card">
-                <h2 class="card-title">🎠 캐러셀 만들기</h2>
-                <p class="card-desc">인스타그램 캐러셀(슬라이드형) 콘텐츠를 빠르게 제작합니다.</p>
+                <h2 class="card-title">🎨 콘텐츠 만들기</h2>
+                <p class="card-desc">인스타그램 캐러셀/카드뉴스를 빠르게 제작합니다.</p>
 
-                <!-- 스텝 인디케이터 (p3-6) -->
-                <div id="carousel-step-indicator" style="display:flex; gap:0; margin-bottom:1.5rem; border-radius:8px; overflow:hidden; border:1px solid var(--border);">
-                    <div class="content-step active" data-step="settings" data-type="carousel" onclick="showContentStep('carousel','settings')" style="flex:1; text-align:center; padding:8px; cursor:pointer; font-size:0.8rem; font-weight:600; background:var(--primary); color:#fff;">① 설정</div>
-                    <div class="content-step" data-step="editor" data-type="carousel" onclick="showContentStep('carousel','editor')" style="flex:1; text-align:center; padding:8px; cursor:pointer; font-size:0.8rem; font-weight:600; background:var(--bg); color:var(--text-muted);">② 편집</div>
-                    <div class="content-step" data-step="preview" data-type="carousel" onclick="showContentStep('carousel','preview')" style="flex:1; text-align:center; padding:8px; cursor:pointer; font-size:0.8rem; font-weight:600; background:var(--bg); color:var(--text-muted);">③ 미리보기</div>
+                <!-- 콘텐츠 타입 토글 -->
+                <div style="display:flex; gap:0; margin-bottom:1rem; border-radius:8px; overflow:hidden; border:1px solid var(--border);">
+                    <button id="content-type-carousel-btn" onclick="switchContentType('carousel')" style="flex:1; text-align:center; padding:10px; cursor:pointer; font-size:0.85rem; font-weight:600; background:var(--bg); color:var(--text-muted); border:none;">캐러셀 (1:1)</button>
+                    <button id="content-type-cardnews-btn" onclick="switchContentType('cardnews')" style="flex:1; text-align:center; padding:10px; cursor:pointer; font-size:0.85rem; font-weight:600; background:var(--primary); color:#fff; border:none;">카드뉴스 (4:5)</button>
                 </div>
 
-                <!-- 설정 패널 -->
-                <div id="carousel-settings-panel" style="background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem;">
-                    <h3 style="font-size: 1rem; margin-bottom: 0.75rem;">⚙️ 캐러셀 설정</h3>
+                <!-- 스텝 인디케이터 -->
+                <div id="content-step-indicator" style="display:flex; gap:0; margin-bottom:1.5rem; border-radius:8px; overflow:hidden; border:1px solid var(--border);">
+                    <div class="content-step active" data-step="settings" onclick="showContentStep('content','settings')" style="flex:1; text-align:center; padding:8px; cursor:pointer; font-size:0.8rem; font-weight:600; background:var(--primary); color:#fff;">① 설정</div>
+                    <div class="content-step" data-step="editor" onclick="showContentStep('content','editor')" style="flex:1; text-align:center; padding:8px; cursor:pointer; font-size:0.8rem; font-weight:600; background:var(--bg); color:var(--text-muted);">② 편집</div>
+                    <div class="content-step" data-step="preview" onclick="showContentStep('content','preview')" style="flex:1; text-align:center; padding:8px; cursor:pointer; font-size:0.8rem; font-weight:600; background:var(--bg); color:var(--text-muted);">③ 미리보기</div>
+                </div>
 
-                    <!-- 색상 테마 프리셋 (p3-1) -->
+                <!-- ① 설정 패널 -->
+                <div id="content-settings-panel" style="background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem;">
+                    <h3 style="font-size: 1rem; margin-bottom: 0.75rem;">⚙️ 콘텐츠 설정</h3>
+
+                    <!-- 템플릿 세트 갤러리 -->
                     <div style="margin-bottom: 1rem;">
-                        <label style="font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; display:block;">색상 테마</label>
-                        <div id="carousel-color-themes" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
+                        <label style="font-size: 0.8rem; font-weight: 600; margin-bottom: 6px; display:block;">템플릿 세트</label>
+                        <div id="content-template-gallery" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:8px;"></div>
                     </div>
 
-                    <!-- 필수 설정 (p3-5) -->
+                    <!-- 슬라이드 수 + 비율 -->
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
                         <div>
                             <label style="font-size: 0.8rem; font-weight: 600;">슬라이드 수</label>
                             <div style="display:flex; align-items:center; gap:4px;">
-                                <button onclick="adjustCount('carousel',-1)" style="width:28px;height:28px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);color:var(--text);">-</button>
-                                <input type="number" id="carousel-slide-count" value="5" min="1" max="10" style="width:50px; text-align:center; padding:4px;">
-                                <button onclick="adjustCount('carousel',1)" style="width:28px;height:28px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);color:var(--text);">+</button>
+                                <button onclick="adjustCount('content',-1)" style="width:28px;height:28px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);color:var(--text);">-</button>
+                                <input type="number" id="content-item-count" value="5" min="1" max="10" style="width:50px; text-align:center; padding:4px;">
+                                <button onclick="adjustCount('content',1)" style="width:28px;height:28px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);color:var(--text);">+</button>
                             </div>
                         </div>
                         <div>
-                            <label style="font-size: 0.8rem; font-weight: 600;">템플릿</label>
-                            <div id="carousel-template-cards" style="display:flex; gap:6px;"></div>
+                            <label style="font-size: 0.8rem; font-weight: 600;">비율</label>
+                            <div style="display:flex; gap:6px;">
+                                <button class="ratio-btn" data-type="content" data-ratio="1:1" onclick="selectRatio('content','1:1')" style="padding:4px 12px; border:2px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.75rem; background:var(--bg); color:var(--text);">1:1</button>
+                                <button class="ratio-btn active" data-type="content" data-ratio="4:5" onclick="selectRatio('content','4:5')" style="padding:4px 12px; border:2px solid var(--primary); border-radius:6px; cursor:pointer; font-size:0.75rem; background:var(--primary); color:#fff;">4:5</button>
+                                <button class="ratio-btn" data-type="content" data-ratio="9:16" onclick="selectRatio('content','9:16')" style="padding:4px 12px; border:2px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.75rem; background:var(--bg); color:var(--text);">9:16</button>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- 비율 선택 (p1-5) -->
-                    <div style="margin-bottom: 1rem;">
-                        <label style="font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; display:block;">비율</label>
-                        <div style="display:flex; gap:6px;">
-                            <button class="ratio-btn active" data-type="carousel" data-ratio="1:1" onclick="selectRatio('carousel','1:1')" style="padding:4px 12px; border:2px solid var(--primary); border-radius:6px; cursor:pointer; font-size:0.75rem; background:var(--primary); color:#fff;">1:1</button>
-                            <button class="ratio-btn" data-type="carousel" data-ratio="4:5" onclick="selectRatio('carousel','4:5')" style="padding:4px 12px; border:2px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.75rem; background:var(--bg); color:var(--text);">4:5</button>
-                            <button class="ratio-btn" data-type="carousel" data-ratio="9:16" onclick="selectRatio('carousel','9:16')" style="padding:4px 12px; border:2px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.75rem; background:var(--bg); color:var(--text);">9:16</button>
-                        </div>
-                    </div>
-
-                    <!-- 고급 설정 (p3-5) -->
+                    <!-- 고급 설정 -->
                     <details style="margin-bottom: 1rem;">
                         <summary style="cursor:pointer; font-size:0.85rem; font-weight:600; color:var(--text-muted);">고급 옵션 ▾</summary>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 0.75rem;">
-                        <div>
-                            <label style="font-size: 0.8rem; font-weight: 600;">배경색</label>
-                            <input type="color" id="carousel-bg-color" value="#FFFFFF" style="width:100%; height:36px; border:1px solid var(--border); border-radius:6px;">
-                        </div>
-                        <div>
-                            <label style="font-size: 0.8rem; font-weight: 600;">글자색</label>
-                            <input type="color" id="carousel-text-color" value="#111111" style="width:100%; height:36px; border:1px solid var(--border); border-radius:6px;">
-                        </div>
-                        <div>
-                            <label style="font-size: 0.8rem; font-weight: 600;">강조색</label>
-                            <input type="color" id="carousel-accent-color" value="#6366f1" style="width:100%; height:36px; border:1px solid var(--border); border-radius:6px;">
-                        </div>
-                        <div>
-                            <label style="font-size: 0.8rem; font-weight: 600;">폰트</label>
-                            <select id="carousel-font" style="width:100%; padding: 6px 10px;">
-                                <option value="Nanum Gothic">나눔고딕</option>
-                                <option value="Do Hyeon">도현</option>
-                                <option value="Jua">주아</option>
-                                <option value="Black Han Sans">블랙한산스</option>
+                            <div>
+                                <label style="font-size: 0.8rem; font-weight: 600;">배경색</label>
+                                <input type="color" id="content-bg-color" value="#F8F9FA" style="width:100%; height:36px; border:1px solid var(--border); border-radius:6px;">
+                            </div>
+                            <div>
+                                <label style="font-size: 0.8rem; font-weight: 600;">글자색</label>
+                                <input type="color" id="content-text-color" value="#1A1A1A" style="width:100%; height:36px; border:1px solid var(--border); border-radius:6px;">
+                            </div>
+                            <div>
+                                <label style="font-size: 0.8rem; font-weight: 600;">강조색</label>
+                                <input type="color" id="content-accent-color" value="#4A7FB5" style="width:100%; height:36px; border:1px solid var(--border); border-radius:6px;">
+                            </div>
+                            <div>
+                                <label style="font-size: 0.8rem; font-weight: 600;">폰트</label>
+                                <select id="content-font" style="width:100%; padding: 6px 10px;">
+                                    <option value="Nanum Gothic">나눔고딕</option>
+                                    <option value="Do Hyeon">도현</option>
+                                    <option value="Jua">주아</option>
+                                    <option value="Black Han Sans">블랙한산스</option>
                                     <option value="Nanum Pen Script">나눔펜</option>
                                     <option value="Gaegu">개구</option>
                                     <option value="Noto Sans KR">노토산스</option>
@@ -1738,357 +1738,85 @@
                                     <option value="Gothic A1">고딕A1</option>
                                     <option value="Sunflower">선플라워</option>
                                     <option value="Poor Story">푸어스토리</option>
-                            </select>
-                        </div>
-                            <div>
-                                <label style="font-size: 0.8rem; font-weight: 600;">제목 크기</label>
-                                <select id="carousel-title-size" style="width:100%; padding: 6px 10px;">
-                                    <option value="large">큰</option>
-                                    <option value="medium" selected>보통</option>
-                                    <option value="small">작은</option>
-                                </select>
-                    </div>
-                            <div>
-                                <label style="font-size: 0.8rem; font-weight: 600;">여백</label>
-                                <select id="carousel-spacing" style="width:100%; padding: 6px 10px;">
-                                    <option value="compact">촘촘</option>
-                                    <option value="normal" selected>보통</option>
-                                    <option value="spacious">넉넉</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label style="font-size: 0.8rem; font-weight: 600;">제목 강조</label>
-                                <select id="carousel-title-accent" style="width:100%; padding: 6px 10px;">
-                                    <option value="none">없음</option>
-                                    <option value="underline">밑줄</option>
-                                    <option value="highlight">형광펜</option>
-                                    <option value="box">박스</option>
                                 </select>
                             </div>
                             <div>
                                 <label style="font-size: 0.8rem; font-weight: 600;">마지막 페이지</label>
-                                <select id="carousel-last-page-type" style="width:100%; padding: 6px 10px;">
+                                <select id="content-last-page-type" style="width:100%; padding: 6px 10px;">
                                     <option value="cta">CTA (행동유도)</option>
                                     <option value="summary">요약</option>
                                     <option value="branding">브랜딩</option>
                                 </select>
                             </div>
-                            <div style="grid-column: span 2;">
-                                <label style="font-size: 0.8rem; font-weight: 600;">
-                                    <input type="checkbox" id="carousel-gradient-toggle" onchange="toggleGradient('carousel')"> 그래디언트 배경
-                                </label>
-                                <div id="carousel-gradient-options" style="display:none; margin-top:6px; display:none; gap:6px;">
-                                    <input type="color" id="carousel-gradient-start" value="#667eea" style="height:30px;width:60px;border:1px solid var(--border);border-radius:4px;">
-                                    <input type="color" id="carousel-gradient-end" value="#764ba2" style="height:30px;width:60px;border:1px solid var(--border);border-radius:4px;">
-                                    <select id="carousel-gradient-dir" style="padding:4px 8px;">
-                                        <option value="to bottom">상하</option>
-                                        <option value="to right">좌우</option>
-                                        <option value="135deg" selected>대각선</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div style="grid-column: span 2;">
+                            <div>
                                 <label style="font-size: 0.8rem; font-weight: 600;">로고/워터마크</label>
-                                <input type="file" id="carousel-logo-upload" accept="image/*" onchange="uploadLogo('carousel')" style="font-size:0.8rem;">
-                                <span id="carousel-logo-status" style="font-size:0.75rem; color:var(--text-muted);"></span>
+                                <input type="file" id="content-logo-upload" accept="image/*" onchange="uploadLogo('content')" style="font-size:0.8rem;">
+                                <span id="content-logo-status" style="font-size:0.75rem; color:var(--text-muted);"></span>
                             </div>
                         </div>
                     </details>
 
-                    <!-- 프리셋 저장/불러오기 (p1-6) -->
+                    <!-- 프리셋 저장/불러오기 -->
                     <div style="display:flex; gap:6px; margin-bottom:1rem;">
-                        <select id="carousel-preset-select" style="flex:1; padding:6px 10px; font-size:0.8rem;">
+                        <select id="content-preset-select" style="flex:1; padding:6px 10px; font-size:0.8rem;">
                             <option value="">프리셋 선택...</option>
                         </select>
-                        <button class="btn btn-secondary" onclick="savePreset('carousel')" style="font-size:0.8rem; padding:4px 12px;">저장</button>
-                        <button class="btn btn-secondary" onclick="loadPreset('carousel')" style="font-size:0.8rem; padding:4px 12px;">불러오기</button>
+                        <button class="btn btn-secondary" onclick="savePreset('content')" style="font-size:0.8rem; padding:4px 12px;">저장</button>
+                        <button class="btn btn-secondary" onclick="loadPreset('content')" style="font-size:0.8rem; padding:4px 12px;">불러오기</button>
                     </div>
 
-                    <button class="btn btn-primary" onclick="generateCarouselSlides()" style="width: 100%;">
-                        🎠 AI 슬라이드 텍스트 생성
+                    <button class="btn btn-primary" onclick="generateContent()" style="width: 100%;">
+                        🎨 AI 텍스트 생성
                     </button>
                 </div>
 
-                <!-- 편집 패널 -->
-                <div id="carousel-slides-editor" style="display:none; margin-bottom: 1.5rem;">
-                    <h3 style="font-size: 1rem; margin-bottom: 0.75rem;">📝 슬라이드 텍스트 편집</h3>
-                    <div id="carousel-slides-list" style="display: flex; flex-direction: column; gap: 0.75rem;"></div>
+                <!-- ② 편집 패널 -->
+                <div id="content-editor" style="display:none; margin-bottom: 1.5rem;">
+                    <h3 style="font-size: 1rem; margin-bottom: 0.75rem;">📝 텍스트 편집</h3>
+                    <div id="content-items-list" style="display: flex; flex-direction: column; gap: 0.75rem;"></div>
                     <div style="display:flex; gap:0.5rem; margin-top:1rem;">
-                        <button class="btn btn-primary" onclick="renderCarouselImages()" style="flex:1;">🖼️ 이미지 렌더링</button>
-                        <button class="btn btn-secondary" onclick="addContentItem('carousel')" style="padding:6px 14px;">+ 추가</button>
+                        <button class="btn btn-primary" onclick="renderContent()" style="flex:1;">🖼️ 이미지 렌더링</button>
+                        <button class="btn btn-secondary" onclick="addContentItem('content')" style="padding:6px 14px;">+ 추가</button>
                     </div>
                 </div>
 
-                <!-- 미리보기 패널 -->
-                <div id="carousel-preview" style="display:none;">
+                <!-- ③ 미리보기 패널 -->
+                <div id="content-preview" style="display:none;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
                         <h3 style="font-size: 1rem;">🖼️ 미리보기</h3>
                         <div style="display:flex; gap:6px;">
-                            <button class="view-toggle-btn" onclick="toggleContentView('carousel','grid')" title="그리드 보기" style="padding:4px 8px; border:1px solid var(--border); border-radius:4px; cursor:pointer; background:var(--bg);">▦</button>
-                            <button class="view-toggle-btn active" onclick="toggleContentView('carousel','swipe')" title="스와이프 보기" style="padding:4px 8px; border:1px solid var(--primary); border-radius:4px; cursor:pointer; background:var(--primary); color:#fff;">◁▷</button>
+                            <button class="view-toggle-btn" onclick="toggleContentView('content','grid')" title="그리드 보기" style="padding:4px 8px; border:1px solid var(--border); border-radius:4px; cursor:pointer; background:var(--bg);">▦</button>
+                            <button class="view-toggle-btn active" onclick="toggleContentView('content','swipe')" title="스와이프 보기" style="padding:4px 8px; border:1px solid var(--primary); border-radius:4px; cursor:pointer; background:var(--primary); color:#fff;">◁▷</button>
                         </div>
                     </div>
-                    <!-- 스와이프 뷰 (p3-7) -->
-                    <div id="carousel-swipe-view" style="position:relative; overflow:hidden; border-radius:8px; border:1px solid var(--border);">
-                        <div id="carousel-swipe-container" style="display:flex; transition: transform 0.3s ease;"></div>
-                        <button onclick="swipeContent('carousel',-1)" style="position:absolute;top:50%;left:8px;transform:translateY(-50%);background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:32px;height:32px;cursor:pointer;font-size:1rem;">◀</button>
-                        <button onclick="swipeContent('carousel',1)" style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:32px;height:32px;cursor:pointer;font-size:1rem;">▶</button>
-                        <div id="carousel-swipe-dots" style="text-align:center;padding:8px;"></div>
+                    <!-- 스와이프 뷰 -->
+                    <div id="content-swipe-view" style="position:relative; overflow:hidden; border-radius:8px; border:1px solid var(--border);">
+                        <div id="content-swipe-container" style="display:flex; transition: transform 0.3s ease;"></div>
+                        <button onclick="swipeContent('content',-1)" style="position:absolute;top:50%;left:8px;transform:translateY(-50%);background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:32px;height:32px;cursor:pointer;font-size:1rem;">◀</button>
+                        <button onclick="swipeContent('content',1)" style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:32px;height:32px;cursor:pointer;font-size:1rem;">▶</button>
+                        <div id="content-swipe-dots" style="text-align:center;padding:8px;"></div>
                     </div>
-                    <!-- 그리드 뷰 (p3-8) -->
-                    <div id="carousel-grid-view" style="display:none;">
-                    <div id="carousel-preview-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.75rem;"></div>
+                    <!-- 그리드 뷰 -->
+                    <div id="content-grid-view" style="display:none;">
+                        <div id="content-preview-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 0.75rem;"></div>
                     </div>
-                    <!-- 렌더링 진행률 (p3-11) -->
-                    <div id="carousel-render-progress" style="display:none; margin-top:0.75rem;">
+                    <!-- 렌더링 진행률 -->
+                    <div id="content-render-progress" style="display:none; margin-top:0.75rem;">
                         <div style="background:var(--border);border-radius:4px;height:6px;overflow:hidden;">
-                            <div id="carousel-progress-bar" style="background:var(--primary);height:100%;width:0%;transition:width 0.3s;"></div>
+                            <div id="content-progress-bar" style="background:var(--primary);height:100%;width:0%;transition:width 0.3s;"></div>
                         </div>
-                        <div id="carousel-progress-text" style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;text-align:center;"></div>
+                        <div id="content-progress-text" style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;text-align:center;"></div>
                     </div>
-                    <button class="btn btn-primary" onclick="renderCarouselImages()" style="margin-top: 1rem;">🔄 다시 렌더링</button>
-                </div>
-
-                <div id="carousel-status" style="display:none; margin-top: 1rem; padding: 10px; background: var(--bg-card); border-radius: 8px; font-size: 0.85rem;"></div>
-
-                <!-- 캡션 & 발행 (p3-14, p3-15, p3-16) -->
-                <div id="carousel-publish-area" style="display:none; margin-top: 1.5rem; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem;">
-                    <h3 style="font-size: 1rem; margin-bottom: 0.75rem;">📝 캡션 & 발행</h3>
-                    <div class="form-group">
-                        <label>🔥 훅 문장</label>
-                        <input type="text" id="carousel-hook" placeholder="캐러셀 첫 문장" style="width:100%;">
-                    </div>
-                    <div class="form-group" style="position:relative;">
-                        <label>📝 캡션</label>
-                        <textarea id="carousel-caption" rows="4" placeholder="인스타그램 캡션..." style="width:100%;"></textarea>
-                        <button onclick="copyCaption('carousel')" style="position:absolute;top:0;right:0;background:none;border:none;cursor:pointer;font-size:0.8rem;color:var(--primary);" title="클립보드 복사">📋 복사</button>
-                    </div>
-                    <div class="form-group">
-                        <label>#️⃣ 해시태그</label>
-                        <textarea id="carousel-hashtags" rows="2" placeholder="#웹툰 #정보 #꿀팁" style="width:100%;"></textarea>
-                    </div>
-                    <div style="display: flex; gap: 0.5rem; flex-wrap:wrap;">
-                        <button class="btn btn-primary" onclick="generateCarouselCaption()" style="flex:1;">✨ AI 캡션 생성</button>
-                        <button class="btn btn-secondary" onclick="downloadCarouselImages()" style="flex:1;">📥 ZIP 다운로드</button>
-                        <button class="btn btn-secondary" onclick="publishContentToInstagram('carousel')" style="flex:1; border-color:#E1306C; color:#E1306C;">📸 인스타 발행</button>
-                    </div>
-                </div>
-            </div>
-            <div class="actions" style="margin-top: 2rem;">
-                <button class="btn btn-secondary" onclick="exitCarouselMode()">← 자료 수집으로 돌아가기</button>
-            </div>
-        </div>
-
-        <!-- ============================================ -->
-        <!-- 카드뉴스 전용 패널 -->
-        <!-- ============================================ -->
-        <div class="step-content" id="step-cardnews" style="display:none;">
-            <div class="card">
-                <h2 class="card-title">📰 카드뉴스 만들기</h2>
-                <p class="card-desc">인스타그램 카드뉴스를 빠르게 제작합니다. (4:5 세로형)</p>
-
-                <!-- 스텝 인디케이터 (p3-6) -->
-                <div id="cardnews-step-indicator" style="display:flex; gap:0; margin-bottom:1.5rem; border-radius:8px; overflow:hidden; border:1px solid var(--border);">
-                    <div class="content-step active" data-step="settings" data-type="cardnews" onclick="showContentStep('cardnews','settings')" style="flex:1; text-align:center; padding:8px; cursor:pointer; font-size:0.8rem; font-weight:600; background:var(--primary); color:#fff;">① 설정</div>
-                    <div class="content-step" data-step="editor" data-type="cardnews" onclick="showContentStep('cardnews','editor')" style="flex:1; text-align:center; padding:8px; cursor:pointer; font-size:0.8rem; font-weight:600; background:var(--bg); color:var(--text-muted);">② 편집</div>
-                    <div class="content-step" data-step="preview" data-type="cardnews" onclick="showContentStep('cardnews','preview')" style="flex:1; text-align:center; padding:8px; cursor:pointer; font-size:0.8rem; font-weight:600; background:var(--bg); color:var(--text-muted);">③ 미리보기</div>
-                </div>
-
-                <!-- 설정 패널 -->
-                <div id="cardnews-settings-panel" style="background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem;">
-                    <h3 style="font-size: 1rem; margin-bottom: 0.75rem;">⚙️ 카드뉴스 설정</h3>
-
-                    <div style="margin-bottom: 1rem;">
-                        <label style="font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; display:block;">색상 테마</label>
-                        <div id="cardnews-color-themes" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
-                    </div>
-
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
-                        <div>
-                            <label style="font-size: 0.8rem; font-weight: 600;">카드 수</label>
-                            <div style="display:flex; align-items:center; gap:4px;">
-                                <button onclick="adjustCount('cardnews',-1)" style="width:28px;height:28px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);color:var(--text);">-</button>
-                                <input type="number" id="cardnews-card-count" value="5" min="1" max="10" style="width:50px; text-align:center; padding:4px;">
-                                <button onclick="adjustCount('cardnews',1)" style="width:28px;height:28px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);color:var(--text);">+</button>
-                            </div>
-                        </div>
-                        <div>
-                            <label style="font-size: 0.8rem; font-weight: 600;">템플릿</label>
-                            <div id="cardnews-template-cards" style="display:flex; gap:6px;"></div>
-                        </div>
-                    </div>
-
-                    <div style="margin-bottom: 1rem;">
-                        <label style="font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; display:block;">비율</label>
-                        <div style="display:flex; gap:6px;">
-                            <button class="ratio-btn" data-type="cardnews" data-ratio="1:1" onclick="selectRatio('cardnews','1:1')" style="padding:4px 12px; border:2px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.75rem; background:var(--bg); color:var(--text);">1:1</button>
-                            <button class="ratio-btn active" data-type="cardnews" data-ratio="4:5" onclick="selectRatio('cardnews','4:5')" style="padding:4px 12px; border:2px solid var(--primary); border-radius:6px; cursor:pointer; font-size:0.75rem; background:var(--primary); color:#fff;">4:5</button>
-                            <button class="ratio-btn" data-type="cardnews" data-ratio="9:16" onclick="selectRatio('cardnews','9:16')" style="padding:4px 12px; border:2px solid var(--border); border-radius:6px; cursor:pointer; font-size:0.75rem; background:var(--bg); color:var(--text);">9:16</button>
-                        </div>
-                    </div>
-
-                    <details style="margin-bottom: 1rem;">
-                        <summary style="cursor:pointer; font-size:0.85rem; font-weight:600; color:var(--text-muted);">고급 옵션 ▾</summary>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 0.75rem;">
-                        <div>
-                            <label style="font-size: 0.8rem; font-weight: 600;">배경색</label>
-                            <input type="color" id="cardnews-bg-color" value="#1a1a2e" style="width:100%; height:36px; border:1px solid var(--border); border-radius:6px;">
-                        </div>
-                        <div>
-                            <label style="font-size: 0.8rem; font-weight: 600;">글자색</label>
-                            <input type="color" id="cardnews-text-color" value="#FFFFFF" style="width:100%; height:36px; border:1px solid var(--border); border-radius:6px;">
-                        </div>
-                        <div>
-                            <label style="font-size: 0.8rem; font-weight: 600;">강조색</label>
-                            <input type="color" id="cardnews-accent-color" value="#e94560" style="width:100%; height:36px; border:1px solid var(--border); border-radius:6px;">
-                        </div>
-                        <div>
-                            <label style="font-size: 0.8rem; font-weight: 600;">폰트</label>
-                            <select id="cardnews-font" style="width:100%; padding: 6px 10px;">
-                                <option value="Nanum Gothic">나눔고딕</option>
-                                <option value="Do Hyeon">도현</option>
-                                <option value="Jua">주아</option>
-                                <option value="Black Han Sans">블랙한산스</option>
-                                    <option value="Nanum Pen Script">나눔펜</option>
-                                    <option value="Gaegu">개구</option>
-                                    <option value="Noto Sans KR">노토산스</option>
-                                    <option value="Nanum Myeongjo">나눔명조</option>
-                                    <option value="Gothic A1">고딕A1</option>
-                                    <option value="Sunflower">선플라워</option>
-                                    <option value="Poor Story">푸어스토리</option>
-                            </select>
-                        </div>
-                            <div>
-                                <label style="font-size: 0.8rem; font-weight: 600;">제목 크기</label>
-                                <select id="cardnews-title-size" style="width:100%; padding: 6px 10px;">
-                                    <option value="large">큰</option>
-                                    <option value="medium" selected>보통</option>
-                                    <option value="small">작은</option>
-                                </select>
-                    </div>
-                            <div>
-                                <label style="font-size: 0.8rem; font-weight: 600;">여백</label>
-                                <select id="cardnews-spacing" style="width:100%; padding: 6px 10px;">
-                                    <option value="compact">촘촘</option>
-                                    <option value="normal" selected>보통</option>
-                                    <option value="spacious">넉넉</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label style="font-size: 0.8rem; font-weight: 600;">제목 강조</label>
-                                <select id="cardnews-title-accent" style="width:100%; padding: 6px 10px;">
-                                    <option value="none">없음</option>
-                                    <option value="underline">밑줄</option>
-                                    <option value="highlight">형광펜</option>
-                                    <option value="box">박스</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label style="font-size: 0.8rem; font-weight: 600;">마지막 페이지</label>
-                                <select id="cardnews-last-page-type" style="width:100%; padding: 6px 10px;">
-                                    <option value="cta">CTA (행동유도)</option>
-                                    <option value="summary">요약</option>
-                                    <option value="branding">브랜딩</option>
-                                </select>
-                            </div>
-                            <div style="grid-column: span 2;">
-                                <label style="font-size: 0.8rem; font-weight: 600;">
-                                    <input type="checkbox" id="cardnews-gradient-toggle" onchange="toggleGradient('cardnews')"> 그래디언트 배경
-                                </label>
-                                <div id="cardnews-gradient-options" style="display:none; margin-top:6px; gap:6px;">
-                                    <input type="color" id="cardnews-gradient-start" value="#667eea" style="height:30px;width:60px;border:1px solid var(--border);border-radius:4px;">
-                                    <input type="color" id="cardnews-gradient-end" value="#764ba2" style="height:30px;width:60px;border:1px solid var(--border);border-radius:4px;">
-                                    <select id="cardnews-gradient-dir" style="padding:4px 8px;">
-                                        <option value="to bottom">상하</option>
-                                        <option value="to right">좌우</option>
-                                        <option value="135deg" selected>대각선</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div style="grid-column: span 2;">
-                                <label style="font-size: 0.8rem; font-weight: 600;">로고/워터마크</label>
-                                <input type="file" id="cardnews-logo-upload" accept="image/*" onchange="uploadLogo('cardnews')" style="font-size:0.8rem;">
-                                <span id="cardnews-logo-status" style="font-size:0.75rem; color:var(--text-muted);"></span>
-                            </div>
-                        </div>
-                    </details>
-
-                    <div style="display:flex; gap:6px; margin-bottom:1rem;">
-                        <select id="cardnews-preset-select" style="flex:1; padding:6px 10px; font-size:0.8rem;">
-                            <option value="">프리셋 선택...</option>
-                        </select>
-                        <button class="btn btn-secondary" onclick="savePreset('cardnews')" style="font-size:0.8rem; padding:4px 12px;">저장</button>
-                        <button class="btn btn-secondary" onclick="loadPreset('cardnews')" style="font-size:0.8rem; padding:4px 12px;">불러오기</button>
-                    </div>
-
-                    <button class="btn btn-primary" onclick="generateCardNewsCards()" style="width: 100%;">
-                        📰 AI 카드 텍스트 생성
-                    </button>
-                </div>
-
-                <!-- 편집 패널 -->
-                <div id="cardnews-cards-editor" style="display:none; margin-bottom: 1.5rem;">
-                    <h3 style="font-size: 1rem; margin-bottom: 0.75rem;">📝 카드 텍스트 편집</h3>
-                    <div id="cardnews-cards-list" style="display: flex; flex-direction: column; gap: 0.75rem;"></div>
                     <div style="display:flex; gap:0.5rem; margin-top:1rem;">
-                        <button class="btn btn-primary" onclick="renderCardNewsImages()" style="flex:1;">🖼️ 이미지 렌더링</button>
-                        <button class="btn btn-secondary" onclick="addContentItem('cardnews')" style="padding:6px 14px;">+ 추가</button>
+                        <button class="btn btn-secondary" onclick="renderContent()" style="flex:1;">🔄 다시 렌더링</button>
+                        <button class="btn btn-primary" onclick="contentGoToPublish()" style="flex:1;">발행탭으로 이동 →</button>
                     </div>
                 </div>
 
-                <!-- 미리보기 패널 -->
-                <div id="cardnews-preview" style="display:none;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
-                        <h3 style="font-size: 1rem;">🖼️ 미리보기</h3>
-                        <div style="display:flex; gap:6px;">
-                            <button class="view-toggle-btn" onclick="toggleContentView('cardnews','grid')" title="그리드 보기" style="padding:4px 8px; border:1px solid var(--border); border-radius:4px; cursor:pointer; background:var(--bg);">▦</button>
-                            <button class="view-toggle-btn active" onclick="toggleContentView('cardnews','swipe')" title="스와이프 보기" style="padding:4px 8px; border:1px solid var(--primary); border-radius:4px; cursor:pointer; background:var(--primary); color:#fff;">◁▷</button>
-                        </div>
-                    </div>
-                    <div id="cardnews-swipe-view" style="position:relative; overflow:hidden; border-radius:8px; border:1px solid var(--border);">
-                        <div id="cardnews-swipe-container" style="display:flex; transition: transform 0.3s ease;"></div>
-                        <button onclick="swipeContent('cardnews',-1)" style="position:absolute;top:50%;left:8px;transform:translateY(-50%);background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:32px;height:32px;cursor:pointer;font-size:1rem;">◀</button>
-                        <button onclick="swipeContent('cardnews',1)" style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:32px;height:32px;cursor:pointer;font-size:1rem;">▶</button>
-                        <div id="cardnews-swipe-dots" style="text-align:center;padding:8px;"></div>
-                    </div>
-                    <div id="cardnews-grid-view" style="display:none;">
-                    <div id="cardnews-preview-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.75rem;"></div>
-                    </div>
-                    <div id="cardnews-render-progress" style="display:none; margin-top:0.75rem;">
-                        <div style="background:var(--border);border-radius:4px;height:6px;overflow:hidden;">
-                            <div id="cardnews-progress-bar" style="background:var(--primary);height:100%;width:0%;transition:width 0.3s;"></div>
-                        </div>
-                        <div id="cardnews-progress-text" style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;text-align:center;"></div>
-                    </div>
-                    <button class="btn btn-primary" onclick="renderCardNewsImages()" style="margin-top: 1rem;">🔄 다시 렌더링</button>
-                </div>
-
-                <div id="cardnews-status" style="display:none; margin-top: 1rem; padding: 10px; background: var(--bg-card); border-radius: 8px; font-size: 0.85rem;"></div>
-
-                <div id="cardnews-publish-area" style="display:none; margin-top: 1.5rem; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem;">
-                    <h3 style="font-size: 1rem; margin-bottom: 0.75rem;">📝 캡션 & 발행</h3>
-                    <div class="form-group">
-                        <label>🔥 훅 문장</label>
-                        <input type="text" id="cardnews-hook" placeholder="카드뉴스 첫 문장" style="width:100%;">
-                    </div>
-                    <div class="form-group" style="position:relative;">
-                        <label>📝 캡션</label>
-                        <textarea id="cardnews-caption" rows="4" placeholder="인스타그램 캡션..." style="width:100%;"></textarea>
-                        <button onclick="copyCaption('cardnews')" style="position:absolute;top:0;right:0;background:none;border:none;cursor:pointer;font-size:0.8rem;color:var(--primary);" title="클립보드 복사">📋 복사</button>
-                    </div>
-                    <div class="form-group">
-                        <label>#️⃣ 해시태그</label>
-                        <textarea id="cardnews-hashtags" rows="2" placeholder="#카드뉴스 #정보 #꿀팁" style="width:100%;"></textarea>
-                    </div>
-                    <div style="display: flex; gap: 0.5rem; flex-wrap:wrap;">
-                        <button class="btn btn-primary" onclick="generateCardNewsCaption()" style="flex:1;">✨ AI 캡션 생성</button>
-                        <button class="btn btn-secondary" onclick="downloadCardNewsImages()" style="flex:1;">📥 ZIP 다운로드</button>
-                        <button class="btn btn-secondary" onclick="publishContentToInstagram('cardnews')" style="flex:1; border-color:#E1306C; color:#E1306C;">📸 인스타 발행</button>
-                    </div>
-                </div>
+                <div id="content-status" style="display:none; margin-top: 1rem; padding: 10px; background: var(--bg-card); border-radius: 8px; font-size: 0.85rem;"></div>
             </div>
             <div class="actions" style="margin-top: 2rem;">
-                <button class="btn btn-secondary" onclick="exitCardNewsMode()">← 자료 수집으로 돌아가기</button>
+                <button class="btn btn-secondary" onclick="exitContentMode()">← 자료 수집으로 돌아가기</button>
             </div>
         </div>
 
@@ -2232,7 +1960,7 @@
             if (mode === 'auto') {
                 document.getElementById('keyword-input-area').style.display = 'block';
                 document.getElementById('manual-input-area').style.display = 'none';
-                document.getElementById('btn-start-next').innerText = '웹툰 제작 시작하기 🚀';
+                document.getElementById('btn-start-next').innerText = 'AI 제작 시작 🚀';
             } else {
                 document.getElementById('keyword-input-area').style.display = 'none';
                 document.getElementById('manual-input-area').style.display = 'block';
@@ -2377,7 +2105,7 @@
                 sessionId = data.session_id;
                 localStorage.setItem('lastSessionId', sessionId); // 세션 ID 저장
 
-                btn.innerText = '웹툰 제작 시작하기 🚀';
+                btn.innerText = 'AI 제작 시작 🚀';
                 btn.disabled = false;
 
                 // 바로 자료 수집 단계로 이동
@@ -2387,7 +2115,7 @@
             } catch (e) {
                 console.error('워크플로우 시작 오류:', e);
                 const btn = document.getElementById('btn-start-next');
-                btn.innerText = '웹툰 제작 시작하기 🚀';
+                btn.innerText = 'AI 제작 시작 🚀';
                 btn.disabled = false;
                 showToast('시작 오류: ' + e.message, 'error');
             }
@@ -2542,7 +2270,7 @@
                 if (data.model_switched && data.model_used) {
                     const switchNotice = document.createElement('div');
                     switchNotice.style.cssText = 'background:#fff3cd; color:#856404; border:1px solid #ffc107; border-radius:8px; padding:0.75rem 1rem; margin-bottom:1rem; font-size:0.85rem; display:flex; align-items:center; gap:0.5rem;';
-                    switchNotice.innerHTML = `<span style="font-size:1.1rem;">⚡</span> 요청 모델(${model})이 응답 불가하여 <strong>${data.model_used}</strong> 모델로 전환되어 수집되었습니다.`;
+                    switchNotice.innerHTML = `<span style="font-size:1.1rem;">⚡</span> 기본 모델이 응답 불가하여 <strong>${data.model_used}</strong> 모델로 자동 전환되어 수집되었습니다.`;
                     reviewArea.insertBefore(switchNotice, reviewArea.firstChild);
                 }
             } catch (e) {
@@ -2737,6 +2465,8 @@
 
             if (type === 'webtoon') {
                 confirmData();
+            } else if (type === 'content') {
+                showContentPanel('content');
             } else if (type === 'carousel') {
                 showContentPanel('carousel');
             } else if (type === 'cardnews') {
@@ -2764,6 +2494,94 @@
         function exitCardNewsMode() {
             document.getElementById('step-cardnews').style.display = 'none';
             goToStep(2);
+        }
+
+        // ── 통합 콘텐츠 패널 전용 함수 ──
+
+        function switchContentType(subtype) {
+            contentState.content.contentSubtype = subtype;
+            const carBtn = document.getElementById('content-type-carousel-btn');
+            const cnBtn = document.getElementById('content-type-cardnews-btn');
+            if (subtype === 'carousel') {
+                carBtn.style.background = 'var(--primary)'; carBtn.style.color = '#fff';
+                cnBtn.style.background = 'var(--bg)'; cnBtn.style.color = 'var(--text-muted)';
+                contentConfig.content.label = '슬라이드';
+                selectRatio('content', '1:1');
+            } else {
+                cnBtn.style.background = 'var(--primary)'; cnBtn.style.color = '#fff';
+                carBtn.style.background = 'var(--bg)'; carBtn.style.color = 'var(--text-muted)';
+                contentConfig.content.label = '카드';
+                selectRatio('content', '4:5');
+            }
+        }
+
+        function exitContentMode() {
+            document.getElementById('step-content').style.display = 'none';
+            goToStep(2);
+        }
+
+        function goToPreviousFromPublish() {
+            if (currentContentType === 'content') {
+                showContentPanel('content');
+            } else {
+                goToStep(4);
+            }
+        }
+
+        function renderContent() {
+            renderContentImages('content');
+        }
+
+        function contentGoToPublish() {
+            const state = contentState.content;
+            if (!state.sessionId) return showToast('먼저 이미지를 렌더링해주세요.', 'warning');
+            goToStep(5);
+            loadContentToPublish(state.sessionId, state.contentSubtype);
+        }
+
+        async function loadContentToPublish(sessionId, subtype) {
+            try {
+                const resp = await fetch(`/api/content/${sessionId}/detail`);
+                const data = await resp.json();
+                const images = data.rendered_images || [];
+                if (!images.length) return showToast('렌더링된 이미지가 없습니다.', 'warning');
+
+                window._publishImages = images;
+                window._publishSessionId = sessionId;
+                window._publishContentType = subtype;
+
+                // images-container에 이미지 태그 추가 (발행/다운로드에 사용)
+                const container = document.getElementById('images-container');
+                if (container) {
+                    const ts = Date.now();
+                    container.innerHTML = images.map((url, i) =>
+                        `<img src="${url}?t=${ts}" alt="콘텐츠 ${i + 1}" style="display:none;">`
+                    ).join('');
+                }
+
+                // Step 5 인스타그램 미리보기 이미지 로드
+                const imgEl = document.getElementById('insta-preview-img');
+                if (imgEl && images.length > 0) imgEl.src = images[0] + '?t=' + Date.now();
+
+                const indexEl = document.getElementById('insta-carousel-index');
+                if (indexEl) indexEl.textContent = `1 / ${images.length}`;
+
+                // 화살표 표시
+                if (images.length > 1) {
+                    const prevBtn = document.getElementById('carousel-prev-btn');
+                    const nextBtn = document.getElementById('carousel-next-btn');
+                    if (prevBtn) prevBtn.style.display = 'flex';
+                    if (nextBtn) nextBtn.style.display = 'flex';
+                }
+
+                // aspect ratio 업데이트
+                const previewCarousel = document.getElementById('insta-preview-carousel');
+                if (previewCarousel) {
+                    previewCarousel.style.aspectRatio = subtype === 'carousel' ? '1/1' : '4/5';
+                }
+            } catch (err) {
+                showToast('이미지 로드 오류: ' + err.message, 'error');
+            }
         }
 
         async function confirmData() {
@@ -2804,6 +2622,16 @@
                 label: '카드',
                 countId: 'cardnews-card-count',
                 titleLimit: 15, bodyLimit: 100,
+            },
+            content: {
+                apiPrefix: '/api/content',
+                countParam: 'item_count',
+                itemsKey: 'items',
+                editParam: 'item_index',
+                editUrl: 'edit',
+                label: '카드',
+                countId: 'content-item-count',
+                titleLimit: 20, bodyLimit: 100,
             }
         };
 
@@ -2811,11 +2639,12 @@
         const contentState = {
             carousel: { sessionId: null, items: [], currentSwipe: 0, selectedRatio: '1:1', selectedTemplate: 'centered', logoPath: null },
             cardnews: { sessionId: null, items: [], currentSwipe: 0, selectedRatio: '4:5', selectedTemplate: 'centered', logoPath: null },
+            content: { sessionId: null, items: [], currentSwipe: 0, selectedRatio: '4:5', selectedTemplate: 'centered', logoPath: null, contentSubtype: 'cardnews', selectedTemplateSet: null, selectedTheme: null },
         };
 
         function saveContentStateToStorage() {
             const toSave = {};
-            ['carousel', 'cardnews'].forEach(type => {
+            ['carousel', 'cardnews', 'content'].forEach(type => {
                 toSave[type] = {
                     sessionId: contentState[type].sessionId,
                     selectedRatio: contentState[type].selectedRatio,
@@ -2823,6 +2652,11 @@
                     logoPath: contentState[type].logoPath,
                 };
             });
+            if (contentState.content) {
+                toSave.content.contentSubtype = contentState.content.contentSubtype;
+                toSave.content.selectedTemplateSet = contentState.content.selectedTemplateSet;
+                toSave.content.selectedTheme = contentState.content.selectedTheme;
+            }
             localStorage.setItem('contentState', JSON.stringify(toSave));
         }
 
@@ -2863,10 +2697,11 @@
             if (!saved) return;
             try {
                 const parsed = JSON.parse(saved);
-                for (const type of ['carousel', 'cardnews']) {
+                for (const type of ['carousel', 'cardnews', 'content']) {
                     if (!parsed[type] || !parsed[type].sessionId) continue;
                     const sid = parsed[type].sessionId;
-                    const res = await fetch(`/api/content/sessions/${sid}`);
+                    const url = type === 'content' ? `/api/content/${sid}/detail` : `/api/content/sessions/${sid}`;
+                    const res = await fetch(url);
                     if (!res.ok) continue;
                     const data = await res.json();
                     if (data.session_id) {
@@ -2875,6 +2710,11 @@
                         contentState[type].selectedRatio = parsed[type].selectedRatio || contentState[type].selectedRatio;
                         contentState[type].selectedTemplate = parsed[type].selectedTemplate || contentState[type].selectedTemplate;
                         contentState[type].logoPath = parsed[type].logoPath || null;
+                        if (type === 'content') {
+                            contentState.content.contentSubtype = parsed.content.contentSubtype || 'cardnews';
+                            contentState.content.selectedTemplateSet = parsed.content.selectedTemplateSet || null;
+                            contentState.content.selectedTheme = parsed.content.selectedTheme || null;
+                        }
                         const cfg = contentConfig[type];
                         if (cfg && contentState[type].items.length > 0) {
                             renderContentEditor(type, contentState[type].items);
@@ -2930,6 +2770,59 @@
                 // 프리셋 목록 로드
                 loadPresetList(type);
             });
+
+            // 통합 콘텐츠 패널 템플릿 갤러리 초기화
+            loadTemplateGallery();
+            loadPresetList('content');
+        }
+
+        // 템플릿 세트 갤러리 로드
+        async function loadTemplateGallery() {
+            try {
+                const resp = await fetch('/api/content/templates');
+                const data = await resp.json();
+                const gallery = document.getElementById('content-template-gallery');
+                if (!gallery || !data.template_sets) return;
+
+                gallery.innerHTML = data.template_sets.map(ts => `
+                    <div onclick="selectTemplateSet('${ts.id}')" data-set="${ts.id}"
+                        style="border:2px solid var(--border); border-radius:10px; padding:6px; cursor:pointer; text-align:center; transition:all 0.2s; overflow:hidden;"
+                        onmouseenter="if(!this.classList.contains('selected'))this.style.borderColor='var(--primary)'"
+                        onmouseleave="if(!this.classList.contains('selected'))this.style.borderColor='var(--border)'">
+                        ${ts.preview_image
+                            ? `<img src="${ts.preview_image}" alt="${ts.name}" style="width:100%; aspect-ratio:4/5; object-fit:cover; border-radius:6px; margin-bottom:6px; display:block;">`
+                            : `<div style="display:flex; gap:4px; justify-content:center; margin-bottom:6px; padding:20px 0;">
+                                ${(ts.preview_colors || []).map(c => '<span style="width:16px;height:16px;border-radius:50%;background:' + c + ';display:inline-block;border:1px solid rgba(0,0,0,0.1);"></span>').join('')}
+                              </div>`
+                        }
+                        <div style="font-size:0.72rem; font-weight:600; padding:0 2px;">${ts.label || ts.name}</div>
+                        <div style="font-size:0.62rem; color:var(--text-muted); margin-top:2px; line-height:1.3; padding:0 2px 4px;">${ts.description || ''}</div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                console.warn('템플릿 갤러리 로드 실패:', err);
+            }
+        }
+
+        // 템플릿 세트 선택
+        function selectTemplateSet(setId) {
+            contentState.content.selectedTemplateSet = setId;
+            const gallery = document.getElementById('content-template-gallery');
+            if (gallery) {
+                gallery.querySelectorAll('[data-set]').forEach(el => {
+                    const isSel = el.dataset.set === setId;
+                    el.classList.toggle('selected', isSel);
+                    el.style.borderColor = isSel ? 'var(--primary)' : 'var(--border)';
+                    el.style.background = isSel ? 'rgba(37,99,235,0.05)' : '';
+                });
+            }
+            // 템플릿 세트의 테마 자동 설정
+            fetch('/api/content/templates').then(r => r.json()).then(data => {
+                const ts = (data.template_sets || []).find(t => t.id === setId);
+                if (ts && ts.theme) {
+                    contentState.content.selectedTheme = ts.theme;
+                }
+            }).catch(() => {});
         }
 
         // DOM 준비 후 초기화
@@ -2950,7 +2843,7 @@
                 const d = document.getElementById(`${type}-gradient-dir`)?.value || '135deg';
                 bgGradient = `linear-gradient(${d}, ${s}, ${e})`;
             }
-            return {
+            const settings = {
                 bg_color: document.getElementById(`${type}-bg-color`)?.value,
                 text_color: document.getElementById(`${type}-text-color`)?.value,
                 accent_color: document.getElementById(`${type}-accent-color`)?.value,
@@ -2963,9 +2856,16 @@
                 aspect_ratio: contentState[type].selectedRatio,
                 bg_gradient: bgGradient,
             };
+            // 통합 콘텐츠 패널: template_set, theme 추가
+            if (type === 'content') {
+                settings.template_set = contentState.content.selectedTemplateSet;
+                settings.theme = contentState.content.selectedTheme;
+            }
+            return settings;
         }
 
         async function generateContent(type) {
+            if (!type) type = 'content';
             const cfg = contentConfig[type];
             const statusEl = document.getElementById(`${type}-status`);
             if (statusEl) { statusEl.style.display = 'block'; statusEl.innerHTML = `⏳ AI가 ${cfg.label} 텍스트를 생성 중...`; }
@@ -2982,8 +2882,19 @@
                 ...settings,
             };
 
+            // 통합 콘텐츠: content_type 추가 + 통합 API 사용
+            if (type === 'content') {
+                body.content_type = contentState.content.contentSubtype;
+            }
+
             try {
-                const resp = await fetch(`${cfg.apiPrefix}/generate-${cfg.itemsKey === 'slides' ? 'slides' : 'cards'}`, {
+                let url;
+                if (type === 'content') {
+                    url = '/api/content/generate';
+                } else {
+                    url = `${cfg.apiPrefix}/generate-${cfg.itemsKey === 'slides' ? 'slides' : 'cards'}`;
+                }
+                const resp = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body),
@@ -3006,17 +2917,46 @@
 
         function renderContentEditor(type, items) {
             const cfg = contentConfig[type];
-            const editorId = type === 'carousel' ? 'carousel-slides-editor' : 'cardnews-cards-editor';
-            const listId = type === 'carousel' ? 'carousel-slides-list' : 'cardnews-cards-list';
+            let editorId, listId;
+            if (type === 'content') {
+                editorId = 'content-editor';
+                listId = 'content-items-list';
+            } else {
+                editorId = type === 'carousel' ? 'carousel-slides-editor' : 'cardnews-cards-editor';
+                listId = type === 'carousel' ? 'carousel-slides-list' : 'cardnews-cards-list';
+            }
             const editor = document.getElementById(editorId);
             const list = document.getElementById(listId);
             if (!editor || !list) return;
             editor.style.display = 'block';
 
-            list.innerHTML = items.map((item, i) => `
+            list.innerHTML = items.map((item, i) => {
+                // 'content' 타입: 템플릿 타입 드롭다운 생성
+                let templateTypeHtml = '';
+                if (type === 'content') {
+                    const total = items.length;
+                    let options;
+                    if (i === 0) {
+                        options = [['COVER-A','다크 BEST'], ['COVER-B','다크 카테고리'], ['COVER-C','블루 리포트'], ['COVER-D','미니멀 카드'], ['COVER-E','웜톤 질문'], ['COVER-F','틸 리포트']];
+                    } else if (i === total - 1 && total > 1) {
+                        options = [['CLOSING-A','요약 CTA'], ['CLOSING-B','브랜드 카드']];
+                    } else {
+                        options = [['BODY-A','넘버링 리스트'], ['BODY-B','비교/대조'], ['BODY-C','하이라이트 숫자'], ['BODY-D','스텝 프로세스']];
+                    }
+                    const currentType = item.template_type || options[0][0];
+                    templateTypeHtml = `
+                        <select id="content-tmpltype-${i}" onchange="updateItemTemplateType(${i}, this.value)"
+                            style="padding:3px 6px; font-size:0.72rem; border:1px solid var(--border); border-radius:4px; background:var(--bg); color:var(--text); max-width:120px;">
+                            ${options.map(([v, l]) => `<option value="${v}" ${v === currentType ? 'selected' : ''}>${l}</option>`).join('')}
+                        </select>`;
+                }
+                return `
                 <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; position:relative;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                        <span style="font-size: 0.8rem; color: var(--text-muted);">${cfg.label} ${i + 1}</span>
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <span style="font-size: 0.8rem; color: var(--text-muted);">${cfg.label} ${i + 1}</span>
+                            ${templateTypeHtml}
+                        </div>
                         <div style="display:flex; gap:4px;">
                             <button onclick="duplicateContentItem('${type}',${i})" title="복제" style="background:none;border:none;cursor:pointer;font-size:0.8rem;">📋</button>
                             <button onclick="deleteContentItem('${type}',${i})" title="삭제" style="background:none;border:none;cursor:pointer;font-size:0.8rem;">❌</button>
@@ -3035,13 +2975,29 @@
                         <span id="${type}-body-counter-${i}" style="position:absolute;right:8px;bottom:8px;font-size:0.7rem;color:var(--text-muted);">0/${cfg.bodyLimit}</span>
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
 
             // 초기 카운터 업데이트
             items.forEach((item, i) => {
                 updateCharCounter(type, i, 'title', cfg.titleLimit);
                 updateCharCounter(type, i, 'body', cfg.bodyLimit);
             });
+        }
+
+        // 템플릿 타입 변경 (편집 패널 드롭다운)
+        async function updateItemTemplateType(idx, templateType) {
+            const state = contentState.content;
+            if (!state.sessionId) return;
+            try {
+                await fetch(`/api/content/${state.sessionId}/edit`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ item_index: idx, template_type: templateType }),
+                });
+                if (state.items[idx]) state.items[idx].template_type = templateType;
+            } catch (err) {
+                showToast('템플릿 타입 변경 실패: ' + err.message, 'error');
+            }
         }
 
         async function renderContentImages(type) {
@@ -3280,11 +3236,20 @@
 
         // 스텝 인디케이터 (p3-6)
         function showContentStep(type, step) {
-            const panels = {
-                settings: `${type}-settings-panel`,
-                editor: type === 'carousel' ? 'carousel-slides-editor' : 'cardnews-cards-editor',
-                preview: `${type}-preview`,
-            };
+            let panels;
+            if (type === 'content') {
+                panels = {
+                    settings: 'content-settings-panel',
+                    editor: 'content-editor',
+                    preview: 'content-preview',
+                };
+            } else {
+                panels = {
+                    settings: `${type}-settings-panel`,
+                    editor: type === 'carousel' ? 'carousel-slides-editor' : 'cardnews-cards-editor',
+                    preview: `${type}-preview`,
+                };
+            }
             // 모든 패널 숨기기/표시
             Object.entries(panels).forEach(([key, id]) => {
                 const el = document.getElementById(id);
@@ -3537,7 +3502,8 @@
         document.addEventListener('keydown', (e) => {
             if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
                 const dir = e.key === 'ArrowLeft' ? -1 : 1;
-                const activeType = document.getElementById('step-carousel')?.style.display !== 'none' ? 'carousel' :
+                const activeType = document.getElementById('step-content')?.style.display !== 'none' ? 'content' :
+                    document.getElementById('step-carousel')?.style.display !== 'none' ? 'carousel' :
                     document.getElementById('step-cardnews')?.style.display !== 'none' ? 'cardnews' : null;
                 if (activeType) swipeContent(activeType, dir);
             }
@@ -3797,7 +3763,7 @@
                 if (data.model_switched && data.model_used) {
                     const switchNotice = document.createElement('div');
                     switchNotice.style.cssText = 'background:#fff3cd; color:#856404; border:1px solid #ffc107; border-radius:8px; padding:0.75rem 1rem; margin-bottom:1rem; font-size:0.85rem; display:flex; align-items:center; gap:0.5rem;';
-                    switchNotice.innerHTML = `<span style="font-size:1.1rem;">⚡</span> 요청 모델(${storyModel})이 응답 불가하여 <strong>${data.model_used}</strong> 모델로 전환되어 생성되었습니다.`;
+                    switchNotice.innerHTML = `<span style="font-size:1.1rem;">⚡</span> 기본 모델이 응답 불가하여 <strong>${data.model_used}</strong> 모델로 자동 전환되어 생성되었습니다.`;
                     reviewArea.insertBefore(switchNotice, reviewArea.firstChild);
                 }
             } catch (e) {
@@ -5794,18 +5760,41 @@
             captionFields.forEach(function(f) { f.disabled = true; f.style.opacity = '0.5'; });
 
             try {
-                const res = await fetch('/api/workflow/generate-caption', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ session_id: sessionId })
-                });
+                // 콘텐츠 모드: 콘텐츠 세션 기반 캡션 생성
+                let res;
+                if (currentContentType === 'content' && window._publishSessionId) {
+                    const contentSid = window._publishSessionId;
+                    const sessResp = await fetch(`/api/content/${contentSid}/detail`);
+                    const sessData = await sessResp.json();
+                    const topic = sessData.topic || '';
+                    const itemTexts = (sessData.items || []).map(it => (it.title || '') + ': ' + (it.body || '')).join('\n');
+                    res = await fetch('/api/workflow/generate-common-caption', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ topic, content: itemTexts, content_type: window._publishContentType || 'cardnews' }),
+                    });
+                } else {
+                    res = await fetch('/api/workflow/generate-caption', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ session_id: sessionId })
+                    });
+                }
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) {
                     const msg = data.detail || data.message || (typeof data === 'string' ? data : `오류 ${res.status}`);
                     showToast('캡션 생성 오류: ' + msg, 'error');
                     return;
                 }
-                const caption = data.caption;
+                // 콘텐츠 모드 vs 웹툰 모드: 응답 포맷이 다름
+                let caption;
+                if (currentContentType === 'content' && window._publishSessionId) {
+                    // common-caption: {hook, body, hashtags} (flat)
+                    caption = data;
+                } else {
+                    // webtoon: {caption: {hook, body, expert_tip, hashtags: [...]}}
+                    caption = data.caption;
+                }
                 if (!caption) {
                     showToast('캡션 생성 오류: 응답 형식이 올바르지 않습니다.', 'error');
                     return;
@@ -5813,7 +5802,8 @@
                 document.getElementById('final-hook').value = caption.hook || '';
                 document.getElementById('final-body').value = caption.body || '';
                 document.getElementById('final-tip').value = caption.expert_tip || caption.tip || '';
-                document.getElementById('final-hashtags').value = (caption.hashtags || []).join(' ');
+                const ht = caption.hashtags || '';
+                document.getElementById('final-hashtags').value = Array.isArray(ht) ? ht.join(' ') : ht;
 
                 showToast('캡션이 생성되었습니다!', 'success');
                 updateInstaPreview();
@@ -6007,7 +5997,8 @@
         }
 
         async function publishToInstagram() {
-            if (!sessionId) { showToast('세션이 없습니다.', 'error'); return; }
+            const effectiveSessionId = (currentContentType === 'content' && window._publishSessionId) ? window._publishSessionId : sessionId;
+            if (!effectiveSessionId) { showToast('세션이 없습니다.', 'error'); return; }
             // ★ 중복 발행 방지: 이미 발행된 경우 확인
             const _pubBtn = document.querySelector('[onclick="publishToInstagram()"]');
             if (_pubBtn && _pubBtn._published) {
