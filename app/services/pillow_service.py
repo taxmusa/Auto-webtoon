@@ -631,8 +631,8 @@ class PillowService:
 
         w, h = img.size
 
-        # 워터마크 영역 크기 (이미지 크기 비례, 최소 50px ~ 최대 100px)
-        wm_size = max(50, min(100, int(min(w, h) * 0.07)))
+        # 워터마크 영역 크기 (이미지 크기 비례, 최소 60px ~ 최대 120px)
+        wm_size = max(60, min(120, int(min(w, h) * 0.09)))
 
         # 우하단 워터마크 영역
         wm_x1 = w - wm_size
@@ -663,15 +663,21 @@ class PillowService:
 
         ref_var = np.mean(ref_vars)
 
-        # 워터마크 감지 기준: 우하단 영역의 분산이 주변보다 현저히 높으면 워터마크 있음
-        # (Gemini sparkle은 주변과 다른 밝은 색상 패턴)
-        has_watermark = wm_var > ref_var * 1.3 and wm_var > 500
+        # 워터마크 감지 기준 (완화):
+        # Gemini sparkle은 우하단에 항상 나타날 수 있으므로 느슨하게 감지
+        # 조건 1: 분산 차이가 있거나 (1.15배)
+        # 조건 2: 우하단 영역에 밝은 픽셀(sparkle)이 존재
+        bright_pixels = np.sum(wm_region > 200) / wm_region.size  # 밝은 픽셀 비율
+        has_watermark = (
+            (wm_var > ref_var * 1.15 and wm_var > 300) or
+            (bright_pixels > 0.05 and wm_var > ref_var * 1.05)
+        )
 
         if not has_watermark:
             # 워터마크 없음 — 원본 반환
             return image_bytes
 
-        logger.info("[워터마크 제거] Gemini sparkle 감지됨 (var=%.0f vs ref=%.0f), 제거 진행", wm_var, ref_var)
+        logger.info("[워터마크 제거] Gemini sparkle 감지됨 (var=%.0f vs ref=%.0f, bright=%.2f), 제거 진행", wm_var, ref_var, bright_pixels)
 
         # 워터마크 제거: 주변 픽셀로 자연스럽게 채움
         # 1. 약간 넓은 영역을 잘라서 가장자리 샘플링
@@ -697,10 +703,10 @@ class PillowService:
         # 3. 워터마크 영역을 채움 색상으로 덮기 (약간의 노이즈 추가로 자연스럽게)
         for y in range(wm_y1, wm_y2):
             for x in range(wm_x1, wm_x2):
-                # 가장자리에서 중심으로 갈수록 채움 색상 비율 증가
+                # 우하단 모서리로 갈수록 채움 색상 비율 증가 (더 강하게)
                 dx = (x - wm_x1) / max(1, wm_size - 1)
                 dy = (y - wm_y1) / max(1, wm_size - 1)
-                blend = max(dx, dy)  # 모서리에 가까울수록 blend 높음
+                blend = min(1.0, (dx + dy) * 0.7)  # 합산 기반으로 더 넓게 적용
 
                 # 위/왼쪽 경계 색상과 채움 색상 혼합
                 original = arr[y, x].astype(float)

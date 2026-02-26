@@ -68,9 +68,9 @@ CARDNEWS_CONFIG = ContentConfig(
     content_type="cardnews",
     label="카드뉴스",
     item_label="카드",
-    default_bg_color="#1a1a2e",
-    default_text_color="#FFFFFF",
-    default_accent_color="#e94560",
+    default_bg_color="#F8F9FA",
+    default_text_color="#1A1A1A",
+    default_accent_color="#4A7FB5",
     default_width=1080,
     default_height=1350,
     title_limit=15,
@@ -112,6 +112,10 @@ class ContentCreateRequest(BaseModel):
     title_accent: str = "none"           # none | underline | highlight | box
     # Phase 3
     bg_gradient: Optional[str] = None    # CSS gradient 문자열
+    # Phase B: 테마 팔레트
+    theme: Optional[str] = None          # dark | light | blue | warm | teal (None이면 개별 색상 사용)
+    # Phase C: 템플릿 세트
+    template_set: Optional[str] = None   # dark_best | blue_report | minimal_card | warm_friendly | teal_modern
 
 
 class ContentSession(BaseModel):
@@ -139,6 +143,10 @@ class ContentSession(BaseModel):
     logo_path: Optional[str] = None
     # Phase 3
     bg_gradient: Optional[str] = None
+    # Phase B: 테마 팔레트
+    theme: Optional[str] = None
+    # Phase C: 템플릿 세트
+    template_set: Optional[str] = None
 
 
 class ItemEditRequest(BaseModel):
@@ -161,6 +169,8 @@ class ContentRenderRequest(BaseModel):
     bg_gradient: Optional[str] = None
     last_page_type: Optional[str] = None
     aspect_ratio: Optional[str] = None
+    theme: Optional[str] = None
+    template_set: Optional[str] = None
 
 
 class SingleRenderRequest(BaseModel):
@@ -220,9 +230,26 @@ async def generate_content(config: ContentConfig, req: ContentCreateRequest) -> 
     """AI로 콘텐츠 텍스트 생성 (공통 엔진)"""
     session_id = str(uuid.uuid4())[:8]
 
-    bg_color = req.bg_color or config.default_bg_color
-    text_color = req.text_color or config.default_text_color
-    accent_color = req.accent_color or config.default_accent_color
+    # 테마/템플릿 세트 지정 시 팔레트에서 색상 자동 적용
+    theme_name = req.theme
+    template_set_name = req.template_set
+    if template_set_name:
+        from app.services.theme_palettes import get_template_set
+        ts = get_template_set(template_set_name)
+        if ts:
+            theme_name = ts["theme"]
+
+    if theme_name:
+        from app.services.theme_palettes import get_theme
+        palette = get_theme(theme_name)
+        bg_color = req.bg_color or palette["bg"]
+        text_color = req.text_color or palette["text_primary"]
+        accent_color = req.accent_color or palette["accent"]
+    else:
+        bg_color = req.bg_color or config.default_bg_color
+        text_color = req.text_color or config.default_text_color
+        accent_color = req.accent_color or config.default_accent_color
+
     width, height = _resolve_dimensions(config, req.aspect_ratio)
 
     try:
@@ -263,6 +290,8 @@ async def generate_content(config: ContentConfig, req: ContentCreateRequest) -> 
         spacing=req.spacing,
         title_accent=req.title_accent,
         bg_gradient=req.bg_gradient,
+        theme=theme_name,
+        template_set=template_set_name,
     )
     content_sessions[session_id] = session
     save_session_to_disk(session)
@@ -320,6 +349,19 @@ async def render_content(
 
     # 옵션 업데이트
     if req:
+        # 테마 변경 시 팔레트 색상 자동 적용
+        if req.theme:
+            from app.services.theme_palettes import get_theme
+            session.theme = req.theme
+            palette = get_theme(req.theme)
+            if not req.bg_color:
+                session.bg_color = palette["bg"]
+            if not req.text_color:
+                session.text_color = palette["text_primary"]
+            if not req.accent_color:
+                session.accent_color = palette["accent"]
+        if req.template_set:
+            session.template_set = req.template_set
         if req.bg_color:
             session.bg_color = req.bg_color
         if req.text_color:
@@ -367,26 +409,46 @@ async def render_content(
             is_cover = (i == 0)
             is_last = (i == total - 1) and total > 1
 
-            html = build_slide_html(
-                title=item.title,
-                body=item.body,
-                page_number=f"{i + 1}/{total}",
-                bg_color=session.bg_color,
-                text_color=session.text_color,
-                accent_color=session.accent_color,
-                font_family=session.font_family,
-                width=session.width,
-                height=session.height,
-                template=session.template,
-                is_cover=is_cover,
-                is_last=is_last,
-                last_type=session.last_page_type if is_last else None,
-                title_size=session.title_size,
-                spacing=session.spacing,
-                title_accent=session.title_accent,
-                bg_gradient=session.bg_gradient,
-                logo_base64=logo_b64,
-            )
+            # template_set이 있으면 새 템플릿 빌더 사용
+            use_new_builder = session.template_set is not None
+            if use_new_builder:
+                try:
+                    from app.services.template_builders import build_template_slide
+                    html = build_template_slide(
+                        template_set=session.template_set,
+                        slide_index=i,
+                        total_slides=total,
+                        title=item.title,
+                        body=item.body,
+                        width=session.width,
+                        height=session.height,
+                    )
+                except Exception as e:
+                    logger.warning(f"[{config.label}] 새 템플릿 빌더 실패, 기존 빌더 사용: {e}")
+                    use_new_builder = False
+
+            if not use_new_builder:
+                html = build_slide_html(
+                    title=item.title,
+                    body=item.body,
+                    page_number=f"{i + 1}/{total}",
+                    bg_color=session.bg_color,
+                    text_color=session.text_color,
+                    accent_color=session.accent_color,
+                    font_family=session.font_family,
+                    width=session.width,
+                    height=session.height,
+                    template=session.template,
+                    is_cover=is_cover,
+                    is_last=is_last,
+                    last_type=session.last_page_type if is_last else None,
+                    title_size=session.title_size,
+                    spacing=session.spacing,
+                    title_accent=session.title_accent,
+                    bg_gradient=session.bg_gradient,
+                    logo_base64=logo_b64,
+                    theme=session.theme,
+                )
 
             img_path = os.path.join(output_dir, f"{config.file_prefix}_{i + 1:02d}.png")
             await render_html_to_image(
@@ -454,26 +516,46 @@ async def render_single_item(
     is_last = (idx == total - 1) and total > 1
     logo_b64 = _load_logo_base64(session.logo_path)
 
-    html = build_slide_html(
-        title=item.title,
-        body=item.body,
-        page_number=f"{idx + 1}/{total}",
-        bg_color=session.bg_color,
-        text_color=session.text_color,
-        accent_color=session.accent_color,
-        font_family=session.font_family,
-        width=session.width,
-        height=session.height,
-        template=session.template,
-        is_cover=is_cover,
-        is_last=is_last,
-        last_type=session.last_page_type if is_last else None,
-        title_size=session.title_size,
-        spacing=session.spacing,
-        title_accent=session.title_accent,
-        bg_gradient=session.bg_gradient,
-        logo_base64=logo_b64,
-    )
+    # template_set이 있으면 새 템플릿 빌더 사용
+    use_new_builder = session.template_set is not None
+    if use_new_builder:
+        try:
+            from app.services.template_builders import build_template_slide
+            html = build_template_slide(
+                template_set=session.template_set,
+                slide_index=idx,
+                total_slides=total,
+                title=item.title,
+                body=item.body,
+                width=session.width,
+                height=session.height,
+            )
+        except Exception as e:
+            logger.warning(f"[{config.label}] 새 템플릿 빌더 실패, 기존 빌더 사용: {e}")
+            use_new_builder = False
+
+    if not use_new_builder:
+        html = build_slide_html(
+            title=item.title,
+            body=item.body,
+            page_number=f"{idx + 1}/{total}",
+            bg_color=session.bg_color,
+            text_color=session.text_color,
+            accent_color=session.accent_color,
+            font_family=session.font_family,
+            width=session.width,
+            height=session.height,
+            template=session.template,
+            is_cover=is_cover,
+            is_last=is_last,
+            last_type=session.last_page_type if is_last else None,
+            title_size=session.title_size,
+            spacing=session.spacing,
+            title_accent=session.title_accent,
+            bg_gradient=session.bg_gradient,
+            logo_base64=logo_b64,
+            theme=session.theme,
+        )
 
     output_dir = os.path.join("output", f"{config.output_prefix}_{session_id}")
     os.makedirs(output_dir, exist_ok=True)
@@ -843,3 +925,27 @@ async def reorder_items(session_id: str, req: ReorderRequest):
     _update_page_numbers(session)
     save_session_to_disk(session)
     return {"success": True}
+
+
+# --- 테마/템플릿 세트 조회 ---
+
+@router.get("/themes")
+async def list_themes():
+    """사용 가능한 테마 팔레트 목록"""
+    from app.services.theme_palettes import THEME_PALETTES
+    themes = []
+    for name, palette in THEME_PALETTES.items():
+        themes.append({
+            "id": name,
+            "bg": palette["bg"],
+            "text_primary": palette["text_primary"],
+            "accent": palette["accent"],
+        })
+    return {"themes": themes}
+
+
+@router.get("/template-sets")
+async def list_template_sets():
+    """사용 가능한 템플릿 세트 목록"""
+    from app.services.theme_palettes import get_available_template_sets
+    return {"template_sets": get_available_template_sets()}

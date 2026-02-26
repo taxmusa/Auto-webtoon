@@ -55,7 +55,7 @@ class ImageGeneratorBase(ABC):
 class GeminiGenerator(ImageGeneratorBase):
     """Gemini Pro Image — 3종 레퍼런스 + 씬 체이닝 지원"""
 
-    def __init__(self, api_key: str, model: str = "gemini-3-pro-image-preview"):
+    def __init__(self, api_key: str, model: str = "gemini-2.5-flash-image"):
         if not genai:
             raise ImportError("Google GenAI library is not installed")
         if not api_key:
@@ -167,11 +167,11 @@ class GeminiGenerator(ImageGeneratorBase):
             # 예외: 그 외 타입은 그대로 전달 (텍스트 등)
             return data
 
-        # ★ toonstoons 방식: responseModalities만 설정, ImageConfig 사용 안 함
+        # responseModalities + ImageConfig(aspect_ratio) 설정
         _gen_config_kwargs = {"response_modalities": ["TEXT", "IMAGE"]}
         if aspect_ratio:
-            full_prompt += f"\n\n[Image aspect ratio: {aspect_ratio}]"
-            logger.info(f"[Gemini] aspect_ratio={aspect_ratio} 프롬프트 힌트로 전달")
+            _gen_config_kwargs["image_config"] = types.ImageConfig(aspect_ratio=aspect_ratio)
+            logger.info(f"[Gemini] aspect_ratio={aspect_ratio} ImageConfig로 전달")
 
         # 1. 프롬프트 텍스트 (가장 먼저 — 모델이 의도를 먼저 이해)
         contents.append(full_prompt)

@@ -15,16 +15,16 @@ from functools import lru_cache
 # ============================================
 
 # 텍스트 생성 (스토리, 자료수집, 분야감지, 캡션)
-DEFAULT_TEXT_MODEL = "gemini-3.1-pro-preview"
-DEFAULT_TEXT_FALLBACKS: List[str] = ["gemini-3-flash-preview", "gemini-2.5-flash"]
+DEFAULT_TEXT_MODEL = "gemini-3-flash-preview"
+DEFAULT_TEXT_FALLBACKS: List[str] = ["gemini-2.5-flash"]
 
 # 이미지 생성 (씬 이미지)
 DEFAULT_IMAGE_MODEL = "gemini-3-pro-image-preview"
 DEFAULT_IMAGE_ALIAS = "nano-banana-pro"  # 내부 하위 호환용 (기존 세션 데이터)
 
 # 요약/경량 작업 (요약 슬라이드 등)
-DEFAULT_SUMMARY_MODEL = "gemini-2.5-flash"
-DEFAULT_SUMMARY_LITE = "gemini-2.5-flash-lite"
+DEFAULT_SUMMARY_MODEL = "gemini-3-flash-preview"
+DEFAULT_SUMMARY_LITE = "gemini-3-flash-preview"
 
 # UI 별명 → 실제 API 모델명 매핑 (하위 호환)
 MODEL_ALIAS_MAP: Dict[str, str] = {

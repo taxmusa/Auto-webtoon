@@ -36,9 +36,9 @@ class CardNewsCreateRequest(BaseModel):
     topic: str
     collected_data: str = ""
     card_count: int = Field(default=5, ge=1, le=10)
-    bg_color: str = "#1a1a2e"
-    text_color: str = "#FFFFFF"
-    accent_color: str = "#e94560"
+    bg_color: str = "#F8F9FA"
+    text_color: str = "#1A1A1A"
+    accent_color: str = "#4A7FB5"
     font_family: str = "Nanum Gothic"
     template: str = "centered"
     ai_model: str = "gemini"
@@ -51,6 +51,9 @@ class CardNewsCreateRequest(BaseModel):
     title_accent: str = "none"
     # Phase 3+
     bg_gradient: Optional[str] = None
+    # Phase B+
+    theme: Optional[str] = None
+    template_set: Optional[str] = None
 
 
 class CardEditRequest(BaseModel):
@@ -73,6 +76,8 @@ class CardNewsRenderRequest(BaseModel):
     bg_gradient: Optional[str] = None
     last_page_type: Optional[str] = None
     aspect_ratio: Optional[str] = None
+    theme: Optional[str] = None
+    template_set: Optional[str] = None
 
 
 # ============================================
@@ -98,6 +103,8 @@ async def generate_cards(req: CardNewsCreateRequest):
         spacing=req.spacing,
         title_accent=req.title_accent,
         bg_gradient=req.bg_gradient,
+        theme=req.theme,
+        template_set=req.template_set,
     )
     result = await generate_content(CARDNEWS_CONFIG, common_req)
     # 프론트엔드 호환: "items" → "cards"
@@ -145,6 +152,8 @@ async def render_cardnews(session_id: str, req: Optional[CardNewsRenderRequest] 
             bg_gradient=req.bg_gradient,
             last_page_type=req.last_page_type,
             aspect_ratio=req.aspect_ratio,
+            theme=req.theme,
+            template_set=req.template_set,
         )
     return await render_content(CARDNEWS_CONFIG, session_id, common_req)
 

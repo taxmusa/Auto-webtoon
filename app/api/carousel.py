@@ -51,6 +51,9 @@ class CarouselCreateRequest(BaseModel):
     title_accent: str = "none"
     # Phase 3+
     bg_gradient: Optional[str] = None
+    # Phase B+
+    theme: Optional[str] = None
+    template_set: Optional[str] = None
 
 
 class SlideEditRequest(BaseModel):
@@ -73,6 +76,8 @@ class CarouselRenderRequest(BaseModel):
     bg_gradient: Optional[str] = None
     last_page_type: Optional[str] = None
     aspect_ratio: Optional[str] = None
+    theme: Optional[str] = None
+    template_set: Optional[str] = None
 
 
 # ============================================
@@ -98,6 +103,8 @@ async def generate_slides(req: CarouselCreateRequest):
         spacing=req.spacing,
         title_accent=req.title_accent,
         bg_gradient=req.bg_gradient,
+        theme=req.theme,
+        template_set=req.template_set,
     )
     result = await generate_content(CAROUSEL_CONFIG, common_req)
     # 프론트엔드 호환: "items" → "slides"
@@ -145,6 +152,8 @@ async def render_carousel(session_id: str, req: Optional[CarouselRenderRequest] 
             bg_gradient=req.bg_gradient,
             last_page_type=req.last_page_type,
             aspect_ratio=req.aspect_ratio,
+            theme=req.theme,
+            template_set=req.template_set,
         )
     return await render_content(CAROUSEL_CONFIG, session_id, common_req)
 

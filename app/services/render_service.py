@@ -219,9 +219,11 @@ async def render_html_to_transparent_image(
 # ────────────────────────────────────────────
 
 KOREAN_FONT_CSS = """
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
 @import url('https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&family=Nanum+Pen+Script&family=Do+Hyeon&family=Jua&family=Black+Han+Sans&family=Gaegu:wght@400;700&family=Noto+Sans+KR:wght@400;700&family=Nanum+Myeongjo:wght@400;700&family=Gothic+A1:wght@400;700&family=Sunflower:wght@300;500&family=Poor+Story&display=swap');
 
 :root {
+    --font-pretendard: 'Pretendard', 'Noto Sans KR', sans-serif;
     --font-gothic: 'Nanum Gothic', sans-serif;
     --font-pen: 'Nanum Pen Script', cursive;
     --font-dohyeon: 'Do Hyeon', sans-serif;
@@ -330,7 +332,7 @@ body {{
     width: {width}px;
     height: {height}px;
     background: transparent;
-    font-family: '{font_family}', 'Nanum Gothic', sans-serif;
+    font-family: 'Pretendard', '{font_family}', 'Noto Sans KR', sans-serif;
     position: relative;
     overflow: hidden;
 }}
@@ -370,6 +372,8 @@ def build_slide_html(
     title_accent: str = "none",
     bg_gradient: str = None,
     logo_base64: str = None,
+    # Phase B 파라미터
+    theme: str = None,
 ) -> str:
     """캐러셀/카드뉴스 슬라이드 HTML 생성
 
@@ -395,6 +399,14 @@ def build_slide_html(
     Returns:
         HTML 문자열
     """
+    # --- 테마 팔레트 적용 (Phase B) ---
+    if theme:
+        from app.services.theme_palettes import get_theme
+        palette = get_theme(theme)
+        bg_color = palette["bg"]
+        text_color = palette["text_primary"]
+        accent_color = palette["accent"]
+
     # --- 제목 크기 배율 ---
     size_scale = {"large": 1.3, "medium": 1.0, "small": 0.8}.get(title_size, 1.0)
 
@@ -408,26 +420,26 @@ def build_slide_html(
 
     # --- 템플릿별 기본 제목 크기 ---
     base_sizes = {
-        "centered": 44,
-        "left-aligned": 42,
-        "highlight": 48,
+        "centered": 52,
+        "left-aligned": 50,
+        "highlight": 56,
     }
-    base_title_size = base_sizes.get(template, 44)
+    base_title_size = base_sizes.get(template, 52)
     final_title_size = int(base_title_size * size_scale)
 
     # --- 커버 슬라이드 오버라이드 ---
     if is_cover:
-        final_title_size = int(60 * size_scale)
+        final_title_size = int(68 * size_scale)
 
     # --- 마지막 슬라이드(브랜딩) 오버라이드 ---
     if is_last and last_type == "branding":
-        final_title_size = int(52 * size_scale)
+        final_title_size = int(56 * size_scale)
 
     # --- 템플릿별 레이아웃 ---
     if template == "left-aligned":
         layout_css = f"text-align: left; padding: {pad};"
         title_color = text_color
-        body_opacity = "opacity: 0.85;"
+        body_opacity = ""
         text_align_title = ""
         text_align_body = ""
         max_width_body = ""
@@ -441,7 +453,7 @@ def build_slide_html(
     else:  # centered
         layout_css = f"display: flex; flex-direction: column; justify-content: center; align-items: center; padding: {pad};"
         title_color = text_color
-        body_opacity = "opacity: 0.85;"
+        body_opacity = ""
         text_align_title = "text-align: center;"
         text_align_body = "text-align: center;"
         max_width_body = "max-width: 85%;"
@@ -474,7 +486,7 @@ def build_slide_html(
     # --- 페이지 번호 (커버에서는 숨김) ---
     page_html = ""
     if page_number and not is_cover:
-        page_html = f'<div style="position:absolute; bottom:30px; right:40px; font-size:16px; color:{text_color}; opacity:0.4;">{page_number}</div>'
+        page_html = f'<div style="position:absolute; bottom:30px; right:40px; font-size:20px; color:{text_color}; opacity:0.4;">{page_number}</div>'
 
     # --- 로고/워터마크 ---
     logo_html = ""
@@ -502,7 +514,7 @@ body {{
     width: {width}px;
     height: {height}px;
     {background_css}
-    font-family: '{font_family}', 'Nanum Gothic', sans-serif;
+    font-family: 'Pretendard', '{font_family}', 'Noto Sans KR', sans-serif;
     position: relative;
     overflow: hidden;
     {layout_css}
@@ -517,7 +529,7 @@ body {{
     {title_accent_css}
 }}
 .slide-body {{
-    font-size: 22px;
+    font-size: 28px;
     color: {text_color};
     {body_opacity}
     line-height: {lh};
@@ -669,9 +681,9 @@ def build_summary_slide_html(
         extra_css = f"""
 .table-wrap {{ flex:1; display:flex; align-items:flex-start; overflow:hidden; margin-top:28px; }}
 table {{ width:100%; border-collapse:separate; border-spacing:0; border-radius:16px; overflow:hidden; border:1px solid {p['border']}; }}
-thead th {{ background:{p['accent']}; color:#fff; padding:22px 28px; font-size:26px; font-weight:800; text-align:left; letter-spacing:0.01em; }}
+thead th {{ background:{p['accent']}; color:#fff; padding:22px 28px; font-size:30px; font-weight:800; text-align:left; letter-spacing:0.01em; }}
 thead th:not(:last-child) {{ border-right:1px solid rgba(255,255,255,0.2); }}
-tbody td {{ padding:20px 28px; font-size:24px; color:{p['text']}; border-bottom:1px solid {p['border']}; line-height:1.6; background:{p['card']}; }}
+tbody td {{ padding:20px 28px; font-size:28px; color:{p['text']}; border-bottom:1px solid {p['border']}; line-height:1.6; background:{p['card']}; }}
 tbody td:not(:last-child) {{ border-right:1px solid {p['border']}; }}
 tbody tr.alt td {{ background:{p['accent_light']}40; }}
 tbody tr:last-child td {{ border-bottom:none; }}
@@ -694,7 +706,7 @@ tbody tr:last-child td {{ border-bottom:none; }}
 .check-list {{ flex:1; display:flex; flex-direction:column; gap:14px; margin-top:28px; }}
 .check-item {{ display:flex; align-items:flex-start; gap:18px; background:{p['card']}; border-radius:14px; padding:22px 28px; border:1px solid {p['border']}; border-left:4px solid {p['accent']}; }}
 .check-icon {{ flex-shrink:0; margin-top:2px; }}
-.check-text {{ font-size:25px; line-height:1.6; color:{p['text']}; font-weight:500; }}
+.check-text {{ font-size:28px; line-height:1.6; color:{p['text']}; font-weight:500; }}
 """
 
     elif style == "qa":
@@ -777,8 +789,8 @@ tbody tr:last-child td {{ border-bottom:none; }}
 .qa-a {{ display:flex; align-items:flex-start; gap:16px; padding-top:18px; border-top:1px dashed {p['border']}; }}
 .qa-badge {{ display:inline-flex; align-items:center; justify-content:center; min-width:42px; height:42px; border-radius:12px; background:{p['accent']}; color:#fff; font-weight:900; font-size:20px; flex-shrink:0; }}
 .qa-badge-a {{ background:{p['accent_light']}; color:{p['accent']}; }}
-.qa-q-text {{ font-size:26px; font-weight:700; color:{p['text']}; line-height:1.5; padding-top:6px; }}
-.qa-a-text {{ font-size:24px; color:{p['muted']}; line-height:1.7; padding-top:8px; }}
+.qa-q-text {{ font-size:30px; font-weight:700; color:{p['text']}; line-height:1.5; padding-top:6px; }}
+.qa-a-text {{ font-size:28px; color:{p['muted']}; line-height:1.7; padding-top:8px; }}
 """
 
     elif style == "steps":
@@ -803,7 +815,7 @@ tbody tr:last-child td {{ border-bottom:none; }}
 .step-num {{ width:52px; height:52px; border-radius:50%; background:{p['accent']}; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:24px; flex-shrink:0; }}
 .step-line {{ width:2px; flex:1; background:{p['border']}; min-height:14px; }}
 .step-item:last-child .step-line {{ display:none; }}
-.step-card {{ flex:1; background:{p['card']}; border-radius:14px; padding:22px 28px; margin-bottom:14px; border:1px solid {p['border']}; border-left:3px solid {p['accent']}; font-size:25px; line-height:1.6; color:{p['text']}; font-weight:500; }}
+.step-card {{ flex:1; background:{p['card']}; border-radius:14px; padding:22px 28px; margin-bottom:14px; border:1px solid {p['border']}; border-left:3px solid {p['accent']}; font-size:28px; line-height:1.6; color:{p['text']}; font-weight:500; }}
 """
 
     elif style == "highlight":
@@ -820,7 +832,7 @@ tbody tr:last-child td {{ border-bottom:none; }}
 .hl-wrap {{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:48px; gap:28px; }}
 .hl-deco-line {{ width:80px; height:4px; background:{p['accent']}; border-radius:2px; }}
 .hl-main {{ font-size:52px; font-weight:900; color:{p['accent']}; line-height:1.35; letter-spacing:-0.02em; max-width:90%; }}
-.hl-sub {{ font-size:26px; color:{p['muted']}; line-height:1.7; max-width:85%; font-weight:400; }}
+.hl-sub {{ font-size:30px; color:{p['muted']}; line-height:1.7; max-width:85%; font-weight:400; }}
 """
 
     else:  # text_card
@@ -833,9 +845,9 @@ tbody tr:last-child td {{ border-bottom:none; }}
         body_html = f"""<div class="tc-wrap">{"".join(paragraphs)}</div>"""
         extra_css = f"""
 .tc-wrap {{ flex:1; background:{p['card']}; border-radius:20px; padding:44px 48px; margin-top:24px; border:1px solid {p['border']}; overflow:hidden; }}
-.tc-wrap p {{ font-size:26px; line-height:1.8; color:{p['text']}; margin:0 0 18px 0; }}
+.tc-wrap p {{ font-size:30px; line-height:1.8; color:{p['text']}; margin:0 0 18px 0; }}
 .tc-wrap p:last-child {{ margin-bottom:0; }}
-.tc-wrap p:first-child {{ font-size:28px; font-weight:700; color:{p['accent']}; margin-bottom:24px; padding-bottom:18px; border-bottom:2px solid {p['border']}; }}
+.tc-wrap p:first-child {{ font-size:32px; font-weight:700; color:{p['accent']}; margin-bottom:24px; padding-bottom:18px; border-bottom:2px solid {p['border']}; }}
 """
 
     return f"""<!DOCTYPE html>
@@ -847,7 +859,7 @@ body {{
     width:{width}px; height:{height}px;
     background:{p['bg']};
     color:{p['text']};
-    font-family:'Noto Sans KR', '{font_family}', sans-serif;
+    font-family:'Pretendard', 'Noto Sans KR', '{font_family}', sans-serif;
     padding:0; margin:0;
     overflow:visible;
 }}
@@ -856,7 +868,7 @@ body {{
     padding:64px 56px 56px;
 }}
 .title {{
-    font-size:36px; font-weight:900; color:{p['text']};
+    font-size:42px; font-weight:900; color:{p['text']};
     line-height:1.3; margin-bottom:4px; letter-spacing:-0.02em;
     padding-bottom:20px;
     border-bottom:2px solid {p['border']};
@@ -876,7 +888,7 @@ body {{
     var realH=w.scrollHeight;
     if(realH>maxH){{
         var s=maxH/realH;
-        if(s<0.55) s=0.55;
+        if(s<0.75) s=0.75;
         w.style.transform='scale('+s+')';
         w.style.transformOrigin='top left';
         w.style.width=(100/s)+'%';
