@@ -14,6 +14,7 @@ from app.services.theme_palettes import (
     TYPOGRAPHY,
     LAYOUT,
     SEMANTIC_COLORS,
+    get_text_tier,
 )
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,9 @@ body {{
     position: relative;
     overflow: hidden;
     color: var(--text-primary);
+    word-break: keep-all;
+    overflow-wrap: break-word;
+    -webkit-font-smoothing: antialiased;
 }}
 </style>
 </head>
@@ -286,6 +290,7 @@ def build_body_a(title: str, body: str, page_num: str, width: int, height: int, 
     """BODY-A: 넘버링 리스트형 — 포인트별 정보 나열"""
     palette = get_theme(theme)
     pad = LAYOUT["padding"]
+    tier = get_text_tier(body)
 
     # body를 줄바꿈으로 분리하여 항목 추출
     items = []
@@ -294,7 +299,6 @@ def build_body_a(title: str, body: str, page_num: str, width: int, height: int, 
             line = line.strip()
             if not line:
                 continue
-            # "1. 제목: 설명" 또는 "- 제목: 설명" 패턴
             clean = line.lstrip("0123456789.-) ·•▪▸►★☆✓✔ ")
             if ":" in clean:
                 parts = clean.split(":", 1)
@@ -303,14 +307,14 @@ def build_body_a(title: str, body: str, page_num: str, width: int, height: int, 
                 items.append({"title": clean, "desc": ""})
 
     items_html = ""
-    for i, item in enumerate(items[:5]):  # 최대 5개
+    for i, item in enumerate(items[:5]):
         num = f"{i + 1:02d}"
         items_html += f"""
-        <div style="display:flex; gap:20px; align-items:flex-start; margin-bottom:{LAYOUT["element_gap"]}px;">
-            <div style="min-width:48px; height:48px; border-radius:50%; background:{palette["accent"]}; color:{palette["bg"]}; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:800;">{num}</div>
+        <div style="display:flex; gap:20px; align-items:flex-start; margin-bottom:{tier["gap"]}px;">
+            <div style="min-width:52px; height:52px; border-radius:50%; background:{palette["accent"]}; color:{palette["bg"]}; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800;">{num}</div>
             <div style="flex:1;">
-                <div style="font-size:{TYPOGRAPHY["body_bold"]["size"]}px; font-weight:{TYPOGRAPHY["body_bold"]["weight"]}; color:var(--text-primary); margin-bottom:4px;">{_escape(item["title"])}</div>
-                {"<div style='font-size:" + str(TYPOGRAPHY["body"]["size"]) + "px; color:var(--text-secondary); line-height:" + str(TYPOGRAPHY["body"]["line_height"]) + ";'>" + _escape(item["desc"]) + "</div>" if item["desc"] else ""}
+                <div style="font-size:{tier["title"]}px; font-weight:700; color:var(--text-primary); margin-bottom:6px;">{_escape(item["title"])}</div>
+                {"<div style='font-size:" + str(tier["body"]) + "px; color:var(--text-secondary); line-height:" + str(tier["line_height"]) + ";'>" + _escape(item["desc"]) + "</div>" if item["desc"] else ""}
             </div>
         </div>"""
 
@@ -324,7 +328,7 @@ def build_body_a(title: str, body: str, page_num: str, width: int, height: int, 
     <div style="height:{LAYOUT["divider_thickness"]}px; background:var(--divider); margin-bottom:{LAYOUT["section_gap"]}px;"></div>
 
     <!-- 항목 리스트 -->
-    <div style="flex:1;">
+    <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
         {items_html}
     </div>
 
@@ -340,8 +344,8 @@ def build_body_b(title: str, body: str, page_num: str, width: int, height: int, 
     palette = get_theme(theme)
     pad = LAYOUT["padding"]
     card_r = LAYOUT["card_radius"]
+    tier = get_text_tier(body)
 
-    # body에서 비교 항목 추출: "X: ..." / "O: ..." 또는 "전: ..." / "후: ..."
     bad_items = []
     good_items = []
     key_point = ""
@@ -359,14 +363,13 @@ def build_body_b(title: str, body: str, page_num: str, width: int, height: int, 
             elif lower.startswith(("💡", "포인트:", "핵심:")):
                 key_point = line.split(":", 1)[-1].strip() if ":" in line else line[2:].strip()
             else:
-                # 기본: 짝수는 bad, 홀수는 good으로 분배
                 if len(bad_items) <= len(good_items):
                     bad_items.append(line)
                 else:
                     good_items.append(line)
 
-    bad_html = "".join(f'<div style="font-size:{TYPOGRAPHY["body"]["size"]}px; color:var(--text-primary); margin-bottom:8px; text-decoration:line-through; opacity:0.7;">{_escape(item)}</div>' for item in bad_items[:4])
-    good_html = "".join(f'<div style="font-size:{TYPOGRAPHY["body"]["size"]}px; color:var(--text-primary); margin-bottom:8px;">{_escape(item)}</div>' for item in good_items[:4])
+    bad_html = "".join(f'<div style="font-size:{tier["body"]}px; color:var(--text-primary); margin-bottom:14px; text-decoration:line-through; opacity:0.7;">{_escape(item)}</div>' for item in bad_items[:4])
+    good_html = "".join(f'<div style="font-size:{tier["body"]}px; color:var(--text-primary); margin-bottom:14px;">{_escape(item)}</div>' for item in good_items[:4])
 
     content = f"""
 <div style="display:flex; flex-direction:column; height:100%; padding:{pad}px;">
@@ -378,25 +381,25 @@ def build_body_b(title: str, body: str, page_num: str, width: int, height: int, 
     <div style="height:{LAYOUT["divider_thickness"]}px; background:var(--divider); margin-bottom:{LAYOUT["section_gap"]}px;"></div>
 
     <!-- 비교 카드 -->
-    <div style="flex:1; display:flex; gap:24px;">
+    <div style="flex:1; display:flex; gap:32px; align-items:stretch;">
         <!-- BAD -->
-        <div style="flex:1; background:{palette["card_bg"]}; border:1px solid {palette.get("bad_color", "#FF6B6B")}30; border-radius:{card_r}px; padding:{LAYOUT["card_padding"]}px;">
-            <div style="font-size:20px; font-weight:800; color:{palette.get("bad_color", "#FF6B6B")}; margin-bottom:16px; text-align:center;">✕ BEFORE</div>
-            <div style="border-top:2px solid {palette.get("bad_color", "#FF6B6B")}30; padding-top:16px;">
+        <div style="flex:1; background:{palette["card_bg"]}; border:1px solid {palette.get("bad_color", "#FF6B6B")}30; border-radius:{card_r}px; padding:{LAYOUT["card_padding"] + 4}px; display:flex; flex-direction:column;">
+            <div style="font-size:24px; font-weight:800; color:{palette.get("bad_color", "#FF6B6B")}; margin-bottom:16px; text-align:center;">✕ BEFORE</div>
+            <div style="border-top:2px solid {palette.get("bad_color", "#FF6B6B")}30; padding-top:16px; flex:1; display:flex; flex-direction:column; justify-content:center;">
                 {bad_html}
             </div>
         </div>
         <!-- GOOD -->
-        <div style="flex:1; background:{palette["card_bg"]}; border:1px solid {palette.get("good_color", "#4CAF50")}30; border-radius:{card_r}px; padding:{LAYOUT["card_padding"]}px;">
-            <div style="font-size:20px; font-weight:800; color:{palette.get("good_color", "#4CAF50")}; margin-bottom:16px; text-align:center;">✓ AFTER</div>
-            <div style="border-top:2px solid {palette.get("good_color", "#4CAF50")}30; padding-top:16px;">
+        <div style="flex:1; background:{palette["card_bg"]}; border:1px solid {palette.get("good_color", "#4CAF50")}30; border-radius:{card_r}px; padding:{LAYOUT["card_padding"] + 4}px; display:flex; flex-direction:column;">
+            <div style="font-size:24px; font-weight:800; color:{palette.get("good_color", "#4CAF50")}; margin-bottom:16px; text-align:center;">✓ AFTER</div>
+            <div style="border-top:2px solid {palette.get("good_color", "#4CAF50")}30; padding-top:16px; flex:1; display:flex; flex-direction:column; justify-content:center;">
                 {good_html}
             </div>
         </div>
     </div>
 
     <!-- 핵심 포인트 -->
-    {"<div style='margin-top:24px; font-size:" + str(TYPOGRAPHY["body_bold"]["size"]) + "px; font-weight:" + str(TYPOGRAPHY["body_bold"]["weight"]) + "; color:" + palette["accent"] + "; text-align:center;'>💡 " + _escape(key_point) + "</div>" if key_point else ""}
+    {"<div style='margin-top:24px; font-size:" + str(tier["title"]) + "px; font-weight:700; color:" + palette["accent"] + "; text-align:center;'>💡 " + _escape(key_point) + "</div>" if key_point else ""}
 
     <!-- 하단 핸들 -->
     <div style="margin-top:16px; font-size:{TYPOGRAPHY["handle"]["size"]}px; color:var(--text-secondary);">@handle</div>
@@ -409,22 +412,21 @@ def build_body_c(title: str, body: str, page_num: str, width: int, height: int, 
     """BODY-C: 하이라이트 박스형 — 큰 숫자/금액 강조"""
     palette = get_theme(theme)
     pad = LAYOUT["padding"]
+    tier = get_text_tier(body)
 
-    # body 파싱: 첫 줄 = 큰 숫자, 둘째 줄 = 라벨, 나머지 = 계산 세부
     lines = [l.strip() for l in (body or "").split("\n") if l.strip()]
     big_number = lines[0] if lines else "0"
     label = lines[1] if len(lines) > 1 else ""
     detail_lines = lines[2:] if len(lines) > 2 else []
 
-    # 계산 세부 HTML
     detail_html = ""
     if detail_lines:
         items = ""
         for dl in detail_lines:
             if dl.startswith(("합계", "총", "---", "===")):
-                items += f'<div style="border-top:1px solid var(--divider); margin-top:8px; padding-top:8px; font-weight:700; font-size:{TYPOGRAPHY["body_bold"]["size"]}px; color:var(--text-primary);">{_escape(dl)}</div>'
+                items += f'<div style="border-top:1px solid var(--divider); margin-top:8px; padding-top:8px; font-weight:700; font-size:{tier["title"]}px; color:var(--text-primary);">{_escape(dl)}</div>'
             else:
-                items += f'<div style="font-size:{TYPOGRAPHY["body"]["size"]}px; color:var(--text-secondary); line-height:1.8;">{_escape(dl)}</div>'
+                items += f'<div style="font-size:{tier["body"]}px; color:var(--text-secondary); line-height:2.0;">{_escape(dl)}</div>'
         detail_html = f"""
         <div style="background:{palette['card_bg']}; border:1px solid {palette.get('card_border', '#E0E0E0')}; border-radius:{LAYOUT['card_radius']}px; padding:{LAYOUT['card_padding']}px; margin-top:24px;">
             {items}
@@ -440,13 +442,15 @@ def build_body_c(title: str, body: str, page_num: str, width: int, height: int, 
     <div style="height:{LAYOUT['divider_thickness']}px; background:var(--divider); margin-bottom:{LAYOUT['section_gap']}px;"></div>
 
     <!-- 하이라이트 박스 -->
-    <div style="background:{palette['card_bg']}; border:1px solid {palette.get('card_border', '#E0E0E0')}; border-radius:{LAYOUT['card_radius']}px; padding:{LAYOUT['card_padding'] + 16}px; text-align:center;">
-        <div style="font-size:{TYPOGRAPHY['number_xl']['size']}px; font-weight:{TYPOGRAPHY['number_xl']['weight']}; line-height:{TYPOGRAPHY['number_xl']['line_height']}; color:{palette['number_color']};">{_escape(big_number)}</div>
-        {"<div style='font-size:" + str(TYPOGRAPHY['caption']['size']) + "px; color:var(--text-secondary); margin-top:8px;'>" + _escape(label) + "</div>" if label else ""}
-    </div>
+    <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+        <div style="background:{palette['card_bg']}; border:1px solid {palette.get('card_border', '#E0E0E0')}; border-radius:{LAYOUT['card_radius']}px; padding:{LAYOUT['card_padding'] + 16}px; text-align:center;">
+            <div style="font-size:{TYPOGRAPHY['number_xl']['size']}px; font-weight:{TYPOGRAPHY['number_xl']['weight']}; line-height:{TYPOGRAPHY['number_xl']['line_height']}; color:{palette['number_color']}; letter-spacing:-2px;">{_escape(big_number)}</div>
+            {"<div style='font-size:" + str(TYPOGRAPHY['caption']['size']) + "px; color:var(--text-secondary); margin-top:12px;'>" + _escape(label) + "</div>" if label else ""}
+        </div>
 
-    <!-- 계산 세부 -->
-    {detail_html}
+        <!-- 계산 세부 -->
+        {detail_html}
+    </div>
 
     <!-- 하단 핸들 -->
     <div style="margin-top:auto; font-size:{TYPOGRAPHY['handle']['size']}px; color:var(--text-secondary);">@handle</div>
@@ -490,22 +494,23 @@ def build_body_d(title: str, body: str, page_num: str, width: int, height: int, 
         if current_title:
             steps.append({"title": current_title, "desc": current_desc.strip()})
 
+    tier = get_text_tier(body)
     steps_html = ""
     for i, step in enumerate(steps[:6]):
         is_last_step = (i == len(steps[:6]) - 1)
         connector = ""
         if not is_last_step:
-            connector = f'<div style="margin-left:18px; height:24px; border-left:2px dashed {palette["accent"]}; opacity:0.5;"></div>'
+            connector = f'<div style="margin-left:18px; height:32px; border-left:2px dashed {palette["accent"]}; opacity:0.5;"></div>'
 
         steps_html += f"""
         <div>
             <div style="display:flex; align-items:center; gap:16px; margin-bottom:4px;">
-                <div style="font-size:16px; font-weight:800; color:{palette['accent']}; min-width:60px;">STEP {i + 1}</div>
+                <div style="font-size:20px; font-weight:800; color:{palette['accent']}; min-width:70px;">STEP {i + 1}</div>
                 <div style="flex:1; height:1px; background:{palette.get('divider', '#444')};"></div>
             </div>
-            <div style="padding-left:12px;">
-                <div style="font-size:{TYPOGRAPHY['body_bold']['size']}px; font-weight:{TYPOGRAPHY['body_bold']['weight']}; color:var(--text-primary); margin-bottom:2px;">{_escape(step['title'])}</div>
-                {"<div style='font-size:" + str(TYPOGRAPHY['body']['size']) + "px; color:var(--text-secondary); line-height:" + str(TYPOGRAPHY['body']['line_height']) + ";'>" + _escape(step['desc']) + "</div>" if step['desc'] else ""}
+            <div style="padding-left:16px;">
+                <div style="font-size:{tier["title"]}px; font-weight:700; color:var(--text-primary); margin-bottom:4px;">{_escape(step['title'])}</div>
+                {"<div style='font-size:" + str(tier["body"]) + "px; color:var(--text-secondary); line-height:" + str(tier["line_height"]) + ";'>" + _escape(step['desc']) + "</div>" if step['desc'] else ""}
             </div>
             {connector}
         </div>"""
@@ -520,7 +525,7 @@ def build_body_d(title: str, body: str, page_num: str, width: int, height: int, 
     <div style="height:{LAYOUT['divider_thickness']}px; background:var(--divider); margin-bottom:{LAYOUT['section_gap']}px;"></div>
 
     <!-- 스텝 리스트 -->
-    <div style="flex:1;">
+    <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
         {steps_html}
     </div>
 
@@ -539,6 +544,7 @@ def build_closing_a(title: str, body: str, page_num: str, width: int, height: in
     """CLOSING-A: 요약 + CTA형"""
     palette = get_theme(theme)
     pad = LAYOUT["padding"]
+    tier = get_text_tier(body)
 
     # body에서 요약 포인트 추출
     points = []
@@ -558,9 +564,9 @@ def build_closing_a(title: str, body: str, page_num: str, width: int, height: in
     points_html = ""
     for pt in points[:5]:
         points_html += f"""
-        <div style="display:flex; gap:12px; align-items:flex-start; margin-bottom:16px;">
-            <div style="color:{palette["accent"]}; font-size:24px; font-weight:700;">✓</div>
-            <div style="font-size:{TYPOGRAPHY["body_bold"]["size"]}px; font-weight:{TYPOGRAPHY["body_bold"]["weight"]}; color:var(--text-primary);">{_escape(pt)}</div>
+        <div style="display:flex; gap:12px; align-items:flex-start; margin-bottom:{tier["gap"]}px;">
+            <div style="color:{palette["accent"]}; font-size:28px; font-weight:700;">✓</div>
+            <div style="font-size:{tier["title"]}px; font-weight:700; color:var(--text-primary); line-height:{tier["line_height"]};">{_escape(pt)}</div>
         </div>"""
 
     # CTA 버튼
@@ -601,6 +607,7 @@ def build_closing_b(title: str, body: str, page_num: str, width: int, height: in
     """CLOSING-B: 브랜드 카드형 — 회사명, 슬로건, 연락처, 해시태그"""
     palette = get_theme(theme)
     pad = LAYOUT["padding"]
+    tier = get_text_tier(body)
 
     # 파싱: title = 브랜드명, body 줄별로 슬로건/연락처/태그/하단메시지
     brand_name = _escape(title) if title else "브랜드명"
@@ -629,7 +636,7 @@ def build_closing_b(title: str, body: str, page_num: str, width: int, height: in
                 contacts.append(line)
 
     contacts_html = "".join(
-        f'<div style="font-size:{TYPOGRAPHY["body"]["size"]}px; color:var(--text-secondary); margin-bottom:8px; text-align:center;">{_escape(c)}</div>'
+        f'<div style="font-size:{tier["body"]}px; color:var(--text-secondary); margin-bottom:10px; text-align:center;">{_escape(c)}</div>'
         for c in contacts[:4]
     )
 

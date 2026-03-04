@@ -275,6 +275,7 @@ async def generate_content(config: ContentConfig, req: ContentCreateRequest) -> 
             collected_data=req.collected_data,
             item_count=req.item_count,
             last_page_type=req.last_page_type,
+            template_set=template_set_name,
         )
     except HTTPException:
         raise
@@ -640,8 +641,9 @@ async def _generate_texts(
     collected_data: str,
     item_count: int,
     last_page_type: str = "cta",
+    template_set: str = None,
 ) -> List[ContentItem]:
-    """Gemini AI로 텍스트 생성"""
+    """Gemini AI로 텍스트 생성 — 디자인 최적화 프롬프트"""
 
     last_instruction = {
         "summary": f"마지막 {config.item_label}: 핵심 3줄 요약",
@@ -649,7 +651,48 @@ async def _generate_texts(
         "branding": f"마지막 {config.item_label}: 계정명/슬로건 (텍스트 최소화, 브랜드 강조)",
     }.get(last_page_type, f"마지막 {config.item_label}: CTA (행동 유도)")
 
-    prompt = f"""당신은 {config.ai_role}입니다.
+    # 템플릿 세트별 본문 포맷 가이드
+    body_format_guide = ""
+    if template_set:
+        from app.services.theme_palettes import get_template_set
+        ts = get_template_set(template_set)
+        if ts:
+            body_type = ts.get("body", "BODY-A")
+            format_guides = {
+                "BODY-A": """[본문 리스트형 포맷]
+각 중간 슬라이드의 body는 넘버링 리스트 형식으로 작성:
+- 각 항목을 줄바꿈(\\n)으로 구분
+- 형식: "항목 제목: 설명" (콜론으로 제목과 설명 분리)
+- 항목당 설명은 15~30자
+- 3~5개 항목이 적정
+예시: "1. 기본공제: 본인·배우자·부양가족 1인당 150만원\\n2. 추가공제: 장애인·경로우대 추가 공제 가능"
+""",
+                "BODY-B": """[본문 비교형 포맷]
+각 중간 슬라이드의 body는 비교(Before/After) 형식:
+- X: 로 시작하면 잘못된 사례 (BEFORE)
+- O: 로 시작하면 올바른 사례 (AFTER)
+- 💡 로 시작하면 핵심 포인트
+- 각 항목은 15~25자
+예시: "X: 무조건 경비처리하면 된다\\nX: 영수증 안 챙겨도 괜찮다\\nO: 적격증빙 꼭 보관\\nO: 업무 관련성 증명 필수\\n💡 적격증빙이 핵심"
+""",
+                "BODY-C": """[본문 숫자 강조형 포맷]
+각 중간 슬라이드의 body 첫 줄은 큰 숫자/금액:
+- 1줄: 강조할 숫자 (예: "150만원", "3.3%", "5년")
+- 2줄: 해당 숫자의 설명 라벨
+- 3줄~: 세부 계산 내역 (선택)
+예시: "최대 700만원\\n연금저축 세액공제 한도\\n총급여 5,500만원 이하: 16.5%\\n총급여 5,500만원 초과: 13.2%"
+""",
+                "BODY-D": """[본문 단계형 포맷]
+각 중간 슬라이드의 body는 STEP 순서로 작성:
+- 형식: "STEP 1: 제목: 설명"  또는  "1. 제목: 설명"
+- 3~5단계가 적정
+- 각 단계 설명은 15~25자
+예시: "STEP 1: 서류 준비: 소득금액증명원, 사업자등록증 준비\\nSTEP 2: 홈택스 접속: 종합소득세 신고 메뉴 선택\\nSTEP 3: 신고서 작성: 수입금액과 경비 입력"
+""",
+            }
+            body_format_guide = format_guides.get(body_type, "")
+
+    prompt = f"""당신은 {config.ai_role}입니다. 1080px 인스타그램 이미지에 최적화된 텍스트를 생성합니다.
 
 주제: {topic}
 
@@ -658,15 +701,22 @@ async def _generate_texts(
 
 위 주제로 인스타그램 {config.label} {item_count}장의 텍스트를 생성해주세요.
 
-규칙:
-1. 첫 {config.item_label}: 강렬한 표지 (주제를 한 문장으로, 호기심 유발)
+=== 콘텐츠 구성 규칙 ===
+1. 첫 {config.item_label}: 강렬한 표지 (주제를 한 문장으로, 호기심/위기감 유발)
 2. 중간 {config.item_label}: 핵심 정보를 하나씩 전달
 3. {last_instruction}
-4. 제목은 {config.title_limit}자 이내
-5. 본문은 {config.body_limit}자 이내
-6. 전문 용어 대신 쉬운 한국어 사용
-7. 이모지를 적절히 활용
 
+=== 디자인 최적화 규칙 (필수) ===
+- 제목: {config.title_limit}자 이내, 한 줄에 12~16자가 이상적
+- 본문: {config.body_limit}자 이내
+- 각 항목의 설명은 한 줄에 14~20자가 적정 (1080px 기준)
+- 숫자/금액은 "150만원", "3.3%" 등 짧고 임팩트 있게
+- 줄바꿈(\\n)을 활용하여 항목을 명확히 구분
+- 한 문장이 30자를 넘지 않도록 끊어 작성
+- 전문 용어 → 쉬운 한국어로 변환
+- 이모지는 제목에 1~2개만 적절히 사용
+
+{body_format_guide}
 반드시 아래 JSON 형식으로만 응답:
 [
   {{"title": "제목1", "body": "본문1"}},
@@ -1024,6 +1074,154 @@ async def unified_render_single(session_id: str, req: SingleRenderRequest):
     session = await get_session(session_id)
     config = _get_config(session.content_type)
     return await render_single_item(config, session_id, req)
+
+
+class HtmlPreviewRequest(BaseModel):
+    """HTML 미리보기 요청 (Playwright 렌더링 없이 HTML만 반환)"""
+    item_index: int
+    title: Optional[str] = None
+    body: Optional[str] = None
+    template_type: Optional[str] = None
+
+
+@router.post("/{session_id}/preview-html")
+async def get_preview_html(session_id: str, req: HtmlPreviewRequest):
+    """개별 슬라이드 HTML 반환 (실시간 미리보기용, Playwright 미사용)"""
+    session = await get_session(session_id)
+
+    idx = req.item_index
+    if idx < 0 or idx >= len(session.items):
+        raise HTTPException(status_code=400, detail="유효하지 않은 인덱스")
+
+    item = session.items[idx]
+    title = req.title if req.title is not None else item.title
+    body = req.body if req.body is not None else item.body
+    template_type = req.template_type or item.template_type
+
+    total = len(session.items)
+
+    # template_set이 있으면 새 템플릿 빌더 사용
+    if session.template_set:
+        try:
+            from app.services.template_builders import build_template_slide
+            html = build_template_slide(
+                template_set=session.template_set,
+                slide_index=idx,
+                total_slides=total,
+                title=title,
+                body=body,
+                width=session.width,
+                height=session.height,
+                template_type_override=template_type,
+            )
+            return {"html": html}
+        except Exception as e:
+            logger.warning(f"새 템플릿 빌더 실패, 기존 빌더 사용: {e}")
+
+    # 기존 빌더 폴백
+    from app.services.render_service import build_slide_html
+    is_cover = (idx == 0)
+    is_last = (idx == total - 1) and total > 1
+    logo_b64 = _load_logo_base64(session.logo_path)
+
+    html = build_slide_html(
+        title=title,
+        body=body,
+        page_number=f"{idx + 1}/{total}",
+        bg_color=session.bg_color,
+        text_color=session.text_color,
+        accent_color=session.accent_color,
+        font_family=session.font_family,
+        width=session.width,
+        height=session.height,
+        template=session.template,
+        is_cover=is_cover,
+        is_last=is_last,
+        last_type=session.last_page_type if is_last else None,
+        title_size=session.title_size,
+        spacing=session.spacing,
+        title_accent=session.title_accent,
+        bg_gradient=session.bg_gradient,
+        logo_base64=logo_b64,
+        theme=session.theme,
+    )
+    return {"html": html}
+
+
+class AiRewriteRequest(BaseModel):
+    """AI 텍스트 다시쓰기 요청"""
+    item_index: int
+    title: str = ""
+    body: str = ""
+    mode: str = "rewrite"  # rewrite(다시쓰기), shorter(짧게), professional(전문적), friendly(친근하게)
+    topic: str = ""  # 원래 주제 (컨텍스트)
+
+
+@router.post("/{session_id}/ai-rewrite")
+async def ai_rewrite_item(session_id: str, req: AiRewriteRequest):
+    """개별 슬라이드 텍스트 AI 다시쓰기"""
+    session = await get_session(session_id)
+    config = _get_config(session.content_type)
+
+    mode_instructions = {
+        "rewrite": "동일한 핵심 정보를 유지하면서 더 매력적이고 읽기 쉽게 다시 작성",
+        "shorter": "핵심만 남기고 최대한 간결하게 줄이기 (제목 10자, 본문 40자 이내 목표)",
+        "professional": "전문적이고 신뢰감 있는 톤으로 변환 (존댓말, 정확한 용어)",
+        "friendly": "친근하고 편안한 톤으로 변환 (반말OK, 이모지 활용, 대화체)",
+    }
+    instruction = mode_instructions.get(req.mode, mode_instructions["rewrite"])
+
+    # 슬라이드 위치 파악
+    total = len(session.items)
+    idx = req.item_index
+    position = "표지(첫 슬라이드)" if idx == 0 else ("마무리(마지막 슬라이드)" if idx == total - 1 and total > 1 else "본문 슬라이드")
+
+    prompt = f"""인스타그램 {config.label}의 {position}입니다.
+주제: {req.topic or session.topic or '(미지정)'}
+
+현재 텍스트:
+- 제목: {req.title}
+- 본문: {req.body}
+
+요청: {instruction}
+
+규칙:
+- 한 줄에 14~20자 적정 (1080px 이미지 기준)
+- 줄바꿈(\\n)으로 항목 구분
+- 제목은 {config.title_limit}자 이내
+- 본문은 {config.body_limit}자 이내
+
+반드시 JSON으로만 응답:
+{{"title": "새 제목", "body": "새 본문"}}
+"""
+
+    try:
+        from app.services.gemini_service import get_gemini_client
+        client = get_gemini_client()
+        if not client:
+            raise HTTPException(status_code=400, detail="Gemini API 키가 설정되지 않았습니다.")
+
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model=DEFAULT_TEXT_MODEL,
+            contents=prompt,
+        )
+        text = response.text.strip()
+        if "```json" in text:
+            text = text.split("```json")[1].split("```")[0].strip()
+        elif "```" in text:
+            text = text.split("```")[1].split("```")[0].strip()
+
+        result = json.loads(text)
+        return {
+            "success": True,
+            "title": result.get("title", req.title),
+            "body": result.get("body", req.body),
+            "mode": req.mode,
+        }
+    except Exception as e:
+        logger.error(f"AI 다시쓰기 오류: {e}")
+        raise HTTPException(status_code=500, detail=f"AI 다시쓰기 실패: {str(e)}")
 
 
 # --- 템플릿 카탈로그 ---

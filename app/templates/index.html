@@ -769,6 +769,9 @@
             #bubble-edit-main > div:last-child {
                 max-height: 400px !important;
             }
+            #content-editor-layout {
+                grid-template-columns: 1fr !important;
+            }
         }
     </style>
 </head>
@@ -1159,7 +1162,7 @@
                         </div>
                         <div style="display:flex; gap:6px; margin-bottom:0.4rem;" id="gen-control-buttons">
                             <button class="btn btn-primary" onclick="startImageGeneration()" id="btn-start-gen" style="flex:1; padding:8px; font-size:0.85rem; font-weight:600;">
-                                🎨 전체 이미지 생성 <span id="btn-model-label">(3.0)</span>
+                                🎨 전체 이미지 생성 <span id="btn-model-label">(3.1)</span>
                             </button>
                             <button class="btn btn-secondary" onclick="pauseGeneration()" id="btn-pause" style="padding:8px 12px; font-size:0.85rem;">⏸️</button>
                             <button class="btn" onclick="stopGeneration()" style="padding:8px 12px; font-size:0.85rem; background:var(--danger); color:#fff; border:none; border-radius:8px; cursor:pointer;">⏹️</button>
@@ -1505,6 +1508,12 @@
 
         <!-- Step 5: 캡션 생성 + 최종 발행 -->
         <div class="step-content" id="step-5">
+            <!-- 콘텐츠 모드용 뒤로가기 버튼 (웹툰 모드에서는 숨김) -->
+            <div id="content-back-to-editor" style="display:none; margin-bottom:1rem;">
+                <button class="btn btn-secondary" onclick="backToContentEditor()" style="font-size:0.85rem;">
+                    ← 콘텐츠 편집으로 돌아가기
+                </button>
+            </div>
             <!-- 발행/미리보기용 이미지 소스 (세션 API로 채움, 숨김) -->
             <div id="images-container" style="display:none;"></div>
             <!-- 시리즈 선택 탭 (시리즈 2개 이상일 때만 표시) -->
@@ -1672,11 +1681,10 @@
                     <button id="content-type-cardnews-btn" onclick="switchContentType('cardnews')" style="flex:1; text-align:center; padding:10px; cursor:pointer; font-size:0.85rem; font-weight:600; background:var(--primary); color:#fff; border:none;">카드뉴스 (4:5)</button>
                 </div>
 
-                <!-- 스텝 인디케이터 -->
+                <!-- 스텝 인디케이터 (2단계) -->
                 <div id="content-step-indicator" style="display:flex; gap:0; margin-bottom:1.5rem; border-radius:8px; overflow:hidden; border:1px solid var(--border);">
                     <div class="content-step active" data-step="settings" onclick="showContentStep('content','settings')" style="flex:1; text-align:center; padding:8px; cursor:pointer; font-size:0.8rem; font-weight:600; background:var(--primary); color:#fff;">① 설정</div>
-                    <div class="content-step" data-step="editor" onclick="showContentStep('content','editor')" style="flex:1; text-align:center; padding:8px; cursor:pointer; font-size:0.8rem; font-weight:600; background:var(--bg); color:var(--text-muted);">② 편집</div>
-                    <div class="content-step" data-step="preview" onclick="showContentStep('content','preview')" style="flex:1; text-align:center; padding:8px; cursor:pointer; font-size:0.8rem; font-weight:600; background:var(--bg); color:var(--text-muted);">③ 미리보기</div>
+                    <div class="content-step" data-step="editor" onclick="showContentStep('content','editor')" style="flex:1; text-align:center; padding:8px; cursor:pointer; font-size:0.8rem; font-weight:600; background:var(--bg); color:var(--text-muted);">② 편집 + 미리보기</div>
                 </div>
 
                 <!-- ① 설정 패널 -->
@@ -1686,7 +1694,7 @@
                     <!-- 템플릿 세트 갤러리 -->
                     <div style="margin-bottom: 1rem;">
                         <label style="font-size: 0.8rem; font-weight: 600; margin-bottom: 6px; display:block;">템플릿 세트</label>
-                        <div id="content-template-gallery" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:8px;"></div>
+                        <div id="content-template-gallery" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); gap:12px;"></div>
                     </div>
 
                     <!-- 슬라이드 수 + 비율 -->
@@ -1771,47 +1779,71 @@
                     </button>
                 </div>
 
-                <!-- ② 편집 패널 -->
+                <!-- ② 편집 + 미리보기 통합 패널 -->
                 <div id="content-editor" style="display:none; margin-bottom: 1.5rem;">
-                    <h3 style="font-size: 1rem; margin-bottom: 0.75rem;">📝 텍스트 편집</h3>
-                    <div id="content-items-list" style="display: flex; flex-direction: column; gap: 0.75rem;"></div>
+                    <!-- 상단 액션 바 -->
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                        <h3 style="font-size: 1rem; margin:0;">📝 편집 + 미리보기</h3>
+                        <div style="display:flex; gap:6px; align-items:center;">
+                            <button class="btn btn-secondary" onclick="addContentItem('content')" style="padding:4px 12px; font-size:0.8rem;">+ 추가</button>
+                            <button class="btn btn-primary" onclick="renderContent()" style="padding:4px 12px; font-size:0.8rem;">🖼️ 이미지 렌더링</button>
+                        </div>
+                    </div>
+
+                    <!-- 2컬럼 레이아웃: 좌=편집, 우=미리보기 -->
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; align-items:start;" id="content-editor-layout">
+                        <!-- 좌측: 텍스트 편집 -->
+                        <div>
+                            <div id="content-items-list" style="display:flex; flex-direction:column; gap:0.75rem; max-height:70vh; overflow-y:auto; padding-right:4px;"></div>
+                        </div>
+
+                        <!-- 우측: 실시간 미리보기 -->
+                        <div>
+                            <!-- 현재 슬라이드 미리보기 (iframe — 원본 크기를 축소 표시) -->
+                            <div id="content-live-preview" style="border:1px solid var(--border); border-radius:8px; overflow:hidden; background:#f0f0f0; position:relative;">
+                                <div id="content-iframe-wrapper" style="position:relative; overflow:hidden;">
+                                    <iframe id="content-preview-iframe" style="border:none; display:block; background:#fff; transform-origin:top left;" srcdoc="<div style='display:flex;align-items:center;justify-content:center;height:400px;color:#999;font-size:14px;font-family:sans-serif;'>텍스트를 편집하면 미리보기가 표시됩니다</div>"></iframe>
+                                </div>
+                                <div id="content-preview-slide-nav" style="display:flex; justify-content:center; align-items:center; gap:8px; padding:6px; background:var(--bg-card); border-top:1px solid var(--border);">
+                                    <button onclick="previewSlide(-1)" style="background:none;border:1px solid var(--border);border-radius:4px;padding:2px 10px;cursor:pointer;color:var(--text);">◀</button>
+                                    <span id="content-preview-page" style="font-size:0.8rem; color:var(--text-muted); min-width:60px; text-align:center;">1/1</span>
+                                    <button onclick="previewSlide(1)" style="background:none;border:1px solid var(--border);border-radius:4px;padding:2px 10px;cursor:pointer;color:var(--text);">▶</button>
+                                </div>
+                            </div>
+
+                            <!-- 렌더링된 이미지 썸네일 그리드 -->
+                            <div id="content-rendered-section" style="display:none; margin-top:0.75rem;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                    <span style="font-size:0.8rem; font-weight:600; color:var(--text-muted);">렌더링 결과</span>
+                                    <button class="btn btn-secondary" onclick="renderContent()" style="padding:2px 10px; font-size:0.75rem;">🔄 다시</button>
+                                </div>
+                                <div id="content-preview-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(100px, 1fr)); gap:6px;"></div>
+                            </div>
+
+                            <!-- 렌더링 진행률 -->
+                            <div id="content-render-progress" style="display:none; margin-top:0.75rem;">
+                                <div style="background:var(--border);border-radius:4px;height:6px;overflow:hidden;">
+                                    <div id="content-progress-bar" style="background:var(--primary);height:100%;width:0%;transition:width 0.3s;"></div>
+                                </div>
+                                <div id="content-progress-text" style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;text-align:center;"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 하단 액션 -->
                     <div style="display:flex; gap:0.5rem; margin-top:1rem;">
-                        <button class="btn btn-primary" onclick="renderContent()" style="flex:1;">🖼️ 이미지 렌더링</button>
-                        <button class="btn btn-secondary" onclick="addContentItem('content')" style="padding:6px 14px;">+ 추가</button>
+                        <button class="btn btn-secondary" onclick="showContentStep('content','settings')" style="flex:1;">← 설정으로</button>
+                        <button class="btn btn-primary" onclick="contentGoToPublish()" style="flex:1;">발행탭으로 이동 →</button>
                     </div>
                 </div>
 
-                <!-- ③ 미리보기 패널 -->
-                <div id="content-preview" style="display:none;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
-                        <h3 style="font-size: 1rem;">🖼️ 미리보기</h3>
-                        <div style="display:flex; gap:6px;">
-                            <button class="view-toggle-btn" onclick="toggleContentView('content','grid')" title="그리드 보기" style="padding:4px 8px; border:1px solid var(--border); border-radius:4px; cursor:pointer; background:var(--bg);">▦</button>
-                            <button class="view-toggle-btn active" onclick="toggleContentView('content','swipe')" title="스와이프 보기" style="padding:4px 8px; border:1px solid var(--primary); border-radius:4px; cursor:pointer; background:var(--primary); color:#fff;">◁▷</button>
-                        </div>
-                    </div>
-                    <!-- 스와이프 뷰 -->
-                    <div id="content-swipe-view" style="position:relative; overflow:hidden; border-radius:8px; border:1px solid var(--border);">
-                        <div id="content-swipe-container" style="display:flex; transition: transform 0.3s ease;"></div>
-                        <button onclick="swipeContent('content',-1)" style="position:absolute;top:50%;left:8px;transform:translateY(-50%);background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:32px;height:32px;cursor:pointer;font-size:1rem;">◀</button>
-                        <button onclick="swipeContent('content',1)" style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:32px;height:32px;cursor:pointer;font-size:1rem;">▶</button>
-                        <div id="content-swipe-dots" style="text-align:center;padding:8px;"></div>
-                    </div>
-                    <!-- 그리드 뷰 -->
-                    <div id="content-grid-view" style="display:none;">
-                        <div id="content-preview-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 0.75rem;"></div>
-                    </div>
-                    <!-- 렌더링 진행률 -->
-                    <div id="content-render-progress" style="display:none; margin-top:0.75rem;">
-                        <div style="background:var(--border);border-radius:4px;height:6px;overflow:hidden;">
-                            <div id="content-progress-bar" style="background:var(--primary);height:100%;width:0%;transition:width 0.3s;"></div>
-                        </div>
-                        <div id="content-progress-text" style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;text-align:center;"></div>
-                    </div>
-                    <div style="display:flex; gap:0.5rem; margin-top:1rem;">
-                        <button class="btn btn-secondary" onclick="renderContent()" style="flex:1;">🔄 다시 렌더링</button>
-                        <button class="btn btn-primary" onclick="contentGoToPublish()" style="flex:1;">발행탭으로 이동 →</button>
-                    </div>
+                <!-- 라이트박스 모달 (이미지 확대 보기) -->
+                <div id="content-lightbox" onclick="closeLightbox(event)" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); z-index:10000; align-items:center; justify-content:center; cursor:pointer;">
+                    <button onclick="lightboxNav(-1)" style="position:absolute;left:16px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.2);color:#fff;border:none;border-radius:50%;width:44px;height:44px;cursor:pointer;font-size:1.2rem;z-index:10001;">◀</button>
+                    <img id="content-lightbox-img" src="" style="max-width:90vw; max-height:85vh; border-radius:8px; cursor:default;" onclick="event.stopPropagation()">
+                    <button onclick="lightboxNav(1)" style="position:absolute;right:16px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.2);color:#fff;border:none;border-radius:50%;width:44px;height:44px;cursor:pointer;font-size:1.2rem;z-index:10001;">▶</button>
+                    <div id="content-lightbox-counter" style="position:absolute;bottom:20px;left:50%;transform:translateX(-50%);color:#fff;font-size:0.9rem;background:rgba(0,0,0,0.5);padding:4px 16px;border-radius:12px;"></div>
+                    <button onclick="closeLightbox()" style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,0.2);color:#fff;border:none;border-radius:50%;width:36px;height:36px;cursor:pointer;font-size:1rem;z-index:10001;">✕</button>
                 </div>
 
                 <div id="content-status" style="display:none; margin-top: 1rem; padding: 10px; background: var(--bg-card); border-radius: 8px; font-size: 0.85rem;"></div>
@@ -2536,54 +2568,20 @@
         function contentGoToPublish() {
             const state = contentState.content;
             if (!state.sessionId) return showToast('먼저 이미지를 렌더링해주세요.', 'warning');
+            // 웹툰과 동일한 패턴: goToStep(5) → ensurePublishImagesFromSession() → updateInstaPreview()
             goToStep(5);
-            loadContentToPublish(state.sessionId, state.contentSubtype);
         }
 
-        async function loadContentToPublish(sessionId, subtype) {
-            try {
-                const resp = await fetch(`/api/content/${sessionId}/detail`);
-                const data = await resp.json();
-                const images = data.rendered_images || [];
-                if (!images.length) return showToast('렌더링된 이미지가 없습니다.', 'warning');
-
-                window._publishImages = images;
-                window._publishSessionId = sessionId;
-                window._publishContentType = subtype;
-
-                // images-container에 이미지 태그 추가 (발행/다운로드에 사용)
-                const container = document.getElementById('images-container');
-                if (container) {
-                    const ts = Date.now();
-                    container.innerHTML = images.map((url, i) =>
-                        `<img src="${url}?t=${ts}" alt="콘텐츠 ${i + 1}" style="display:none;">`
-                    ).join('');
-                }
-
-                // Step 5 인스타그램 미리보기 이미지 로드
-                const imgEl = document.getElementById('insta-preview-img');
-                if (imgEl && images.length > 0) imgEl.src = images[0] + '?t=' + Date.now();
-
-                const indexEl = document.getElementById('insta-carousel-index');
-                if (indexEl) indexEl.textContent = `1 / ${images.length}`;
-
-                // 화살표 표시
-                if (images.length > 1) {
-                    const prevBtn = document.getElementById('carousel-prev-btn');
-                    const nextBtn = document.getElementById('carousel-next-btn');
-                    if (prevBtn) prevBtn.style.display = 'flex';
-                    if (nextBtn) nextBtn.style.display = 'flex';
-                }
-
-                // aspect ratio 업데이트
-                const previewCarousel = document.getElementById('insta-preview-carousel');
-                if (previewCarousel) {
-                    previewCarousel.style.aspectRatio = subtype === 'carousel' ? '1/1' : '4/5';
-                }
-            } catch (err) {
-                showToast('이미지 로드 오류: ' + err.message, 'error');
-            }
+        function backToContentEditor() {
+            // Step 5 숨기기
+            const step5 = document.getElementById('step-5');
+            if (step5) { step5.classList.remove('active'); step5.style.display = 'none'; }
+            // 콘텐츠 편집 패널 복원
+            showContentPanel('content');
+            showContentStep('content', 'editor');
         }
+
+        // loadContentToPublish 삭제됨 — ensurePublishImagesFromSession() 내부에서 콘텐츠 모드 직접 처리 (웹툰과 동일 패턴)
 
         async function confirmData() {
             goToStep(3);
@@ -2787,17 +2785,17 @@
 
                 gallery.innerHTML = data.template_sets.map(ts => `
                     <div onclick="selectTemplateSet('${ts.id}')" data-set="${ts.id}"
-                        style="border:2px solid var(--border); border-radius:10px; padding:6px; cursor:pointer; text-align:center; transition:all 0.2s; overflow:hidden;"
+                        style="border:2px solid var(--border); border-radius:12px; padding:8px; cursor:pointer; text-align:center; transition:all 0.2s; overflow:hidden;"
                         onmouseenter="if(!this.classList.contains('selected'))this.style.borderColor='var(--primary)'"
                         onmouseleave="if(!this.classList.contains('selected'))this.style.borderColor='var(--border)'">
                         ${ts.preview_image
-                            ? `<img src="${ts.preview_image}" alt="${ts.name}" style="width:100%; aspect-ratio:4/5; object-fit:cover; border-radius:6px; margin-bottom:6px; display:block;">`
-                            : `<div style="display:flex; gap:4px; justify-content:center; margin-bottom:6px; padding:20px 0;">
-                                ${(ts.preview_colors || []).map(c => '<span style="width:16px;height:16px;border-radius:50%;background:' + c + ';display:inline-block;border:1px solid rgba(0,0,0,0.1);"></span>').join('')}
+                            ? `<img src="${ts.preview_image}" alt="${ts.name}" style="width:100%; aspect-ratio:4/5; object-fit:cover; border-radius:8px; margin-bottom:8px; display:block;">`
+                            : `<div style="display:flex; gap:6px; justify-content:center; margin-bottom:8px; padding:28px 0;">
+                                ${(ts.preview_colors || []).map(c => '<span style="width:20px;height:20px;border-radius:50%;background:' + c + ';display:inline-block;border:1px solid rgba(0,0,0,0.1);"></span>').join('')}
                               </div>`
                         }
-                        <div style="font-size:0.72rem; font-weight:600; padding:0 2px;">${ts.label || ts.name}</div>
-                        <div style="font-size:0.62rem; color:var(--text-muted); margin-top:2px; line-height:1.3; padding:0 2px 4px;">${ts.description || ''}</div>
+                        <div style="font-size:0.82rem; font-weight:700; padding:0 4px;">${ts.label || ts.name}</div>
+                        <div style="font-size:0.7rem; color:var(--text-muted); margin-top:3px; line-height:1.35; padding:0 4px 6px;">${ts.description || ''}</div>
                     </div>
                 `).join('');
             } catch (err) {
@@ -2946,35 +2944,48 @@
                     }
                     const currentType = item.template_type || options[0][0];
                     templateTypeHtml = `
-                        <select id="content-tmpltype-${i}" onchange="updateItemTemplateType(${i}, this.value)"
+                        <select id="content-tmpltype-${i}" onchange="updateItemTemplateType(${i}, this.value); debouncedPreview(${i});"
                             style="padding:3px 6px; font-size:0.72rem; border:1px solid var(--border); border-radius:4px; background:var(--bg); color:var(--text); max-width:120px;">
                             ${options.map(([v, l]) => `<option value="${v}" ${v === currentType ? 'selected' : ''}>${l}</option>`).join('')}
                         </select>`;
                 }
+                // 실시간 미리보기 연동 oninput 추가
+                const previewInput = type === 'content' ? `; debouncedPreview(${i})` : '';
+                // AI Writing Assistant 버튼 (content 타입만)
+                const aiAssistHtml = type === 'content' ? `
+                    <div style="display:flex; gap:3px; margin-top:4px;" onclick="event.stopPropagation();">
+                        <button onclick="aiRewrite(${i},'rewrite')" title="다시쓰기" style="flex:1;padding:2px 4px;font-size:0.68rem;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);color:var(--text);">✨ 다시쓰기</button>
+                        <button onclick="aiRewrite(${i},'shorter')" title="짧게" style="flex:1;padding:2px 4px;font-size:0.68rem;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);color:var(--text);">📏 짧게</button>
+                        <button onclick="aiRewrite(${i},'professional')" title="전문적" style="flex:1;padding:2px 4px;font-size:0.68rem;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);color:var(--text);">🏢 전문적</button>
+                        <button onclick="aiRewrite(${i},'friendly')" title="친근하게" style="flex:1;padding:2px 4px;font-size:0.68rem;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg);color:var(--text);">😊 친근</button>
+                    </div>` : '';
                 return `
-                <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; position:relative;">
+                <div class="content-edit-card" onclick="if(${type === 'content' ? 'true' : 'false'}){highlightEditorCard(${i});updateLivePreview(${i});}" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; position:relative; cursor:pointer; transition: border-color 0.2s, box-shadow 0.2s;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                         <div style="display:flex; align-items:center; gap:6px;">
-                            <span style="font-size: 0.8rem; color: var(--text-muted);">${cfg.label} ${i + 1}</span>
+                            <span style="font-size: 0.75rem; color: var(--text-muted); font-weight:600;">${cfg.label} ${i + 1}</span>
                             ${templateTypeHtml}
                         </div>
                         <div style="display:flex; gap:4px;">
-                            <button onclick="duplicateContentItem('${type}',${i})" title="복제" style="background:none;border:none;cursor:pointer;font-size:0.8rem;">📋</button>
-                            <button onclick="deleteContentItem('${type}',${i})" title="삭제" style="background:none;border:none;cursor:pointer;font-size:0.8rem;">❌</button>
+                            <button onclick="event.stopPropagation();duplicateContentItem('${type}',${i})" title="복제" style="background:none;border:none;cursor:pointer;font-size:0.75rem;">📋</button>
+                            <button onclick="event.stopPropagation();deleteContentItem('${type}',${i})" title="삭제" style="background:none;border:none;cursor:pointer;font-size:0.75rem;">❌</button>
                         </div>
                     </div>
-                    <div style="position:relative;">
+                    <div style="position:relative;" onclick="event.stopPropagation();">
                         <input type="text" id="${type}-title-${i}" value="${(item.title || '').replace(/"/g, '&quot;')}"
-                            placeholder="제목" style="width: 100%; margin-bottom: 6px; font-weight: 700;"
-                            oninput="updateCharCounter('${type}',${i},'title',${cfg.titleLimit})">
-                        <span id="${type}-title-counter-${i}" style="position:absolute;right:8px;top:8px;font-size:0.7rem;color:var(--text-muted);">0/${cfg.titleLimit}</span>
+                            placeholder="제목" style="width: 100%; margin-bottom: 4px; font-weight: 700; font-size:0.85rem; padding:6px 8px;"
+                            oninput="updateCharCounter('${type}',${i},'title',${cfg.titleLimit})${previewInput}"
+                            onfocus="highlightEditorCard(${i})">
+                        <span id="${type}-title-counter-${i}" style="position:absolute;right:8px;top:6px;font-size:0.65rem;color:var(--text-muted);">0/${cfg.titleLimit}</span>
                     </div>
-                    <div style="position:relative;">
+                    <div style="position:relative;" onclick="event.stopPropagation();">
                         <textarea id="${type}-body-${i}" rows="2" placeholder="본문"
-                            style="width: 100%; resize: vertical;"
-                            oninput="updateCharCounter('${type}',${i},'body',${cfg.bodyLimit})">${item.body || ''}</textarea>
-                        <span id="${type}-body-counter-${i}" style="position:absolute;right:8px;bottom:8px;font-size:0.7rem;color:var(--text-muted);">0/${cfg.bodyLimit}</span>
+                            style="width: 100%; resize: vertical; font-size:0.82rem; padding:6px 8px;"
+                            oninput="updateCharCounter('${type}',${i},'body',${cfg.bodyLimit})${previewInput}"
+                            onfocus="highlightEditorCard(${i})">${item.body || ''}</textarea>
+                        <span id="${type}-body-counter-${i}" style="position:absolute;right:8px;bottom:8px;font-size:0.65rem;color:var(--text-muted);">0/${cfg.bodyLimit}</span>
                     </div>
+                    ${aiAssistHtml}
                 </div>
             `}).join('');
 
@@ -2983,6 +2994,12 @@
                 updateCharCounter(type, i, 'title', cfg.titleLimit);
                 updateCharCounter(type, i, 'body', cfg.bodyLimit);
             });
+
+            // 첫 카드 하이라이트 + 미리보기
+            if (type === 'content') {
+                highlightEditorCard(0);
+                updateLivePreview(0);
+            }
         }
 
         // 템플릿 타입 변경 (편집 패널 드롭다운)
@@ -3050,8 +3067,9 @@
                 const data = await resp.json();
                 if (data.success) {
                     renderContentPreview(type, data.images);
-                    showContentStep(type, 'preview');
+                    // 편집+미리보기 통합이므로 패널 전환 불필요 — 그리드에 표시됨
                     if (statusEl) statusEl.innerHTML = `✅ ${data.total}개 ${cfg.label} 렌더링 완료!`;
+                    showToast(`${data.total}개 이미지 렌더링 완료!`, 'success');
                 } else {
                     if (statusEl) statusEl.innerHTML = `❌ 렌더링 오류: ${data.detail || '알 수 없음'}`;
                 }
@@ -3062,54 +3080,159 @@
             setTimeout(() => { if (progressEl) progressEl.style.display = 'none'; }, 3000);
         }
 
+        // 라이트박스 관련
+        let _lightboxImages = [];
+        let _lightboxIndex = 0;
+
+        function openLightbox(images, idx) {
+            _lightboxImages = images;
+            _lightboxIndex = idx;
+            const lb = document.getElementById('content-lightbox');
+            const img = document.getElementById('content-lightbox-img');
+            const counter = document.getElementById('content-lightbox-counter');
+            if (!lb || !img) return;
+            img.src = images[idx] + '?t=' + Date.now();
+            counter.textContent = `${idx + 1} / ${images.length}`;
+            lb.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeLightbox(e) {
+            if (e && e.target !== e.currentTarget && !e.target.closest('button')) return;
+            const lb = document.getElementById('content-lightbox');
+            if (lb) lb.style.display = 'none';
+            document.body.style.overflow = '';
+        }
+
+        function lightboxNav(dir) {
+            if (!_lightboxImages.length) return;
+            _lightboxIndex = Math.max(0, Math.min(_lightboxImages.length - 1, _lightboxIndex + dir));
+            const img = document.getElementById('content-lightbox-img');
+            const counter = document.getElementById('content-lightbox-counter');
+            if (img) img.src = _lightboxImages[_lightboxIndex] + '?t=' + Date.now();
+            if (counter) counter.textContent = `${_lightboxIndex + 1} / ${_lightboxImages.length}`;
+        }
+
+        // 키보드 네비게이션 (라이트박스)
+        document.addEventListener('keydown', (e) => {
+            const lb = document.getElementById('content-lightbox');
+            if (!lb || lb.style.display === 'none') return;
+            if (e.key === 'Escape') closeLightbox();
+            else if (e.key === 'ArrowLeft') lightboxNav(-1);
+            else if (e.key === 'ArrowRight') lightboxNav(1);
+        });
+
+        // 실시간 HTML 미리보기
+        let _previewDebounceTimer = null;
+        let _currentPreviewIdx = 0;
+
+        function updateLivePreview(idx) {
+            _currentPreviewIdx = idx;
+            const state = contentState.content;
+            if (!state.sessionId) return;
+
+            const titleEl = document.getElementById(`content-title-${idx}`);
+            const bodyEl = document.getElementById(`content-body-${idx}`);
+            const tmplEl = document.getElementById(`content-tmpltype-${idx}`);
+
+            const pageEl = document.getElementById('content-preview-page');
+            if (pageEl) pageEl.textContent = `${idx + 1}/${state.items.length}`;
+
+            fetch(`/api/content/${state.sessionId}/preview-html`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    item_index: idx,
+                    title: titleEl?.value || '',
+                    body: bodyEl?.value || '',
+                    template_type: tmplEl?.value || null,
+                }),
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.html) {
+                    scaleIframePreview(data.html);
+                }
+            })
+            .catch(() => {});
+        }
+
+        function scaleIframePreview(html) {
+            const iframe = document.getElementById('content-preview-iframe');
+            const wrapper = document.getElementById('content-iframe-wrapper');
+            if (!iframe || !wrapper) return;
+
+            // 원본 템플릿 크기 결정
+            const state = contentState.content;
+            const ratio = state.selectedRatio || '4:5';
+            const ratioMap = { '1:1': [1080, 1080], '4:5': [1080, 1350], '9:16': [1080, 1920] };
+            const [origW, origH] = ratioMap[ratio] || [1080, 1350];
+
+            // 컨테이너 너비 기준 축소 + 최대 높이 제한 (500px)
+            const containerW = wrapper.parentElement.clientWidth || 400;
+            const maxH = 500;
+            const scaleByW = containerW / origW;
+            const scaleByH = maxH / origH;
+            const scale = Math.min(scaleByW, scaleByH);
+
+            // iframe을 원본 크기로 설정하고 CSS transform으로 축소
+            iframe.style.width = origW + 'px';
+            iframe.style.height = origH + 'px';
+            iframe.style.transform = `scale(${scale})`;
+            iframe.style.transformOrigin = 'top left';
+
+            // wrapper 높이를 축소된 크기에 맞춤
+            wrapper.style.height = Math.round(origH * scale) + 'px';
+            wrapper.style.width = Math.round(origW * scale) + 'px';
+
+            iframe.srcdoc = html;
+        }
+
+        function debouncedPreview(idx) {
+            clearTimeout(_previewDebounceTimer);
+            _previewDebounceTimer = setTimeout(() => updateLivePreview(idx), 400);
+        }
+
+        function previewSlide(dir) {
+            const state = contentState.content;
+            if (!state.items.length) return;
+            const newIdx = Math.max(0, Math.min(state.items.length - 1, _currentPreviewIdx + dir));
+            // 편집 카드 하이라이트
+            highlightEditorCard(newIdx);
+            updateLivePreview(newIdx);
+        }
+
+        function highlightEditorCard(idx) {
+            const list = document.getElementById('content-items-list');
+            if (!list) return;
+            list.querySelectorAll('.content-edit-card').forEach((card, i) => {
+                card.style.borderColor = i === idx ? 'var(--primary)' : 'var(--border)';
+                card.style.boxShadow = i === idx ? '0 0 0 2px var(--primary)' : 'none';
+            });
+        }
+
         function renderContentPreview(type, images) {
             const cfg = contentConfig[type];
-            const preview = document.getElementById(`${type}-preview`);
             const grid = document.getElementById(`${type}-preview-grid`);
-            const swipeContainer = document.getElementById(`${type}-swipe-container`);
-            const dotsContainer = document.getElementById(`${type}-swipe-dots`);
-            if (!preview) return;
-            preview.style.display = 'block';
+            const renderedSection = document.getElementById(`${type}-rendered-section`);
+            if (renderedSection) renderedSection.style.display = 'block';
+
             contentState[type].currentSwipe = 0;
+            // 이미지 URL 저장 (라이트박스용)
+            contentState[type]._renderedImages = images;
 
             const ts = Date.now();
 
-            // 그리드 뷰
+            // 썸네일 그리드
             if (grid) {
-            grid.innerHTML = images.map((url, i) => `
-                    <div style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden; position:relative;" class="preview-card">
+                grid.innerHTML = images.map((url, i) => `
+                    <div style="border:1px solid var(--border); border-radius:6px; overflow:hidden; position:relative; cursor:pointer;" class="preview-card"
+                        onclick="openLightbox(contentState['${type}']._renderedImages, ${i})">
                         <img src="${url}?t=${ts}" style="width:100%; display:block;" alt="${cfg.label} ${i+1}">
-                    <div style="text-align:center; padding:4px; font-size:0.75rem; color:var(--text-muted);">${i+1}/${images.length}</div>
-                        <div class="hover-rerender" onclick="rerenderSingle('${type}',${i})"
-                            style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);display:none;align-items:center;justify-content:center;cursor:pointer;color:#fff;font-size:0.85rem;border-radius:8px;">
-                            🔄 재렌더링
-                        </div>
-                </div>
-            `).join('');
-                // 호버 이벤트 (p3-12)
-                grid.querySelectorAll('.preview-card').forEach(card => {
-                    card.addEventListener('mouseenter', () => card.querySelector('.hover-rerender').style.display = 'flex');
-                    card.addEventListener('mouseleave', () => card.querySelector('.hover-rerender').style.display = 'none');
-                });
-            }
-
-            // 스와이프 뷰 (p3-7)
-            if (swipeContainer) {
-                swipeContainer.innerHTML = images.map((url, i) => `
-                    <div style="min-width:100%;"><img src="${url}?t=${ts}" style="width:100%;display:block;" alt="${cfg.label} ${i+1}"></div>
+                        <div style="text-align:center; padding:2px; font-size:0.7rem; color:var(--text-muted);">${i+1}</div>
+                    </div>
                 `).join('');
             }
-            if (dotsContainer) {
-                dotsContainer.innerHTML = images.map((_, i) => `
-                    <span class="swipe-dot${i === 0 ? ' active' : ''}" onclick="goToSwipe('${type}',${i})"
-                        style="display:inline-block;width:8px;height:8px;border-radius:50%;margin:0 3px;cursor:pointer;background:${i === 0 ? 'var(--primary)' : 'var(--border)'};">
-                    </span>
-                `).join('');
-            }
-
-            // 발행 패널 표시
-            const pub = document.getElementById(`${type}-publish-area`);
-            if (pub) pub.style.display = 'block';
         }
 
         async function generateContentCaption(type) {
@@ -3235,20 +3358,18 @@
             }
         }
 
-        // 스텝 인디케이터 (p3-6)
+        // 스텝 인디케이터 (2단계: 설정 → 편집+미리보기)
         function showContentStep(type, step) {
             let panels;
             if (type === 'content') {
                 panels = {
                     settings: 'content-settings-panel',
                     editor: 'content-editor',
-                    preview: 'content-preview',
                 };
             } else {
                 panels = {
                     settings: `${type}-settings-panel`,
                     editor: type === 'carousel' ? 'carousel-slides-editor' : 'cardnews-cards-editor',
-                    preview: `${type}-preview`,
                 };
             }
             // 모든 패널 숨기기/표시
@@ -3262,6 +3383,10 @@
                 el.style.background = isActive ? 'var(--primary)' : 'var(--bg)';
                 el.style.color = isActive ? '#fff' : 'var(--text-muted)';
             });
+            // 편집 탭 진입 시 첫 슬라이드 미리보기 로드 (DOM 렌더링 후)
+            if (step === 'editor' && type === 'content') {
+                setTimeout(() => updateLivePreview(0), 100);
+            }
         }
 
         // 스와이프 (p3-7)
@@ -3371,6 +3496,60 @@
                     if (swipeImgs[idx]) swipeImgs[idx].src = data.image + '?t=' + Date.now();
                 }
             } catch (err) { showToast('재렌더링 실패: ' + err.message, 'error'); }
+        }
+
+        // AI Writing Assistant — 슬라이드별 다시쓰기
+        async function aiRewrite(idx, mode) {
+            const state = contentState.content;
+            if (!state.sessionId) return showToast('먼저 텍스트를 생성해주세요.', 'warning');
+
+            const titleEl = document.getElementById(`content-title-${idx}`);
+            const bodyEl = document.getElementById(`content-body-${idx}`);
+            if (!titleEl || !bodyEl) return;
+
+            const modeLabels = { rewrite: '다시쓰기', shorter: '짧게', professional: '전문적', friendly: '친근하게' };
+            showToast(`${modeLabels[mode] || mode} 중...`, 'info');
+
+            // 버튼 비활성화 (중복 호출 방지)
+            const card = titleEl.closest('.content-edit-card');
+            const buttons = card?.querySelectorAll('button[onclick*="aiRewrite"]');
+            buttons?.forEach(b => { b.disabled = true; b.style.opacity = '0.5'; });
+
+            try {
+                const resp = await fetch(`/api/content/${state.sessionId}/ai-rewrite`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        item_index: idx,
+                        title: titleEl.value,
+                        body: bodyEl.value,
+                        mode: mode,
+                        topic: state.topic || '',
+                    }),
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    titleEl.value = data.title;
+                    bodyEl.value = data.body;
+                    // 상태 업데이트
+                    if (state.items[idx]) {
+                        state.items[idx].title = data.title;
+                        state.items[idx].body = data.body;
+                    }
+                    // 카운터 + 미리보기 갱신
+                    const cfg = contentConfig.content;
+                    updateCharCounter('content', idx, 'title', cfg.titleLimit);
+                    updateCharCounter('content', idx, 'body', cfg.bodyLimit);
+                    debouncedPreview(idx);
+                    showToast(`${modeLabels[mode]} 완료!`, 'success');
+                } else {
+                    showToast(data.detail || 'AI 다시쓰기 실패', 'error');
+                }
+            } catch (err) {
+                showToast('AI 다시쓰기 오류: ' + err.message, 'error');
+            } finally {
+                buttons?.forEach(b => { b.disabled = false; b.style.opacity = '1'; });
+            }
         }
 
         // 캡션 복사 (p3-14)
@@ -3758,6 +3937,14 @@
                     if (modelPanel) modelPanel.style.display = 'block';
                     const genBar = document.getElementById('gen-control-bar');
                     if (genBar) genBar.style.display = 'block';
+                    // 새 스토리이므로 생성 버튼 복원, 편집 버튼 숨김
+                    const ctrlBtns = document.getElementById('gen-control-buttons');
+                    if (ctrlBtns) ctrlBtns.style.display = 'flex';
+                    const imgActs = document.getElementById('image-actions');
+                    if (imgActs) imgActs.style.display = 'none';
+                    const stBtn = document.getElementById('btn-start-gen');
+                    if (stBtn) { stBtn.disabled = false; stBtn.innerHTML = '🎨 전체 이미지 생성 <span id="btn-model-label">(3.1)</span>'; }
+                    if (typeof onImageModelChange === 'function') onImageModelChange();
                 }
 
                 // 모델 전환 안내 메시지
@@ -4967,7 +5154,10 @@
                 }
             }
 
-            // 3. contentState 복원 (carousel/cardnews 세션)
+            // 3. 이미지 모델 라벨 초기 동기화
+            if (typeof onImageModelChange === 'function') onImageModelChange();
+
+            // 4. contentState 복원 (carousel/cardnews 세션)
             await restoreContentStateFromStorage();
             restoreCaptionsFromStorage();
 
@@ -5119,8 +5309,18 @@
                         if (modelPanel) modelPanel.style.display = 'block';
                         const genBar = document.getElementById('gen-control-bar');
                         if (genBar) genBar.style.display = 'block';
+                        // 생성 버튼 복원
+                        const ctrlBtns2 = document.getElementById('gen-control-buttons');
+                        if (ctrlBtns2) ctrlBtns2.style.display = 'flex';
+                        const stBtn2 = document.getElementById('btn-start-gen');
+                        if (stBtn2) { stBtn2.disabled = false; stBtn2.innerHTML = '🎨 전체 이미지 생성 <span id="btn-model-label">(3.1)</span>'; }
+                        if (typeof onImageModelChange === 'function') onImageModelChange();
+                        // 이미지가 있으면 편집 버튼도 표시
+                        const imgActs2 = document.getElementById('image-actions');
+                        const hasImgs = window._sceneImages && Object.keys(window._sceneImages).length > 0;
+                        if (imgActs2) imgActs2.style.display = hasImgs ? 'flex' : 'none';
                     }
-                    
+
                     // 편집 버튼 활성화 (이미지가 있을 때)
                     const editBtn = document.getElementById('btn-to-edit');
                     if (editBtn) {
@@ -5827,11 +6027,50 @@
         // ============================================
         var publishCurrentSeries = 0;
 
-        /** 발행 탭에서 사용할 이미지를 세션 API로 채움. #images-container가 비어 있을 때만 호출 */
+        /** 발행 탭에서 사용할 이미지를 세션 API로 채움. #images-container가 비어 있을 때만 호출
+         *  웹툰 모드: /api/workflow/session/{sessionId} 사용
+         *  콘텐츠 모드: /api/content/{sessionId}/detail 사용 (동일 패턴)
+         */
         async function ensurePublishImagesFromSession() {
-            if (!sessionId) return;
             var container = document.getElementById('images-container');
-            if (!container || container.children.length > 0) return;
+            if (!container) return;
+
+            // 콘텐츠 모드: 콘텐츠 세션에서 이미지 로드 (웹툰과 동일 패턴)
+            if (currentContentType === 'content') {
+                var contentSid = contentState.content && contentState.content.sessionId;
+                if (!contentSid) return;
+                // 기존 이미지 초기화 후 새로 채움
+                container.innerHTML = '';
+                try {
+                    var res = await fetch('/api/content/' + encodeURIComponent(contentSid) + '/detail');
+                    if (!res.ok) return;
+                    var data = await res.json();
+                    var rendered = data.rendered_images || [];
+                    if (!rendered.length) return;
+                    // 발행용 전역 변수 설정
+                    window._publishImages = rendered;
+                    window._publishSessionId = contentSid;
+                    window._publishContentType = contentState.content.contentSubtype || 'cardnews';
+                    var ts = Date.now();
+                    rendered.forEach(function(url, i) {
+                        var el = document.createElement('img');
+                        el.src = url + '?t=' + ts;
+                        el.alt = '콘텐츠 ' + (i + 1);
+                        container.appendChild(el);
+                    });
+                    // aspect ratio 업데이트
+                    var previewCarousel = document.getElementById('insta-preview-carousel');
+                    if (previewCarousel) {
+                        var subtype = contentState.content.contentSubtype || 'cardnews';
+                        previewCarousel.style.aspectRatio = subtype === 'carousel' ? '1/1' : '4/5';
+                    }
+                } catch (e) { console.error('[발행] 콘텐츠 이미지 로드 오류:', e); }
+                return;
+            }
+
+            // 웹툰 모드: 기존 로직 그대로
+            if (!sessionId) return;
+            if (container.children.length > 0) return;
             try {
                 var res = await fetch('/api/workflow/session/' + encodeURIComponent(sessionId));
                 if (!res.ok) return;
@@ -6370,6 +6609,17 @@
                 if (modelPanel) modelPanel.style.display = 'block';
                 const genBar = document.getElementById('gen-control-bar');
                 if (genBar) genBar.style.display = 'block';
+                // 생성 버튼 컨테이너 항상 복원 (이전 생성 완료로 숨겨진 경우 대비)
+                const controlBtns = document.getElementById('gen-control-buttons');
+                if (controlBtns) controlBtns.style.display = 'flex';
+                const startBtn = document.getElementById('btn-start-gen');
+                if (startBtn) { startBtn.disabled = false; startBtn.innerHTML = '🎨 전체 이미지 생성 <span id="btn-model-label">(3.1)</span>'; }
+                // 이미지가 있으면 편집 버튼도 함께 표시
+                const actionsEl = document.getElementById('image-actions');
+                const hasImages = window._sceneImages && Object.keys(window._sceneImages).length > 0;
+                if (actionsEl) actionsEl.style.display = hasImages ? 'flex' : 'none';
+                // 모델 라벨 동기화
+                if (typeof onImageModelChange === 'function') onImageModelChange();
             }
 
             // Step 4: 말풍선 편집 — Step 3 대사/나레이션을 서버에 동기화 후 에디터 초기화
@@ -6397,6 +6647,7 @@
                     if (tp && !tp.value) tp.value = cap.expert_tip || cap.tip || '';
                     if (ht && !ht.value) ht.value = (cap.hashtags || []).join(' ');
                 }
+                // 웹툰/콘텐츠 모두 동일 패턴: ensurePublishImagesFromSession()이 내부에서 분기
                 if (typeof ensurePublishImagesFromSession === 'function') {
                     ensurePublishImagesFromSession().then(function() {
                         if (typeof initPublishSeriesTabs === 'function') initPublishSeriesTabs();
@@ -6408,6 +6659,9 @@
                     updateInstaPreview();
                     if (typeof checkPublishConnection === 'function') checkPublishConnection();
                 }
+                // 뒤로가기 버튼: 콘텐츠 모드가 아니면 숨기기
+                var contentBackBtn = document.getElementById('content-back-to-editor');
+                if (contentBackBtn) contentBackBtn.style.display = (currentContentType === 'content') ? 'block' : 'none';
             }
 
             // 프리셋 탭
@@ -8606,8 +8860,16 @@
                 if (window._sceneImages && Object.keys(window._sceneImages).length > 0) {
                     var genBar = document.getElementById('gen-control-bar');
                     if (genBar) genBar.style.display = 'block';
+                    // 생성 버튼 복원
+                    var ctrlBtns3 = document.getElementById('gen-control-buttons');
+                    if (ctrlBtns3) ctrlBtns3.style.display = 'flex';
+                    var stBtn3 = document.getElementById('btn-start-gen');
+                    if (stBtn3) { stBtn3.disabled = false; stBtn3.innerHTML = '🎨 전체 이미지 생성 <span id="btn-model-label">(3.1)</span>'; }
+                    if (typeof onImageModelChange === 'function') onImageModelChange();
                     var editBtn = document.getElementById('btn-to-edit');
                     if (editBtn) { editBtn.disabled = false; editBtn.title = ''; }
+                    var imgActs3 = document.getElementById('image-actions');
+                    if (imgActs3) imgActs3.style.display = 'flex';
                 }
             }
             var imgCount = window._sceneImages ? Object.keys(window._sceneImages).length : 0;
