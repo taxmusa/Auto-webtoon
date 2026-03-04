@@ -252,13 +252,15 @@ async def generate_story(request: GenerateStoryRequest):
         except Exception as e:
             logger.error(f"Failed to save story history: {e}")
         
-        actual_model = gemini.last_used_model or request.model
+        actual_model = gemini.last_used_model or request.model or DEFAULT_TEXT_MODEL
+        # request.model이 빈 문자열이면 기본 모델을 사용한 것이므로 전환 아님
+        requested_model = request.model if request.model else DEFAULT_TEXT_MODEL
         return {
             "session_id": session.session_id,
             "state": session.state.value,
             "story": story.model_dump(),
             "model_used": actual_model,
-            "model_switched": actual_model != request.model
+            "model_switched": actual_model != requested_model
         }
     except Exception as e:
         import traceback
@@ -1029,12 +1031,13 @@ async def collect_data(request: CollectDataRequest):
         # 세션에 저장 (상세 내용 포함)
         session.collected_data = items
         
-        actual_model = gemini.last_used_model or request.model
+        actual_model = gemini.last_used_model or request.model or DEFAULT_TEXT_MODEL
+        requested_model = request.model if request.model else DEFAULT_TEXT_MODEL
         return {
             "session_id": session.session_id,
             "items": items,
             "model_used": actual_model,
-            "model_switched": actual_model != request.model
+            "model_switched": actual_model != requested_model
         }
     except asyncio.TimeoutError:
         logger.error(f"[collect_data] 전체 타임아웃 - 모델: {request.model}")

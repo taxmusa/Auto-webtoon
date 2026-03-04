@@ -284,7 +284,7 @@ class ReferenceService:
     # ============================================
 
     async def generate_character(self, prompt: str, gemini_api_key: str,
-                                  model_name: str = "gemini-3-pro-image-preview",
+                                  model_name: str = "gemini-3.1-flash-image-preview",
                                   style_image_bytes: Optional[bytes] = None) -> bytes:
         """텍스트 프롬프트로 캐릭터 레퍼런스 이미지 AI 생성
         

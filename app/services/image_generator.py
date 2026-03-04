@@ -55,7 +55,7 @@ class ImageGeneratorBase(ABC):
 class GeminiGenerator(ImageGeneratorBase):
     """Gemini Pro Image — 3종 레퍼런스 + 씬 체이닝 지원"""
 
-    def __init__(self, api_key: str, model: str = "gemini-2.5-flash-image"):
+    def __init__(self, api_key: str, model: str = "gemini-3.1-flash-image-preview"):
         if not genai:
             raise ImportError("Google GenAI library is not installed")
         if not api_key:
