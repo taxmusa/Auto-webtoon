@@ -25,16 +25,56 @@ app_data/
 _tmp.py
 _test_*.py
 _token_exchange.py
+_exchange_to_permanent.py
+_verify_routes.py
 _commit_msg.txt
+_tmp_config_old.txt
+_v1diff*.txt
 ss.txt
+nul
 toonstoons_extracted/
+
+# 개발/디버그 스크립트
+debug_flow*.py
+generate_preset_thumbnails.py
+generate_previews.py
+generate_style_previews.py
+list_models.py
+migrate_styles.py
+update_styles.py
+test_gemini.py
+error.txt
+traceback*.txt
+model_list.txt
+available_models.txt
+
+# HTML 테스트 출력
+cUsersinsam*.html
+
+# 한글 문서 (개발용)
+*.hwp
+*.plan.md
+개선_종합_계획서.md
+미진행_예약발행_C1-C6.md
+콘텐츠_UI_개선_계획서.md
+콘텐츠_디자인_자동화_분석.md
 
 # IDE
 .idea/
 .vscode/
 .cursor/
+.claude/
 *.swp
 *.swo
 
 # 학습 데이터 (용량 큼)
 trained_characters/
+
+# 빌드 결과물
+build/
+dist/
+*.spec
+*.exe
+
+# 이미지 파일 (루트 레벨)
+/*.png
